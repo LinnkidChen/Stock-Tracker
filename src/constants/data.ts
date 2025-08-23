@@ -57,6 +57,32 @@ export const navItems: NavItem[] = [
     shortcut: ['k', 'k'],
     isActive: false,
     items: [] // No child items
+  },
+  {
+    title: 'Stock Tracker',
+    url: '#', // Placeholder as there is no direct link for the parent
+    icon: 'stocks',
+    isActive: true,
+    items: [
+      {
+        title: 'Stocks',
+        url: '/dashboard/stocks',
+        icon: 'stocks',
+        shortcut: ['s', 's']
+      },
+      {
+        title: 'Portfolio',
+        url: '/dashboard/portfolio',
+        icon: 'portfolio',
+        shortcut: ['p', 'f']
+      },
+      {
+        title: 'Settings',
+        url: '/dashboard/settings',
+        icon: 'settings',
+        shortcut: ['s', 't']
+      }
+    ]
   }
 ];
 
