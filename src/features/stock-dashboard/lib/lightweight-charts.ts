@@ -41,10 +41,7 @@ export async function createPriceChart(
   const chartOptions: DeepPartial<ChartOptions> = {
     height,
     layout: {
-      background: {
-        type: 'solid',
-        color: isDark ? '#0f0f0f' : '#ffffff'
-      },
+      background: { color: isDark ? '#0f0f0f' : '#ffffff' },
       textColor: isDark ? '#e5e7eb' : '#1f2937',
       fontFamily:
         '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -116,9 +113,6 @@ export async function createPriceChart(
       axisPressedMouseMove: true,
       mouseWheel: true,
       pinch: true
-    },
-    watermark: {
-      visible: false
     },
     localization: {
       priceFormatter: (price: number) => {

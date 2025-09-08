@@ -3,7 +3,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from 'sonner';
 
 interface MarketIndex {
   symbol: string;
@@ -60,13 +59,7 @@ export function MarketOverview() {
     queryFn: fetchMarketData,
     staleTime: 60 * 1000, // 1 minute
     refetchInterval: 5 * 60 * 1000, // 5 minutes
-    retry: 3,
-    onError: (error: any) => {
-      toast.error('Failed to load market data', {
-        description:
-          error?.message || 'Please check your connection and try again.'
-      });
-    }
+    retry: 3
   });
 
   const formatPrice = (price: number) => {

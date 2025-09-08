@@ -65,6 +65,8 @@ export default function AppSidebar() {
   const { user } = useUser();
   const router = useRouter();
   const handleSwitchTenant = (_tenantId: string) => {
+    // mark parameter as used to satisfy lint while keeping signature
+    void _tenantId;
     // Tenant switching functionality would be implemented here
   };
 
