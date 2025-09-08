@@ -81,5 +81,5 @@ export async function GET(request: Request) {
     stopTicker();
   });
 
-  return new Response(null, { status: 101, webSocket: client });
+  return new Response(null, { status: 101, webSocket: client } as any);
 }

@@ -94,7 +94,7 @@ export function PortfolioCard() {
           </div>
 
           <div className='flex items-center justify-between'>
-            <span className='text-sm'>Today's P&L</span>
+            <span className='text-sm'>Today&apos;s P&L</span>
             <div
               className={`text-sm font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}
             >

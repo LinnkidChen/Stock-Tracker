@@ -17,7 +17,7 @@ export function TickerInput({ ref: forwardedRef }: TickerInputProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLFormElement | null>(null);
   const { setSelectedTicker } = useDashboardStore();
 
   const handleSubmit = (e: React.FormEvent) => {

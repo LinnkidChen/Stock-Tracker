@@ -53,8 +53,8 @@ export function DashboardClient() {
 
       {/* Keyboard shortcuts help */}
       <div className='text-muted-foreground border-t pt-4 text-xs'>
-        <span className='font-medium'>Keyboard shortcuts:</span> Press "/" to
-        focus search, Enter to search, Esc to clear focus
+        <span className='font-medium'>Keyboard shortcuts:</span> Press{' '}
+        <code>/</code> to focus search, Enter to search, Esc to clear focus
       </div>
     </div>
   );
