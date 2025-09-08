@@ -52,7 +52,7 @@
   - Purpose: Keep only `/api/ws/prices` and `/api/watchlist` per requirements.
   - _Requirements: 4_
 
-- [-] 7. Verify and tidy
+- [x] 7. Verify and tidy
   - Run `pnpm build` to ensure no missing imports or type errors.
   - Run `pnpm lint` (and `pnpm lint:fix` if needed) to confirm style and unused import cleanup.
   - Manually check `/`, `/dashboard`, `/dashboard/stocks` flows and sidebar/KBar behavior.
