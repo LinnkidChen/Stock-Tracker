@@ -1,18 +1,61 @@
 import { NextResponse } from 'next/server';
 import { isValidTicker, normalizeTicker } from '@/lib/validation/ticker';
 
-type Action = 'add' | 'remove';
-type Body = { action?: Action; symbol?: string };
+/**
+ * Action types for watchlist operations
+ */
+export type WatchlistAction = 'add' | 'remove';
+
+/**
+ * Request body structure for watchlist operations
+ */
+export interface WatchlistRequestBody {
+  action?: WatchlistAction;
+  symbol?: string;
+}
+
+/**
+ * Response structure for successful watchlist operations
+ */
+export interface WatchlistResponse {
+  success: true;
+  data: {
+    watchlist: string[];
+  };
+}
+
+/**
+ * Response structure for failed watchlist operations
+ */
+export interface WatchlistErrorResponse {
+  success: false;
+  error: {
+    message: string;
+  };
+}
+
+/**
+ * Combined response type for watchlist API
+ */
+export type WatchlistApiResponse = WatchlistResponse | WatchlistErrorResponse;
+
+type Body = WatchlistRequestBody;
 
 // Very simple in-memory stores keyed by client id (ip header)
 const watchlists = new Map<string, Set<string>>();
 const rateBuckets = new Map<string, { count: number; reset: number }>();
 
+/**
+ * Extracts client identifier from request headers for rate limiting
+ */
 function getClientId(req: Request): string {
   const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0]?.trim();
   return ip || 'anonymous';
 }
 
+/**
+ * Implements simple rate limiting per client
+ */
 function rateLimit(id: string, limit = 60, windowMs = 60_000) {
   const now = Date.now();
   const bucket = rateBuckets.get(id);
@@ -30,6 +73,12 @@ function rateLimit(id: string, limit = 60, windowMs = 60_000) {
   return { allowed: true };
 }
 
+/**
+ * Handles POST requests for watchlist operations (add/remove symbols)
+ *
+ * @param req - The incoming request
+ * @returns Response with updated watchlist or error
+ */
 export async function POST(req: Request) {
   const id = getClientId(req);
   const rl = rateLimit(id);
@@ -58,7 +107,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const action = body.action;
+  const action: WatchlistAction | undefined = body.action;
   const symbol = body.symbol ? normalizeTicker(body.symbol) : undefined;
 
   if (action !== 'add' && action !== 'remove') {

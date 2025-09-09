@@ -1,65 +1,58 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
-interface MarketIndex {
-  symbol: string;
-  name: string;
-  price: number;
-  change: number;
-  changePercent: number;
-}
-
-interface MarketData {
-  indices: MarketIndex[];
-  lastUpdated: string;
-  isStale?: boolean;
-}
-
-// Mock market data
-const mockMarketData: MarketData = {
-  indices: [
-    {
-      symbol: 'SPX',
-      name: 'S&P 500',
-      price: 4185.47,
-      change: 12.35,
-      changePercent: 0.296
-    },
-    {
-      symbol: 'IXIC',
-      name: 'NASDAQ',
-      price: 12965.34,
-      change: -45.67,
-      changePercent: -0.351
-    },
-    {
-      symbol: 'DJI',
-      name: 'DOW',
-      price: 33875.4,
-      change: 89.12,
-      changePercent: 0.264
-    }
-  ],
-  lastUpdated: new Date().toISOString()
-};
-
-async function fetchMarketData(): Promise<MarketData> {
-  // In a real app, this would fetch from /api/dashboard/data
-  // For now, return mock data with slight delay to simulate network
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  return mockMarketData;
-}
+// Market indices configuration
+const MARKET_INDICES = [
+  { symbol: 'SPY', name: 'S&P 500' },
+  { symbol: 'QQQ', name: 'NASDAQ' },
+  { symbol: 'DIA', name: 'DOW' }
+] as const;
 
 export function MarketOverview() {
-  const { data, isLoading, error, isStale } = useQuery({
-    queryKey: ['market-overview'],
-    queryFn: fetchMarketData,
-    staleTime: 60 * 1000, // 1 minute
-    refetchInterval: 5 * 60 * 1000, // 5 minutes
-    retry: 3
+  const queries = useQueries({
+    queries: MARKET_INDICES.map(({ symbol }) => ({
+      queryKey: ['stock-quote', symbol],
+      queryFn: async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        try {
+          const res = await fetch(`/api/stocks/quote/${symbol}`, {
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          if (!res.ok) throw new Error(`Failed to fetch ${symbol}`);
+          const data = await res.json();
+          if (!data.success || !data.data)
+            throw new Error(data.error?.message || 'Failed to fetch data');
+          return data.data;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      },
+      staleTime: 5 * 60 * 1000, // 5 minutes to respect rate limits
+      refetchInterval: false as const, // Disabled auto-refresh
+      retry: 3
+    }))
+  });
+
+  const hasError = queries.some((query) => query.error);
+  const isStale = queries.some((query) => query.isStale);
+
+  const marketData = queries.map((query, index) => {
+    const { symbol, name } = MARKET_INDICES[index];
+    return {
+      symbol,
+      name,
+      data: query.data,
+      isLoading: query.isLoading,
+      error: query.error
+    };
   });
 
   const formatPrice = (price: number) => {
@@ -75,7 +68,7 @@ export function MarketOverview() {
     return `${sign}${formatPrice(change)} (${percentSign}${changePercent.toFixed(2)}%)`;
   };
 
-  if (error) {
+  if (hasError && !marketData.some((item) => item.data)) {
     return (
       <Card>
         <CardHeader>
@@ -103,44 +96,38 @@ export function MarketOverview() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <div className='grid grid-cols-1 gap-4 md:grid-cols-3'>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className='space-y-2 text-center'>
-                <Skeleton className='mx-auto h-8 w-20' />
-                <Skeleton className='mx-auto h-4 w-16' />
-                <Skeleton className='mx-auto h-3 w-24' />
-              </div>
-            ))}
-          </div>
-        ) : data ? (
-          <div className='grid grid-cols-1 gap-4 md:grid-cols-3'>
-            {data.indices.map((index) => {
-              const isPositive = index.change >= 0;
+        <div className='grid grid-cols-1 gap-4 md:grid-cols-3'>
+          {marketData.map((item) => {
+            if (item.isLoading || !item.data) {
               return (
-                <div key={index.symbol} className='text-center'>
-                  <div className='text-2xl font-bold'>
-                    {formatPrice(index.price)}
-                  </div>
-                  <div className='text-muted-foreground text-sm font-medium'>
-                    {index.name}
-                  </div>
-                  <div
-                    className={`text-xs font-medium ${
-                      isPositive ? 'text-green-600' : 'text-red-600'
-                    }`}
-                  >
-                    {formatChange(index.change, index.changePercent)}
-                  </div>
+                <div key={item.symbol} className='space-y-2 text-center'>
+                  <Skeleton className='mx-auto h-8 w-20' />
+                  <Skeleton className='mx-auto h-4 w-16' />
+                  <Skeleton className='mx-auto h-3 w-24' />
                 </div>
               );
-            })}
-          </div>
-        ) : (
-          <div className='text-muted-foreground text-center'>
-            No market data available
-          </div>
-        )}
+            }
+
+            const isPositive = item.data.change >= 0;
+            return (
+              <div key={item.symbol} className='text-center'>
+                <div className='text-2xl font-bold'>
+                  {formatPrice(item.data.price)}
+                </div>
+                <div className='text-muted-foreground text-sm font-medium'>
+                  {item.name}
+                </div>
+                <div
+                  className={`text-xs font-medium ${
+                    isPositive ? 'text-green-600' : 'text-red-600'
+                  }`}
+                >
+                  {formatChange(item.data.change, item.data.changePercent)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </CardContent>
     </Card>
   );
