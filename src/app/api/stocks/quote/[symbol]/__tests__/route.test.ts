@@ -6,15 +6,6 @@ import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker } from '@/lib/validation/ticker';
 import { APIResponse, StockQuote, APIError } from '@/lib/types/stock-api';
 
-// Mock NextResponse
-const mockNextResponse = {
-  json: jest.fn(),
-  headers: {
-    get: jest.fn(),
-    set: jest.fn()
-  }
-};
-
 // Mock Next.js server utilities
 jest.mock('next/server', () => ({
   NextResponse: {
@@ -149,7 +140,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         const params = { symbol: '' };
 
         // Act
-        const response = await GET(mockRequest, { params });
+        await GET(mockRequest, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -178,7 +169,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         const params = { symbol: 'TOOLONG' };
 
         // Act
-        const response = await GET(mockRequest, { params });
+        await GET(mockRequest, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -205,7 +196,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         const params = { symbol: 'AAP@' };
 
         // Act
-        const response = await GET(mockRequest, { params });
+        await GET(mockRequest, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -227,7 +218,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         const params = { symbol: 'AAP1' };
 
         // Act
-        const response = await GET(mockRequest, { params });
+        await GET(mockRequest, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -243,7 +234,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         const params = { symbol: 'INVALID' };
 
         // Act
-        const response = await GET(mockRequest, { params });
+        await GET(mockRequest, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -269,7 +260,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         const params = { symbol: 'INVALID' };
 
         // Act
-        const response = await GET(mockRequest, { params });
+        await GET(mockRequest, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -511,7 +502,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         const params = { symbol: ' AAPL ' };
 
         // Act
-        const response = await GET(mockRequest, { params });
+        await GET(mockRequest, { params });
 
         // Assert
         expect(mockValidateTicker).toHaveBeenCalledWith(' AAPL ');
@@ -529,7 +520,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         const params = { symbol: 'aapl' };
 
         // Act
-        const response = await GET(mockRequest, { params });
+        await GET(mockRequest, { params });
 
         // Assert
         expect(mockValidateTicker).toHaveBeenCalledWith('aapl');
