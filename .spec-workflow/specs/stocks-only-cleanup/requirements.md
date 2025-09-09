@@ -64,22 +64,27 @@ Acceptance Criteria
 ## Non-Functional Requirements
 
 ### Code Architecture and Modularity
+
 - Single Responsibility Principle: Keep only the stocks feature and shared UI/libs.
 - Modular Design: Do not entangle remaining code with removed modules.
 - Dependency Management: Remove dead imports and references.
 - Clear Interfaces: Maintain existing component boundaries for the stocks feature.
 
 ### Performance
+
 - Redirects remain fast; no additional network calls added.
 - No regressions to stocks dashboard performance.
 
 ### Security
+
 - Clerk-protected routes preserved; no accidental exposure of `/dashboard/stocks`.
 
 ### Reliability
+
 - Build and lint SHALL pass.
 - No runtime errors due to missing modules.
 
 ### Usability
+
 - Navigation presents only relevant stocks destinations.
 - Root and dashboard routes lead directly to stocks.

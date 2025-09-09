@@ -70,6 +70,7 @@ Stock-Tracker/
 ## Naming Conventions
 
 ### Files
+
 - **Components**: `PascalCase.tsx` (e.g., `StockCard.tsx`, `PortfolioTable.tsx`)
 - **Pages**: `page.tsx` for App Router pages
 - **Layouts**: `layout.tsx` for nested layouts
@@ -83,6 +84,7 @@ Stock-Tracker/
 - **Tests**: `[filename].test.ts` or `[filename].spec.ts`
 
 ### Code
+
 - **Components/Classes**: `PascalCase` (e.g., `StockChart`, `PortfolioManager`)
 - **Functions/Methods**: `camelCase` (e.g., `calculateReturns`, `fetchStockData`)
 - **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_RETRY_ATTEMPTS`, `API_BASE_URL`)
@@ -93,6 +95,7 @@ Stock-Tracker/
 ## Import Patterns
 
 ### Import Order
+
 1. React and Next.js imports
 2. Third-party library imports
 3. UI component imports from `@/components/ui`
@@ -102,6 +105,7 @@ Stock-Tracker/
 7. Style imports
 
 ### Module Organization
+
 ```typescript
 // Example import structure
 import { useState, useEffect } from 'react';
@@ -122,6 +126,7 @@ import '@/styles/dashboard.css';
 ## Code Structure Patterns
 
 ### Component Organization
+
 ```typescript
 // 1. Imports
 // 2. Type definitions
@@ -134,6 +139,7 @@ import '@/styles/dashboard.css';
 ```
 
 ### Server Action Organization
+
 ```typescript
 // 1. 'use server' directive
 // 2. Imports
@@ -145,6 +151,7 @@ import '@/styles/dashboard.css';
 ```
 
 ### Feature Module Organization
+
 ```
 feature/
 ├── components/          # Feature-specific components
@@ -169,16 +176,19 @@ feature/
 ## Module Boundaries
 
 ### Core vs Features
+
 - **Core (`/lib`, `/components/ui`)**: Shared utilities and UI primitives used across features
 - **Features (`/features/*`)**: Self-contained modules with their own components, logic, and state
 - **App (`/app`)**: Routes and pages that compose features together
 
 ### Public API vs Internal
+
 - Each feature module exports only its public API through `index.ts`
 - Internal implementation details remain private to the module
 - Shared types are exported from `/types` directory
 
 ### Server vs Client
+
 - Server components are the default (no 'use client' directive)
 - Client components explicitly marked with 'use client'
 - Server actions marked with 'use server'
@@ -198,20 +208,21 @@ feature/
 src/
 └── features/
     └── dashboard/              # Stock tracking dashboard
-        ├── components/         
+        ├── components/
         │   ├── stock-card/     # Individual stock display
         │   ├── portfolio-table/# Portfolio overview table
         │   ├── charts/         # Various chart components
         │   └── indicators/     # Technical indicator displays
-        ├── actions/           
+        ├── actions/
         │   ├── fetch-stocks.ts # Stock data fetching
         │   └── update-portfolio.ts # Portfolio updates
-        ├── stores/            
+        ├── stores/
         │   └── dashboard-store.ts # Dashboard state
         └── types.ts           # Dashboard-specific types
 ```
 
 ### Separation of Concerns
+
 - Dashboard components isolated from business logic
 - Data fetching through server actions
 - State management via Zustand stores
