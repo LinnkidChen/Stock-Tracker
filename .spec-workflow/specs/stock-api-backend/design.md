@@ -7,6 +7,7 @@ This feature implements a simple backend API service layer for fetching real-tim
 ## Steering Document Alignment
 
 ### Technical Standards (tech.md)
+
 - Uses Next.js 15 App Router with TypeScript for type safety
 - Implements server-side API routes within the same repository
 - Follows existing error handling patterns with standardized JSON responses
@@ -14,6 +15,7 @@ This feature implements a simple backend API service layer for fetching real-tim
 - Simple, maintainable implementation without premature optimization
 
 ### Project Structure (structure.md)
+
 - API routes in `src/app/api/stocks/` following App Router conventions
 - Service layer in `src/lib/services/` for Alpha Vantage integration
 - Types extended in `src/lib/types/` for API responses
@@ -22,12 +24,14 @@ This feature implements a simple backend API service layer for fetching real-tim
 ## Code Reuse Analysis
 
 ### Existing Components to Leverage
+
 - **Stock type interface**: Extend existing `Stock` interface from `@/lib/types` for consistency
 - **NextResponse patterns**: Follow established patterns from `api/watchlist/route.ts`
 - **Error response format**: Use consistent error structure with success/error/data pattern
 - **Validation utilities**: Leverage `isValidTicker` and `normalizeTicker` from `@/lib/validation/ticker`
 
 ### Integration Points
+
 - **Frontend components**: Existing dashboard will consume the new API endpoints
 - **Type system**: New API response types will extend current Stock interface
 - **Error handling**: Integrate with existing error display patterns in UI
@@ -46,6 +50,7 @@ graph TD
 ```
 
 ### Modular Design Principles
+
 - **Single File Responsibility**: Each file handles one specific concern (routing, service logic, API client)
 - **Component Isolation**: Alpha Vantage client isolated from route handlers through service layer
 - **Service Layer Separation**: Business logic separated from HTTP handling and external API calls
@@ -54,13 +59,15 @@ graph TD
 ## Components and Interfaces
 
 ### API Route Handler (`src/app/api/stocks/quote/[symbol]/route.ts`)
+
 - **Purpose:** Handle HTTP requests for stock quotes and validate input
-- **Interfaces:** 
+- **Interfaces:**
   - `GET /api/stocks/quote/[symbol]` - Single stock quote
 - **Dependencies:** Stock service, input validator
 - **Reuses:** NextResponse patterns, existing validation utilities
 
 ### Stock Service (`src/lib/services/stock-service.ts`)
+
 - **Purpose:** Orchestrate data fetching and transformation
 - **Interfaces:**
   - `getQuote(symbol: string): Promise<StockQuote>`
@@ -68,6 +75,7 @@ graph TD
 - **Reuses:** Existing Stock type interface
 
 ### Alpha Vantage Client (`src/lib/services/alpha-vantage-client.ts`)
+
 - **Purpose:** Handle direct API communication with Alpha Vantage
 - **Interfaces:**
   - `fetchQuote(symbol: string): Promise<AlphaVantageResponse>`
@@ -77,6 +85,7 @@ graph TD
 ## Data Models
 
 ### StockQuote (extends Stock)
+
 ```typescript
 interface StockQuote extends Stock {
   symbol: string;
@@ -90,6 +99,7 @@ interface StockQuote extends Stock {
 ```
 
 ### AlphaVantageResponse
+
 ```typescript
 interface AlphaVantageResponse {
   'Global Quote': {
@@ -103,11 +113,12 @@ interface AlphaVantageResponse {
     '08. previous close': string;
     '09. change': string;
     '10. change percent': string;
-  }
+  };
 }
 ```
 
 ### APIResponse
+
 ```typescript
 interface APIResponse<T> {
   success: boolean;
@@ -124,18 +135,22 @@ interface APIResponse<T> {
 ### Error Scenarios
 
 1. **Invalid Stock Symbol**
+
    - **Handling:** Return 400 with clear error message
    - **User Impact:** "Invalid ticker symbol: XYZ" displayed in UI
 
 2. **Alpha Vantage API Error**
+
    - **Handling:** Return appropriate status code with error message
    - **User Impact:** Display API error message to user
 
 3. **Missing API Key**
+
    - **Handling:** Return 500, log critical error
    - **User Impact:** "Service configuration error. Contact support."
 
 4. **Network Error**
+
    - **Handling:** Return 503 Service Unavailable
    - **User Impact:** "Unable to fetch stock data. Please try again."
 
@@ -146,16 +161,19 @@ interface APIResponse<T> {
 ## Testing Strategy
 
 ### Unit Testing
+
 - Test Alpha Vantage response parsing and transformation
 - Test input validation for various symbol formats
 - Test error response formatting
 
 ### Integration Testing
+
 - Test full flow from API route to mocked Alpha Vantage response
 - Test error propagation through layers
 - Test various error scenarios
 
 ### End-to-End Testing
+
 - Test fetching real stock data (with test API key)
 - Test error scenarios with invalid symbols
 - Test network error handling

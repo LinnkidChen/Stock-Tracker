@@ -1,16 +1,20 @@
 # Product Overview
 
 ## Product Purpose
+
 Stock Tracker is a comprehensive stock portfolio analyzer and indicator platform designed to empower investors with real-time market insights and portfolio performance tracking. It solves the problem of fragmented investment data by providing a unified dashboard for monitoring stocks, analyzing technical indicators, and making data-driven investment decisions.
 
 ## Target Users
+
 The primary users of this product are:
+
 - **Individual Investors** managing personal stock portfolios who need consolidated tracking and analysis
 - **Day Traders** requiring real-time technical indicators and market alerts
 - **Financial Advisors** monitoring multiple client portfolios and providing investment guidance
 - **Investment Enthusiasts** learning about market trends and building investment strategies
 
 Their key needs include:
+
 - Real-time stock price tracking and portfolio valuation
 - Technical indicator analysis for buy/sell decisions
 - Portfolio performance metrics and historical trends
@@ -57,18 +61,18 @@ Their key needs include:
 
 - **Dashboard Type**: Web-based responsive dashboard with mobile optimization for on-the-go monitoring
 - **Real-time Updates**: WebSocket connections for live price updates and instant alert notifications
-- **Key Metrics Displayed**: 
+- **Key Metrics Displayed**:
   - Portfolio total value and daily P&L
   - Individual stock performance and indicators
   - Asset allocation and sector exposure
   - Risk metrics (beta, volatility, Sharpe ratio)
   - Market indices and benchmarks
-- **Alert System**: 
+- **Alert System**:
   - Price-based alerts (target price, percentage change)
   - Technical indicator signals
   - Portfolio rebalancing suggestions
   - Market news and events
-- **Sharing Capabilities**: 
+- **Sharing Capabilities**:
   - Read-only portfolio sharing links
   - Performance report exports (PDF, CSV)
   - Social trading features for strategy sharing
@@ -78,6 +82,7 @@ Their key needs include:
 Stock Tracker will evolve into an AI-powered investment intelligence platform that combines traditional analysis with machine learning insights for superior investment outcomes.
 
 ### Potential Enhancements
+
 - **AI-Powered Predictions**: Machine learning models for price prediction and trend analysis
 - **Automated Trading**: Integration with brokers for automated order execution based on strategies
 - **Social Trading Network**: Follow successful traders and copy trading strategies

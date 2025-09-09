@@ -5,10 +5,10 @@ import { APIResponse, StockQuote, APIError } from '@/lib/types/stock-api';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { symbol: string } }
+  { params }: { params: Promise<{ symbol: string }> }
 ) {
   try {
-    const symbol = params.symbol;
+    const { symbol } = await params;
 
     // Validate the ticker symbol
     const validation = validateTicker(symbol);
