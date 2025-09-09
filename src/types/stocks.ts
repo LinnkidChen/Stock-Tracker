@@ -70,3 +70,28 @@ export interface ChartConfig {
   autoScale: boolean;
   theme: 'light' | 'dark';
 }
+
+export interface WatchlistItemWithPrice extends WatchlistItem {
+  currentPrice?: number;
+  change?: number;
+  changePercent?: number;
+  lastUpdated?: Date;
+}
+
+export interface WatchlistPricesMap {
+  [symbol: string]: {
+    price: number;
+    change: number;
+    changePercent: number;
+    lastUpdated: Date;
+  };
+}
+
+export interface PriceDisplayConfig {
+  showChange: boolean;
+  showChangePercent: boolean;
+  showVolume: boolean;
+  precision: number;
+  colorize: boolean;
+  compactMode: boolean;
+}

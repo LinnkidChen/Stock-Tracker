@@ -60,12 +60,14 @@ This feature directly supports Stock Tracker's core objectives of democratizing 
 ## Non-Functional Requirements
 
 ### Code Architecture and Modularity
+
 - **Single Responsibility**: Separate chart component, ticker input, and data fetching logic
 - **Modular Design**: TradingView wrapper as reusable component across features
 - **Dependency Management**: Lazy load TradingView library only on dashboard page
 - **Clear Interfaces**: TypeScript interfaces for stock data, chart config, and API responses
 
 ### Performance
+
 - Initial chart render < 1 second after page load
 - Ticker switch latency < 2 seconds including data fetch
 - Chart interactions (zoom/pan) < 16ms for 60fps smoothness
@@ -73,6 +75,7 @@ This feature directly supports Stock Tracker's core objectives of democratizing 
 - Bundle size increase < 200KB gzipped for TradingView library
 
 ### Security
+
 - Validate all ticker inputs server-side before API calls
 - Sanitize ticker symbols to prevent injection attacks
 - Rate limit ticker requests to 60 per minute per user
@@ -80,6 +83,7 @@ This feature directly supports Stock Tracker's core objectives of democratizing 
 - Implement CORS policies for external data sources
 
 ### Reliability
+
 - Graceful degradation if TradingView CDN unavailable
 - Retry logic with exponential backoff for failed API calls
 - Local storage backup of last 5 viewed tickers
@@ -87,6 +91,7 @@ This feature directly supports Stock Tracker's core objectives of democratizing 
 - 99.9% uptime for chart rendering during market hours
 
 ### Usability
+
 - Responsive design: Full functionality on screens ≥768px width
 - Mobile: Touch-optimized chart controls for tablet devices
 - Keyboard shortcuts: "/" to focus ticker input, Enter to submit
