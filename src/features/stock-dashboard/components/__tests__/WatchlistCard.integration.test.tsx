@@ -146,8 +146,7 @@ describe('WatchlistCard integration', () => {
 
   test('shows loading skeleton while prices are loading', async () => {
     const watchlist: string[] = [];
-    // Never resolves for first 500ms, then resolves
-    let resolveQuote: ((value: any) => void) | null = null;
+    // Never resolves for first ~3s, then resolves
     global.fetch = jest.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
@@ -169,7 +168,6 @@ describe('WatchlistCard integration', () => {
             ok: true,
             json: () =>
               new Promise((resolve) => {
-                resolveQuote = resolve;
                 // do not resolve immediately to show loader
                 setTimeout(
                   () =>

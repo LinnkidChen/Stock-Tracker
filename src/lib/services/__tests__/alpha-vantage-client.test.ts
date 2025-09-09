@@ -231,7 +231,7 @@ describe('AlphaVantageClient', () => {
       });
       mockFetch.mockReturnValueOnce(neverResolvingPromise);
 
-      const fetchPromise = client.fetchQuote('AAPL');
+      client.fetchQuote('AAPL');
 
       // Fast-forward time to trigger timeout
       jest.advanceTimersByTime(10000);
@@ -387,7 +387,7 @@ describe('AlphaVantageClient', () => {
       });
       mockFetch.mockReturnValueOnce(neverResolvingPromise);
 
-      const searchPromise = client.searchSymbol('AAPL');
+      client.searchSymbol('AAPL');
 
       // Fast-forward time to trigger timeout
       jest.advanceTimersByTime(10000);
