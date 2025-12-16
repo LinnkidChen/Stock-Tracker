@@ -3,8 +3,8 @@ import { Stock } from '../types';
 import { getAlphaVantageClient } from './alpha-vantage-client';
 
 export class StockService {
-  private readonly BATCH_SIZE = 5; // Alpha Vantage free tier limit
-  private readonly BATCH_DELAY_MS = 12000; // 12 seconds between batches
+  private readonly BATCH_SIZE = 5; // Alpha Vantage free tier limit (5 calls/min)
+  private readonly BATCH_DELAY_MS = 61000; // 61 seconds between batches to be safe
 
   async getMultipleQuotes(symbols: string[]): Promise<StockQuote[]> {
     const quotes: StockQuote[] = [];

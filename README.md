@@ -73,29 +73,28 @@ Stock Tracker is a comprehensive stock portfolio analyzer and indicator platform
 - **Formatting**: [Prettier](https://prettier.io)
 - **Pre-commit Hooks**: [Husky](https://typicode.github.io/husky/)
 
-
 ## Features & Pages
 
 ### Stock Analysis Features
 
-| Feature | Description |
-| :------ | :---------- |
-| **Stock Dashboard** | Real-time stock price charts with TradingView Lightweight Charts, featuring candlestick patterns, volume indicators, and technical analysis tools |
-| **Portfolio Tracker** | Monitor multiple portfolios with real-time P&L, asset allocation visualization, and performance metrics |
-| **Technical Indicators** | Comprehensive indicator suite including RSI, MACD, Moving Averages, Bollinger Bands for informed trading decisions |
-| **Watchlist & Alerts** | Create custom watchlists and set price alerts with indicator-based notifications |
-| **Market Overview** | Track sector performance, market indices, and trending stocks with interactive visualizations |
+| Feature                  | Description                                                                                                                                       |
+| :----------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Stock Dashboard**      | Real-time stock price charts with TradingView Lightweight Charts, featuring candlestick patterns, volume indicators, and technical analysis tools |
+| **Portfolio Tracker**    | Monitor multiple portfolios with real-time P&L, asset allocation visualization, and performance metrics                                           |
+| **Technical Indicators** | Comprehensive indicator suite including RSI, MACD, Moving Averages, Bollinger Bands for informed trading decisions                                |
+| **Watchlist & Alerts**   | Create custom watchlists and set price alerts with indicator-based notifications                                                                  |
+| **Market Overview**      | Track sector performance, market indices, and trending stocks with interactive visualizations                                                     |
 
 ### Core Dashboard Pages
 
-| Page | Description |
-| :--- | :---------- |
+| Page                     | Description                                                                                       |
+| :----------------------- | :------------------------------------------------------------------------------------------------ |
 | **Dashboard (Overview)** | Main dashboard with portfolio summary, market indices, and key performance metrics using Recharts |
-| **Stock Details** | Individual stock analysis page with price charts, indicators, and company information |
-| **Portfolio Management** | Manage holdings, track transactions, and analyze portfolio performance |
-| **Watchlists** | Create and manage custom stock watchlists with real-time updates |
-| **Settings** | User preferences, alert configurations, and account management via Clerk |
-| **Reports** | Generate portfolio reports and export data for tax purposes |
+| **Stock Details**        | Individual stock analysis page with price charts, indicators, and company information             |
+| **Portfolio Management** | Manage holdings, track transactions, and analyze portfolio performance                            |
+| **Watchlists**           | Create and manage custom stock watchlists with real-time updates                                  |
+| **Settings**             | User preferences, alert configurations, and account management via Clerk                          |
+| **Reports**              | Generate portfolio reports and export data for tax purposes                                       |
 
 ## Project Structure
 
@@ -139,34 +138,39 @@ src/
 
 ### Prerequisites
 
-- Node.js 20+ 
+- Node.js 20+
 - pnpm package manager
 - Git
 
 ### Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/your-username/stock-tracker.git
 cd stock-tracker
 ```
 
 2. Install dependencies:
+
 ```bash
 pnpm install
 ```
 
 3. Set up environment variables:
+
 ```bash
 cp env.example.txt .env.local
 ```
 
 4. Configure your `.env.local` file with:
+
    - Clerk authentication keys (optional for initial setup)
-   - Sentry DSN for error tracking (optional)
-   - Stock API keys (when ready for real data)
+   - Sentry DSN for error tracking (optional). Set `NEXT_PUBLIC_SENTRY_DISABLED=true` to disable.
+   - Alpha Vantage API key (when ready for real data). Note: Free tier is limited to 5 calls/minute.
 
 5. Run the development server:
+
 ```bash
 pnpm dev
 ```

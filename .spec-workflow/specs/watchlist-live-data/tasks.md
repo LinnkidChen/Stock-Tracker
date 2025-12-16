@@ -85,7 +85,7 @@
 
 - [x] 9. Add unit tests for PriceIndicator component
 
-  - File: src/features/stock-dashboard/components/__tests__/PriceIndicator.test.tsx
+  - File: src/features/stock-dashboard/components/**tests**/PriceIndicator.test.tsx
   - Test positive price change displays in green
   - Test negative price change displays in red
   - Test zero change displays neutral
@@ -96,7 +96,7 @@
 
 - [x] 10. Add unit tests for useWatchlistPrices hook
 
-  - File: src/features/stock-dashboard/hooks/__tests__/useWatchlistPrices.test.tsx
+  - File: src/features/stock-dashboard/hooks/**tests**/useWatchlistPrices.test.tsx
   - Test successful batch fetching
   - Test handling of individual symbol failures
   - Test cache behavior and stale time
@@ -107,7 +107,7 @@
 
 - [x] 11. Add integration tests for WatchlistCard with live data
 
-  - File: src/features/stock-dashboard/components/__tests__/WatchlistCard.integration.test.tsx
+  - File: src/features/stock-dashboard/components/**tests**/WatchlistCard.integration.test.tsx
   - Test full flow from empty to populated watchlist
   - Test adding symbol and seeing price appear
   - Test error states with failed API calls
