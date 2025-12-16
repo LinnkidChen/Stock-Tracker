@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStockService } from '@/lib/services/stock-service';
-import { validateTicker } from '@/lib/validation/ticker';
+import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { APIResponse, StockQuote, APIError } from '@/lib/types/stock-api';
 
 export async function GET(
@@ -8,7 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ symbol: string }> }
 ) {
   try {
-    const { symbol } = await params;
+    const { symbol: rawSymbol } = await params;
+    const symbol = normalizeTicker(rawSymbol);
 
     // Validate the ticker symbol
     const validation = validateTicker(symbol);

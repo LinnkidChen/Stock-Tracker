@@ -32,6 +32,5 @@
     "**/*.test.tsx",
     "**/__tests__/**",
     "src/test-setup.ts"
-  ],
-  "moduleResolution": ["node_modules", ".next", "node"]
+  ]
 }

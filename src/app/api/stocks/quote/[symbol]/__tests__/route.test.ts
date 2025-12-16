@@ -3,7 +3,7 @@
  */
 import { GET } from '../route';
 import { getStockService } from '@/lib/services/stock-service';
-import { validateTicker } from '@/lib/validation/ticker';
+import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { APIResponse, StockQuote, APIError } from '@/lib/types/stock-api';
 
 // Mock Next.js server utilities
@@ -43,6 +43,9 @@ const mockGetStockService = getStockService as jest.MockedFunction<
 const mockValidateTicker = validateTicker as jest.MockedFunction<
   typeof validateTicker
 >;
+const mockNormalizeTicker = normalizeTicker as jest.MockedFunction<
+  typeof normalizeTicker
+>;
 
 // Mock stock service instance
 const mockStockServiceInstance = {
@@ -79,6 +82,9 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
       .spyOn(Date.prototype, 'toISOString')
       .mockReturnValue('2023-01-01T10:00:00.000Z');
     mockGetStockService.mockReturnValue(mockStockServiceInstance as any);
+    mockNormalizeTicker.mockImplementation((s: string) =>
+      s?.trim().toUpperCase()
+    );
   });
 
   afterEach(() => {
@@ -92,7 +98,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
       mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
       const mockRequest = {} as any;
-      const params = { symbol: 'AAPL' };
+      const params = Promise.resolve({ symbol: 'AAPL' });
 
       // Act
       const response = await GET(mockRequest, { params });
@@ -117,7 +123,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
       mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
       const mockRequest = {} as any;
-      const params = { symbol: 'AAPL' };
+      const params = Promise.resolve({ symbol: 'AAPL' });
 
       // Act
       const response = await GET(mockRequest, { params });
@@ -137,10 +143,10 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         });
 
         const mockRequest = {} as any;
-        const params = { symbol: '' };
+        const params = Promise.resolve({ symbol: '' });
 
         // Act
-        await GET(mockRequest, { params });
+        const response = await GET(mockRequest, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -166,10 +172,10 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         });
 
         const mockRequest = {} as any;
-        const params = { symbol: 'TOOLONG' };
+        const params = Promise.resolve({ symbol: 'TOOLONG' });
 
         // Act
-        await GET(mockRequest, { params });
+        const response = await GET(mockRequest, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -193,10 +199,10 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         });
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAP@' };
+        const params = Promise.resolve({ symbol: 'AAP@' });
 
         // Act
-        await GET(mockRequest, { params });
+        const response = await GET(mockRequest, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -215,10 +221,10 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         });
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAP1' };
+        const params = Promise.resolve({ symbol: 'AAP1' });
 
         // Act
-        await GET(mockRequest, { params });
+        const response = await GET(mockRequest, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -231,10 +237,10 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockValidateTicker.mockReturnValue({ isValid: false });
 
         const mockRequest = {} as any;
-        const params = { symbol: 'INVALID' };
+        const params = Promise.resolve({ symbol: 'INVALID' });
 
         // Act
-        await GET(mockRequest, { params });
+        const response = await GET(mockRequest, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -257,10 +263,10 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'INVALID' };
+        const params = Promise.resolve({ symbol: 'INVALID' });
 
         // Act
-        await GET(mockRequest, { params });
+        const response = await GET(mockRequest, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -282,7 +288,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAPL' };
+        const params = Promise.resolve({ symbol: 'AAPL' });
 
         // Act
         const response = await GET(mockRequest, { params });
@@ -302,7 +308,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAPL' };
+        const params = Promise.resolve({ symbol: 'AAPL' });
 
         // Act
         const response = await GET(mockRequest, { params });
@@ -320,7 +326,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAPL' };
+        const params = Promise.resolve({ symbol: 'AAPL' });
 
         // Act
         const response = await GET(mockRequest, { params });
@@ -338,7 +344,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAPL' };
+        const params = Promise.resolve({ symbol: 'AAPL' });
 
         // Act
         const response = await GET(mockRequest, { params });
@@ -356,7 +362,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAPL' };
+        const params = Promise.resolve({ symbol: 'AAPL' });
 
         // Act
         const response = await GET(mockRequest, { params });
@@ -377,7 +383,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockRejectedValue(unexpectedError);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAPL' };
+        const params = Promise.resolve({ symbol: 'AAPL' });
 
         // Act
         const response = await GET(mockRequest, { params });
@@ -401,7 +407,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockRejectedValue(null);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAPL' };
+        const params = Promise.resolve({ symbol: 'AAPL' });
 
         // Act
         const response = await GET(mockRequest, { params });
@@ -419,7 +425,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         );
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAPL' };
+        const params = Promise.resolve({ symbol: 'AAPL' });
 
         // Act
         const response = await GET(mockRequest, { params });
@@ -438,7 +444,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockRejectedValue(fakeApiError);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAPL' };
+        const params = Promise.resolve({ symbol: 'AAPL' });
 
         // Act
         const response = await GET(mockRequest, { params });
@@ -458,7 +464,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAPL' };
+        const params = Promise.resolve({ symbol: 'AAPL' });
 
         // Act
         const response = await GET(mockRequest, { params });
@@ -479,7 +485,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAPL' };
+        const params = Promise.resolve({ symbol: 'AAPL' });
 
         // Act
         const response = await GET(mockRequest, { params });
@@ -499,16 +505,14 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
         const mockRequest = {} as any;
-        const params = { symbol: ' AAPL ' };
+        const params = Promise.resolve({ symbol: ' AAPL ' });
 
         // Act
         await GET(mockRequest, { params });
 
         // Assert
-        expect(mockValidateTicker).toHaveBeenCalledWith(' AAPL ');
-        expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith(
-          ' AAPL '
-        );
+        expect(mockValidateTicker).toHaveBeenCalledWith('AAPL');
+        expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith('AAPL');
       });
 
       it('should handle lowercase symbols', async () => {
@@ -517,14 +521,14 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'aapl' };
+        const params = Promise.resolve({ symbol: 'aapl' });
 
         // Act
         await GET(mockRequest, { params });
 
         // Assert
-        expect(mockValidateTicker).toHaveBeenCalledWith('aapl');
-        expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith('aapl');
+        expect(mockValidateTicker).toHaveBeenCalledWith('AAPL');
+        expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith('AAPL');
       });
 
       it('should handle quote data with null optional fields', async () => {
@@ -545,7 +549,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockStockServiceInstance.getQuote.mockResolvedValue(quoteWithNulls);
 
         const mockRequest = {} as any;
-        const params = { symbol: 'AAPL' };
+        const params = Promise.resolve({ symbol: 'AAPL' });
 
         // Act
         const response = await GET(mockRequest, { params });
@@ -580,7 +584,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
       });
 
       const mockRequest = {} as any;
-      const params = { symbol: undefined as any };
+      const params = Promise.resolve({ symbol: undefined as any });
 
       // Act
       const response = await GET(mockRequest, { params });
@@ -599,7 +603,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
       mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
       const mockRequest = {} as any;
-      const params = { symbol: 'AAPL' };
+      const params = Promise.resolve({ symbol: 'AAPL' });
 
       // Act
       await GET(mockRequest, { params });
@@ -616,7 +620,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
 
       const testSymbol = 'TSLA';
       const mockRequest = {} as any;
-      const params = { symbol: testSymbol };
+      const params = Promise.resolve({ symbol: testSymbol });
 
       // Act
       await GET(mockRequest, { params });
