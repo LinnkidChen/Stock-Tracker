@@ -48,13 +48,6 @@
 - Error tracking: Sentry supported; configure `NEXT_PUBLIC_SENTRY_*` and `SENTRY_AUTH_TOKEN` for source maps.
 - Never commit secrets. Copy `env.example.txt` to `.env` and fill values locally.
 
-## Agent-Specific Instructions
-
-- Planning: always use spec-workflow MCP to plan (see `.spec-workflow/*`).
-- Output: always produce content that is concise, simple, and readable.
-
-These examples should be used as guidance when configuring Sentry functionality within a project.
-
 # Exception Catching
 
 Use `Sentry.captureException(error)` to capture an exception and log the error in Sentry.
