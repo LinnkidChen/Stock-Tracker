@@ -1,6 +1,7 @@
 import { StockQuote, AlphaVantageResponse, APIError } from '../types/stock-api';
 import { Stock } from '../types';
 import { getAlphaVantageClient } from './alpha-vantage-client';
+import { logger } from '../logger';
 
 export class StockService {
   private readonly BATCH_SIZE = 5; // Alpha Vantage free tier limit (5 calls/min)
@@ -99,9 +100,10 @@ export class StockService {
       const parsed = Number.parseFloat(value);
       if (isNaN(parsed)) {
         // Log warning in development only
-        if (process.env.NODE_ENV === 'development') {
-          // eslint-disable-next-line no-console
-          console.warn(`Invalid numeric value received from API: ${value}`);
+        if (value && value !== 'null' && value !== 'None' && isNaN(parsed)) {
+          logger.warn(`Invalid numeric value received from API: ${value}`, {
+            symbol
+          });
         }
         return fallback;
       }
