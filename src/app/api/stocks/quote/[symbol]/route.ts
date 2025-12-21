@@ -89,9 +89,10 @@ export async function GET(
     }
 
     // Handle unexpected errors
+    const sanitizedError = sanitizeError(error);
     logger.error('API Unexpected Error', {
       path: requestPath,
-      error
+      error: sanitizedError
     });
 
     const response: APIResponse<null> = {
@@ -106,6 +107,29 @@ export async function GET(
 
     return NextResponse.json(response, { status: 500 });
   }
+}
+
+function sanitizeError(error: unknown): unknown {
+  if (typeof error === 'string') {
+    return error.replace(/(api_key|token|key)=[^&"\s]+/gi, '$1=***');
+  }
+  if (error && typeof error === 'object') {
+    // Simple deep copy and sanitize strings is expensive,
+    // so we'll just sanitize the message and string representation for now
+    // or return a safe object structure.
+    const err = error as Record<string, unknown>;
+    const message =
+      typeof err.message === 'string'
+        ? err.message.replace(/(api_key|token|key)=[^&"\s]+/gi, '$1=***')
+        : 'Unknown error';
+
+    // Return a safe subset structure
+    return {
+      ...err,
+      message
+    };
+  }
+  return error;
 }
 
 function isAPIError(error: unknown): error is APIError {

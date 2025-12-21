@@ -24,26 +24,7 @@ async function runWithSpan<T>(
   if (typeof Sentry.startSpan !== 'function') {
     return fn();
   }
-
-  let ran = false;
-
-  try {
-    const result = await Sentry.startSpan(context, async (span: SpanLike) => {
-      ran = true;
-      return fn(span);
-    });
-
-    if (ran) {
-      return result;
-    }
-  } catch (error) {
-    if (!ran) {
-      return fn();
-    }
-    throw error;
-  }
-
-  return fn();
+  return Sentry.startSpan(context, fn);
 }
 
 export function WatchlistCard() {

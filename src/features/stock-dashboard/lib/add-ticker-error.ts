@@ -66,94 +66,53 @@ export type AddTickerErrorInput =
   | { type: 'network'; error?: unknown }
   | { type: 'unknown'; error?: unknown };
 
-export function getAddTickerError(input: AddTickerErrorInput): AddTickerError {
-  const fallback = ADD_TICKER_ERROR_COPY.unknown;
+function createError(
+  category: AddTickerErrorCategory,
+  source: AddTickerErrorSource,
+  httpStatus?: number,
+  messageOverride?: string
+): AddTickerError {
+  const copy = ADD_TICKER_ERROR_COPY[category];
+  return {
+    category,
+    title: copy.title,
+    message: messageOverride ?? copy.message,
+    nextStep: copy.nextStep,
+    source,
+    httpStatus
+  };
+}
 
+export function getAddTickerError(input: AddTickerErrorInput): AddTickerError {
   if (input.type === 'validation') {
-    const copy = ADD_TICKER_ERROR_COPY.validation;
-    return {
-      category: 'validation',
-      title: copy.title,
-      message: input.message ?? copy.message,
-      nextStep: copy.nextStep,
-      source: 'client'
-    };
+    return createError('validation', 'client', undefined, input.message);
   }
 
   if (input.type === 'duplicate') {
-    const copy = ADD_TICKER_ERROR_COPY.duplicate;
-    return {
-      category: 'duplicate',
-      title: copy.title,
-      message: copy.message,
-      nextStep: copy.nextStep,
-      source: 'client'
-    };
+    return createError('duplicate', 'client');
   }
 
   if (input.type === 'http') {
     if (input.status === 429) {
-      const copy = ADD_TICKER_ERROR_COPY.rate_limited;
-      return {
-        category: 'rate_limited',
-        title: copy.title,
-        message: copy.message,
-        nextStep: copy.nextStep,
-        source: 'server',
-        httpStatus: input.status
-      };
+      return createError('rate_limited', 'server', input.status);
     }
 
     if (input.status === 400) {
-      const copy = ADD_TICKER_ERROR_COPY.unsupported;
-      return {
-        category: 'unsupported',
-        title: copy.title,
-        message: copy.message,
-        nextStep: copy.nextStep,
-        source: 'server',
-        httpStatus: input.status
-      };
+      // 400 Bad Request often implies invalid input (symbol)
+      // Use validation category but attribute to server
+      return createError('validation', 'server', input.status, input.message);
     }
 
-    const copy = ADD_TICKER_ERROR_COPY.unknown;
-    return {
-      category: 'unknown',
-      title: copy.title,
-      message: copy.message,
-      nextStep: copy.nextStep,
-      source: 'server',
-      httpStatus: input.status
-    };
+    // Default HTTP error to unknown or unsupported?
+    // Plan said: Map 400 to 'validation', rest default.
+    // Preserving logic for other statuses to map to unknown as per previous,
+    // although previous had a specific 'unsupported' mapping for 400.
+    return createError('unknown', 'server', input.status, input.message);
   }
 
   if (input.type === 'network') {
-    const copy = ADD_TICKER_ERROR_COPY.network;
-    return {
-      category: 'network',
-      title: copy.title,
-      message: copy.message,
-      nextStep: copy.nextStep,
-      source: 'client'
-    };
+    return createError('network', 'client');
   }
 
-  if (input.type === 'unknown') {
-    const copy = ADD_TICKER_ERROR_COPY.unknown;
-    return {
-      category: 'unknown',
-      title: copy.title,
-      message: copy.message,
-      nextStep: copy.nextStep,
-      source: 'client'
-    };
-  }
-
-  return {
-    category: 'unknown',
-    title: fallback.title,
-    message: fallback.message,
-    nextStep: fallback.nextStep,
-    source: 'client'
-  };
+  return createError('unknown', 'client');
 }
