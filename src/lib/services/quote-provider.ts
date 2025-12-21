@@ -141,23 +141,29 @@ export class LongbridgeQuoteProvider implements QuoteProvider {
         ? new Date(Number(q.timestamp) * 1000).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0];
 
+      // Calculate derived values
+      const price = Number(q.lastDone);
+      const prevClose = Number(q.prevClose);
+      const change = price - prevClose;
+      const changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
+
       return {
         symbol: q.symbol,
         name: q.symbol, // We might want to fetch name separately e.g. from static info
-        price: Number(q.lastDone),
-        change: Number(q.change), // absolute change
-        changePercent: Number(q.changeRate) * 100, // typically 0.0123 -> 1.23
+        price: price,
+        change: change,
+        changePercent: changePercent,
         volume: Number(q.volume),
         high: Number(q.high),
         low: Number(q.low),
         open: Number(q.open),
-        previousClose: Number(q.prevClose),
-        marketCap: Number(q.totalMarketValue),
-        peRatio: Number(q.peTtm), // or similar field
-        eps: null, // need to check if available
-        dividendYield: Number(q.dividendYield) * 100,
-        week52High: Number(q.high52Week),
-        week52Low: Number(q.low52Week),
+        previousClose: prevClose,
+        marketCap: null, // Basic quote doesn't include market cap
+        peRatio: null,
+        eps: null,
+        dividendYield: null,
+        week52High: null, // Basic quote might not include this
+        week52Low: null,
         avgVolume: null,
         beta: null,
         lastUpdated: lastUpdated

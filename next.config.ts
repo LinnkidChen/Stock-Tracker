@@ -12,7 +12,13 @@ const baseConfig: NextConfig = {
       }
     ]
   },
-  transpilePackages: ['geist']
+  transpilePackages: ['geist'],
+  serverExternalPackages: ['longport'],
+  experimental: {},
+  // @ts-ignore
+  turbopack: {
+    root: __dirname
+  }
 };
 
 const nextConfig = baseConfig;

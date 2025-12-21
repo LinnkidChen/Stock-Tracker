@@ -8,6 +8,8 @@ import { TickerInput } from './TickerInput';
 import { PriceChart } from './PriceChart';
 import { useDashboardStore } from '../store';
 
+import { QuoteProviderToggle } from './QuoteProviderToggle';
+
 export function DashboardClient() {
   const { selectedTicker, hydrateFromStorage } = useDashboardStore();
   const tickerInputRef = useRef<HTMLInputElement>(null);
@@ -39,7 +41,10 @@ export function DashboardClient() {
     <div className='space-y-6' role='main' aria-label='Stock Dashboard'>
       <div className='flex items-center justify-between'>
         <h1 className='text-3xl font-bold'>Stock Dashboard</h1>
-        <TickerInput ref={tickerInputRef} />
+        <div className='flex items-center gap-4'>
+          <QuoteProviderToggle />
+          <TickerInput ref={tickerInputRef} />
+        </div>
       </div>
 
       <MarketOverview />

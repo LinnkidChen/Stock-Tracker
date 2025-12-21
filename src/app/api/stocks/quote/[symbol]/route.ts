@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
-import {
-  APIResponse,
-  StockQuote,
-  APIError,
-  APIErrorCode
-} from '@/lib/types/stock-api';
+import { APIResponse, StockQuote, APIError } from '@/lib/types/stock-api';
 import { logger } from '@/lib/logger';
 
 export async function GET(
