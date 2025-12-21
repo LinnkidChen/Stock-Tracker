@@ -12,6 +12,8 @@ Sentry.init({
   // Check if Sentry should be disabled
   enabled: process.env.NEXT_PUBLIC_SENTRY_DISABLED !== 'true',
 
+  enableLogs: true,
+
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
   tracesSampleRate: 1,
 

@@ -1,0 +1,94 @@
+openapi: 3.0.3
+info:
+  title: Watchlist API
+  version: 1.0.0
+paths:
+  /api/watchlist:
+    post:
+      summary: Add or remove a ticker from the watchlist
+      description: Adds or removes a ticker symbol for the current client session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - action
+                - symbol
+              properties:
+                action:
+                  type: string
+                  enum:
+                    - add
+                    - remove
+                symbol:
+                  type: string
+                  description: Ticker symbol (uppercase, 1-5 letters)
+                  example: AAPL
+      responses:
+        '200':
+          description: Watchlist updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistResponse'
+        '400':
+          description: Invalid request or symbol
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistErrorResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistErrorResponse'
+components:
+  schemas:
+    WatchlistResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+          required:
+            - watchlist
+          properties:
+            watchlist:
+              type: array
+              items:
+                type: string
+    WatchlistErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: object
+          required:
+            - message
+          properties:
+            message:
+              type: string
