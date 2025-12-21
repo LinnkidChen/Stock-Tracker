@@ -5,7 +5,7 @@ import { MarketOverview } from './MarketOverview';
 import { WatchlistCard } from './WatchlistCard';
 import { PortfolioCard } from './PortfolioCard';
 import { TickerInput } from './TickerInput';
-import { PriceChart } from './PriceChart';
+import { StockChartTabs } from './StockChartTabs';
 import { useDashboardStore } from '../store';
 
 import { QuoteProviderToggle } from './QuoteProviderToggle';
@@ -49,7 +49,7 @@ export function DashboardClient() {
 
       <MarketOverview />
 
-      {selectedTicker && <PriceChart ticker={selectedTicker} />}
+      {selectedTicker && <StockChartTabs ticker={selectedTicker} />}
 
       <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
         <WatchlistCard />

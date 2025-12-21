@@ -155,6 +155,9 @@ importers:
       kbar:
         specifier: ^0.1.0-beta.45
         version: 0.1.0-beta.48(@types/react-dom@19.0.2(@types/react@19.0.1))(@types/react@19.0.1)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      klinecharts:
+        specifier: 10.0.0-beta1
+        version: 10.0.0-beta1
       lightweight-charts:
         specifier: ^5.0.8
         version: 5.1.0
@@ -4231,6 +4234,9 @@ packages:
 
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
+
+  klinecharts@10.0.0-beta1:
+    resolution: {integrity: sha512-5ZxFGjJeZqt9+q45lZDhApC3kdgrk51i27uSpIELgXJLNgfSc0anlb8XkU+52LVrBYnTv9dFr8/Q7lG81vIV1w==}
 
   language-subtag-registry@0.3.23:
     resolution: {integrity: sha512-0K65Lea881pHotoGEa5gDlMxt3pctLi2RplBb7Ezh4rRdLEOtgi7n4EwK9lamnUCkKBqaeKRVebTq6BAxSkpXQ==}
@@ -10285,6 +10291,8 @@ snapshots:
   keyv@4.5.4:
     dependencies:
       json-buffer: 3.0.1
+
+  klinecharts@10.0.0-beta1: {}
 
   language-subtag-registry@0.3.23: {}
 

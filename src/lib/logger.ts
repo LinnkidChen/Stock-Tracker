@@ -30,11 +30,14 @@ class Logger {
     }
 
     // Sentry integration
-    if (level === 'error') {
+    if (level === 'error' && typeof Sentry.captureException === 'function') {
       Sentry.captureException(context?.error || new Error(message), {
         extra: context
       });
-    } else if (level === 'warn') {
+    } else if (
+      level === 'warn' &&
+      typeof Sentry.captureMessage === 'function'
+    ) {
       Sentry.captureMessage(message, {
         level: 'warning',
         extra: context

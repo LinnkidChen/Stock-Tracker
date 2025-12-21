@@ -10,11 +10,10 @@ out/
 # testing
 coverage/
 
-# minified assets
-*.min.js
-
-# logs and env
+# logs
 *.log
+
+# env
 .env*
 
 # misc
@@ -22,4 +21,10 @@ coverage/
 Thumbs.db
 *.tmp
 *.swp
+.vscode/
 .idea/
+
+# lockfiles
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
