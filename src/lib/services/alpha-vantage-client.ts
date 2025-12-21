@@ -1,5 +1,6 @@
 import {
   AlphaVantageResponse,
+  AlphaVantageDailySeriesResponse,
   APIError,
   StockSearchResult
 } from '../types/stock-api';
@@ -18,10 +19,10 @@ export class AlphaVantageClient {
 
   async fetchQuote(symbol: string): Promise<AlphaVantageResponse> {
     // Validate symbol
-    if (!/^[A-Za-z0-9]+$/.test(symbol)) {
+    if (!/^[A-Za-z]{1,5}$/.test(symbol)) {
       throw {
         code: 'INVALID_SYMBOL',
-        message: 'Symbol must contain only alphanumeric characters'
+        message: 'Symbol must be 1-5 alphabetic characters'
       } as APIError;
     }
 
@@ -115,6 +116,83 @@ export class AlphaVantageClient {
       const data = await response.json();
       return data.bestMatches || [];
     } catch (error) {
+      const apiError: APIError = {
+        code: 'NETWORK_ERROR',
+        message:
+          error instanceof Error ? error.message : 'Network request failed',
+        details: { originalError: error }
+      };
+      throw apiError;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  async fetchDailySeries(
+    symbol: string
+  ): Promise<AlphaVantageDailySeriesResponse> {
+    if (!/^[A-Za-z]{1,5}$/.test(symbol)) {
+      throw {
+        code: 'INVALID_SYMBOL',
+        message: 'Symbol must be 1-5 alphabetic characters'
+      } as APIError;
+    }
+
+    const params = new URLSearchParams({
+      function: 'TIME_SERIES_DAILY',
+      symbol: symbol.toUpperCase(),
+      outputsize: 'full',
+      apikey: this.apiKey
+    });
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+    try {
+      const response = await fetch(`${this.baseUrl}?${params.toString()}`, {
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data['Error Message']) {
+        const error: APIError = {
+          code: 'INVALID_SYMBOL',
+          message: data['Error Message']
+        };
+        throw error;
+      }
+
+      if (data['Note']) {
+        const error: APIError = {
+          code: 'API_LIMIT_EXCEEDED',
+          message: 'API call frequency limit exceeded',
+          details: { note: data['Note'] }
+        };
+        throw error;
+      }
+
+      if (data['Information']) {
+        const info = String(data['Information']);
+        const error: APIError = {
+          code: info.toLowerCase().includes('api key')
+            ? 'INVALID_API_KEY'
+            : 'UNKNOWN_ERROR',
+          message: info
+        };
+        throw error;
+      }
+
+      return data as AlphaVantageDailySeriesResponse;
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error) {
+        throw error;
+      }
+
       const apiError: APIError = {
         code: 'NETWORK_ERROR',
         message:

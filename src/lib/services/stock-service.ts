@@ -1,11 +1,19 @@
-import { StockQuote, AlphaVantageResponse, APIError } from '../types/stock-api';
+import {
+  StockQuote,
+  AlphaVantageResponse,
+  AlphaVantageDailySeriesResponse,
+  APIError,
+  KLineSeries,
+  KLineCandle,
+  TimeRange
+} from '../types/stock-api';
 import { Stock } from '../types';
 import { getAlphaVantageClient } from './alpha-vantage-client';
 import { logger } from '../logger';
 
 export class StockService {
   private readonly BATCH_SIZE = 5; // Alpha Vantage free tier limit (5 calls/min)
-  private readonly BATCH_DELAY_MS = 61000; // 61 seconds between batches to be safe
+  private readonly BATCH_DELAY_MS = 12000; // 12 seconds between batches
 
   async getMultipleQuotes(symbols: string[]): Promise<StockQuote[]> {
     const quotes: StockQuote[] = [];
@@ -138,6 +146,64 @@ export class StockService {
     };
   }
 
+  private transformAlphaVantageToKLineSeries(
+    response: AlphaVantageDailySeriesResponse,
+    symbol: string
+  ): KLineSeries {
+    const series = response['Time Series (Daily)'] ?? {};
+    const entries = Object.entries(series);
+
+    const endDate = entries.length
+      ? new Date(
+          entries.reduce(
+            (max, [date]) => (date > max ? date : max),
+            entries[0][0]
+          )
+        )
+      : new Date();
+
+    const startDate = new Date(endDate);
+    startDate.setFullYear(startDate.getFullYear() - 1);
+
+    const parseNumber = (value: string | undefined): number => {
+      if (!value || value === 'null' || value === 'None') return 0;
+      const parsed = Number.parseFloat(value);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
+
+    const candles: KLineCandle[] = entries
+      .map(([date, data]) => {
+        const timestamp = new Date(date).getTime();
+        return {
+          timestamp,
+          open: parseNumber(data['1. open']),
+          high: parseNumber(data['2. high']),
+          low: parseNumber(data['3. low']),
+          close: parseNumber(data['4. close']),
+          volume: parseNumber(data['5. volume'])
+        };
+      })
+      .filter(
+        (candle) =>
+          candle.timestamp >= startDate.getTime() &&
+          candle.timestamp <= endDate.getTime()
+      )
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    const range: TimeRange = {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      interval: '1d'
+    };
+
+    return {
+      symbol,
+      range,
+      candles,
+      lastUpdated: endDate.toISOString()
+    };
+  }
+
   private isAPIError(error: any): error is APIError {
     return (
       error &&
@@ -170,6 +236,25 @@ export class StockService {
       const apiError: APIError = {
         code: 'UNKNOWN_ERROR',
         message: 'Failed to fetch stock quote',
+        details: { originalError: error }
+      };
+      throw apiError;
+    }
+  }
+
+  async getKLineSeries(symbol: string): Promise<KLineSeries> {
+    try {
+      const client = this.getClient();
+      const response = await client.fetchDailySeries(symbol);
+      return this.transformAlphaVantageToKLineSeries(response, symbol);
+    } catch (error) {
+      if (this.isAPIError(error)) {
+        throw error;
+      }
+
+      const apiError: APIError = {
+        code: 'UNKNOWN_ERROR',
+        message: 'Failed to fetch kline series',
         details: { originalError: error }
       };
       throw apiError;

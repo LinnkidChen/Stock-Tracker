@@ -34,12 +34,50 @@ export interface AlphaVantageResponse {
   'Global Quote': AlphaVantageGlobalQuote;
 }
 
+export interface AlphaVantageDailySeriesEntry {
+  '1. open': string;
+  '2. high': string;
+  '3. low': string;
+  '4. close': string;
+  '5. volume': string;
+}
+
+export interface AlphaVantageDailySeriesResponse {
+  'Meta Data'?: Record<string, string>;
+  'Time Series (Daily)'?: Record<string, AlphaVantageDailySeriesEntry>;
+  'Error Message'?: string;
+  Note?: string;
+  Information?: string;
+}
+
 export interface APIResponse<T = unknown> {
   success: boolean;
   data: T | null;
   error: APIError | null;
   timestamp: string;
   message?: string;
+}
+
+export interface KLineCandle {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface TimeRange {
+  startDate: string;
+  endDate: string;
+  interval: '1d';
+}
+
+export interface KLineSeries {
+  symbol: string;
+  range: TimeRange;
+  candles: KLineCandle[];
+  lastUpdated: string;
 }
 
 export interface StockSearchResult {

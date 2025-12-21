@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import * as Sentry from '@sentry/nextjs';
 
 interface DashboardState {
   selectedTicker: string | null;
@@ -25,11 +26,19 @@ export const useDashboardStore = create<DashboardState & DashboardActions>()(
 
     // Actions
     setSelectedTicker: (ticker: string) => {
-      set({ selectedTicker: ticker });
-      get().addToLastTickers(ticker);
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('dashboard:selectedTicker', ticker);
-      }
+      const previousTicker = get().selectedTicker;
+      Sentry.startSpan({ op: 'ui.action', name: 'Ticker Switch' }, (span) => {
+        span.setAttribute('ticker', ticker);
+        if (previousTicker) {
+          span.setAttribute('previousTicker', previousTicker);
+        }
+
+        set({ selectedTicker: ticker });
+        get().addToLastTickers(ticker);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('dashboard:selectedTicker', ticker);
+        }
+      });
     },
 
     setLoading: (loading: boolean) => set({ loading }),

@@ -1,0 +1,175 @@
+openapi: 3.0.3
+info:
+  title: Stock KLine API
+  version: 1.0.0
+paths:
+  /api/stocks/kline/{symbol}:
+    get:
+      summary: 获取指定 ticker 的 1 年日 K 线
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z]{1,5}$'
+          description: 股票代码（1-5 位字母）
+      responses:
+        '200':
+          description: K 线数据返回成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponseKLineSeries'
+        '400':
+          description: ticker 无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponseError'
+        '401':
+          description: API Key 无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponseError'
+        '429':
+          description: 第三方 API 限流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponseError'
+        '502':
+          description: 上游网络错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponseError'
+        '500':
+          description: 未知错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponseError'
+components:
+  schemas:
+    APIResponseKLineSeries:
+      type: object
+      required:
+        - success
+        - data
+        - error
+        - timestamp
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/KLineSeries'
+        error:
+          $ref: '#/components/schemas/APIError'
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+    APIResponseError:
+      type: object
+      required:
+        - success
+        - data
+        - error
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          example: false
+        data:
+          type: 'null'
+        error:
+          $ref: '#/components/schemas/APIError'
+        timestamp:
+          type: string
+          format: date-time
+    KLineSeries:
+      type: object
+      required:
+        - symbol
+        - range
+        - candles
+        - lastUpdated
+      properties:
+        symbol:
+          type: string
+        range:
+          $ref: '#/components/schemas/TimeRange'
+        candles:
+          type: array
+          items:
+            $ref: '#/components/schemas/KLineCandle'
+        lastUpdated:
+          type: string
+          format: date-time
+    TimeRange:
+      type: object
+      required:
+        - startDate
+        - endDate
+        - interval
+      properties:
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        interval:
+          type: string
+          enum:
+            - '1d'
+    KLineCandle:
+      type: object
+      required:
+        - timestamp
+        - open
+        - high
+        - low
+        - close
+        - volume
+      properties:
+        timestamp:
+          type: integer
+          format: int64
+          description: 毫秒时间戳（UTC）
+        open:
+          type: number
+          format: double
+        high:
+          type: number
+          format: double
+        low:
+          type: number
+          format: double
+        close:
+          type: number
+          format: double
+        volume:
+          type: number
+          format: double
+    APIError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum:
+            - INVALID_SYMBOL
+            - API_LIMIT_EXCEEDED
+            - NETWORK_ERROR
+            - INVALID_API_KEY
+            - UNKNOWN_ERROR
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true

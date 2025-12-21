@@ -3,5 +3,7 @@ export { WatchlistCard } from './WatchlistCard';
 export { PortfolioCard } from './PortfolioCard';
 export { MarketOverview } from './MarketOverview';
 export { PriceChart } from './PriceChart';
+export { KLineChart } from './KLineChart';
+export { StockChartTabs } from './StockChartTabs';
 export { TickerInput } from './TickerInput';
 export { PriceIndicator } from './PriceIndicator';
