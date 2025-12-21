@@ -158,6 +158,9 @@ importers:
       lightweight-charts:
         specifier: ^5.0.8
         version: 5.1.0
+      longport:
+        specifier: ^3.0.18
+        version: 3.0.18
       lucide-react:
         specifier: ^0.476.0
         version: 0.476.0(react@19.0.0)
@@ -4357,6 +4360,46 @@ packages:
   log-update@6.1.0:
     resolution: {integrity: sha512-9ie8ItPR6tjY5uYJh8K/Zrv/RMZ5VOlOWvtZdEHYSTFKZfIBPQa9tOAEeAWhd+AnIneLJ22w5fjOYtoutpWq5w==}
     engines: {node: '>=18'}
+
+  longport-darwin-arm64@3.0.18:
+    resolution: {integrity: sha512-2cE24/RXwye4Ry4PvOQMoR6kctjB3AgpY2/CNVVM5/Vj2xWBDTeU3enK+fQwF2tuk92zJXA8bkTX2UuIyQcrAQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [darwin]
+
+  longport-darwin-x64@3.0.18:
+    resolution: {integrity: sha512-Do4Lmf/Y66RLBsGzIC8Df/iU48xuTJCQOiPKssH3o3eY6HTGiLIOP/mrb9JP8mJkwt/IeVp+J7SkBq4KLqQ7eA==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [darwin]
+
+  longport-linux-arm64-gnu@3.0.18:
+    resolution: {integrity: sha512-KboiYDz/6MRnNDKqkGi2MxxVkZVpg/yfCdXWbvBZE2Dlvwsao7XRLrLifaCaYCWPntRJYx912RfmGO7ohUOsGQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+
+  longport-linux-x64-gnu@3.0.18:
+    resolution: {integrity: sha512-U2Nl0JD1dovu7JDXlciIIGNbCvGbsbPkrszRnovWUvFKHSs0zHQiH+UhYHdy4cKDNiXGHPhB2GFdOtb3ZWiuxQ==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+
+  longport-linux-x64-musl@3.0.18:
+    resolution: {integrity: sha512-QdoP4p775qrNlJypZTUILQ6ccPAuq0uH9oIBpfC/+wwqcKANFe8gKgeQyPaGnL/kAnqpxTURvExpUNVMdR4S3Q==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+
+  longport-win32-x64-msvc@3.0.18:
+    resolution: {integrity: sha512-QrBvFjI+mr85UVutanCBsDllOByH+ncKFLcGOjbsWfZgWiBlrwFf+bZJ9vGWHTv5IkZcU2Lt+YLIEfseXOwA2A==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [win32]
+
+  longport@3.0.18:
+    resolution: {integrity: sha512-k0nsK17jzjpxZDEp47KrJIGmyRCLvMRj1bY6jzlDj3cWWxABcuK4bYKezyCKcMfquaPFq9UrYyCMYdAoUeezmA==}
+    engines: {node: '>= 10'}
 
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
@@ -9071,7 +9114,7 @@ snapshots:
       eslint: 8.48.0
       eslint-import-resolver-node: 0.3.9
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.50.0(eslint@8.48.0)(typescript@5.7.2))(eslint@8.48.0))(eslint@8.48.0)
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.50.0(eslint@8.48.0)(typescript@5.7.2))(eslint-import-resolver-typescript@3.10.1)(eslint@8.48.0)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.50.0(eslint@8.48.0)(typescript@5.7.2))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.50.0(eslint@8.48.0)(typescript@5.7.2))(eslint@8.48.0))(eslint@8.48.0))(eslint@8.48.0)
       eslint-plugin-jsx-a11y: 6.10.2(eslint@8.48.0)
       eslint-plugin-react: 7.37.5(eslint@8.48.0)
       eslint-plugin-react-hooks: 5.2.0(eslint@8.48.0)
@@ -9101,7 +9144,7 @@ snapshots:
       tinyglobby: 0.2.15
       unrs-resolver: 1.11.1
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.50.0(eslint@8.48.0)(typescript@5.7.2))(eslint-import-resolver-typescript@3.10.1)(eslint@8.48.0)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.50.0(eslint@8.48.0)(typescript@5.7.2))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.50.0(eslint@8.48.0)(typescript@5.7.2))(eslint@8.48.0))(eslint@8.48.0))(eslint@8.48.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -9116,7 +9159,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.50.0(eslint@8.48.0)(typescript@5.7.2))(eslint-import-resolver-typescript@3.10.1)(eslint@8.48.0):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.50.0(eslint@8.48.0)(typescript@5.7.2))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.50.0(eslint@8.48.0)(typescript@5.7.2))(eslint@8.48.0))(eslint@8.48.0))(eslint@8.48.0):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -10360,6 +10403,33 @@ snapshots:
       slice-ansi: 7.1.2
       strip-ansi: 7.1.2
       wrap-ansi: 9.0.2
+
+  longport-darwin-arm64@3.0.18:
+    optional: true
+
+  longport-darwin-x64@3.0.18:
+    optional: true
+
+  longport-linux-arm64-gnu@3.0.18:
+    optional: true
+
+  longport-linux-x64-gnu@3.0.18:
+    optional: true
+
+  longport-linux-x64-musl@3.0.18:
+    optional: true
+
+  longport-win32-x64-msvc@3.0.18:
+    optional: true
+
+  longport@3.0.18:
+    optionalDependencies:
+      longport-darwin-arm64: 3.0.18
+      longport-darwin-x64: 3.0.18
+      longport-linux-arm64-gnu: 3.0.18
+      longport-linux-x64-gnu: 3.0.18
+      longport-linux-x64-musl: 3.0.18
+      longport-win32-x64-msvc: 3.0.18
 
   loose-envify@1.4.0:
     dependencies:

@@ -5,6 +5,7 @@ interface DashboardState {
   loading: boolean;
   wsConnected: boolean;
   lastTickers: string[];
+  quoteProvider: string;
 }
 
 interface DashboardActions {
@@ -12,6 +13,7 @@ interface DashboardActions {
   setLoading: (loading: boolean) => void;
   setWsConnected: (connected: boolean) => void;
   addToLastTickers: (ticker: string) => void;
+  setQuoteProvider: (provider: string) => void;
   hydrateFromStorage: () => void;
 }
 
@@ -22,6 +24,7 @@ export const useDashboardStore = create<DashboardState & DashboardActions>()(
     loading: false,
     wsConnected: false,
     lastTickers: [],
+    quoteProvider: 'default',
 
     // Actions
     setSelectedTicker: (ticker: string) => {
@@ -49,11 +52,19 @@ export const useDashboardStore = create<DashboardState & DashboardActions>()(
       }
     },
 
+    setQuoteProvider: (provider: string) => {
+      set({ quoteProvider: provider });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dashboard:quoteProvider', provider);
+      }
+    },
+
     hydrateFromStorage: () => {
       if (typeof window === 'undefined') return;
 
       const selectedTicker = sessionStorage.getItem('dashboard:selectedTicker');
       const lastTickers = localStorage.getItem('dashboard:lastTickers');
+      const quoteProvider = localStorage.getItem('dashboard:quoteProvider');
 
       if (selectedTicker) {
         set({ selectedTicker });
@@ -65,6 +76,10 @@ export const useDashboardStore = create<DashboardState & DashboardActions>()(
         } catch {
           // Ignore invalid JSON
         }
+      }
+
+      if (quoteProvider) {
+        set({ quoteProvider });
       }
     }
   })
