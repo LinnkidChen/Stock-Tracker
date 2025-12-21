@@ -1,68 +1,68 @@
-# Repository Guidelines
+# 仓库指南
 
-## Project Structure & Module Organization
+## 项目结构与模块组织
 
-- Source code: `src/` using Next.js App Router (`src/app/...`).
-- UI components: `src/components/` (design system under `src/components/ui`).
-- Feature modules: `src/features/*` (e.g., `overview`, `kanban`, `products`).
-- Utilities and types: `src/lib/*`, `src/types/*`.
-- Config: `next.config.ts`, `tsconfig.json`, `.eslintrc.json`, `.prettierrc`.
-- Public assets: `public/`.
-- Environment template: `env.example.txt` (copy to `.env`).
+- 源码：`src/`，使用 Next.js App Router（`src/app/...`）。
+- UI 组件：`src/components/`（设计系统位于 `src/components/ui`）。
+- 功能模块：`src/features/*`（例如 `overview`、`kanban`、`products`）。
+- 工具与类型：`src/lib/*`、`src/types/*`。
+- 配置：`next.config.ts`、`tsconfig.json`、`.eslintrc.json`、`.prettierrc`。
+- 公共资源：`public/`。
+- 环境模板：`env.example.txt`（拷贝为 `.env`）。
 
-## Build, Test, and Development Commands
+## 构建、测试与开发命令
 
-- Dev server: `pnpm dev` (Next.js with Turbopack).
-- Production build: `pnpm build`.
-- Start production server: `pnpm start`.
-- Lint: `pnpm lint` | Fix + format: `pnpm lint:fix`.
-- Format only: `pnpm format` | Check: `pnpm format:check`.
-- Git hooks: pre-commit runs Prettier via `lint-staged`; pre-push runs `pnpm build`.
+- 开发服务器：`pnpm dev`（Next.js + Turbopack）。
+- 生产构建：`pnpm build`。
+- 启动生产服务器：`pnpm start`。
+- Lint：`pnpm lint` | 修复 + 格式化：`pnpm lint:fix`。
+- 仅格式化：`pnpm format` | 校验：`pnpm format:check`。
+- Git 钩子：pre-commit 通过 `lint-staged` 运行 Prettier；pre-push 运行 `pnpm build`。
 
-## Coding Style & Naming Conventions
+## 编码风格与命名规范
 
-- Language: TypeScript/TSX; 2‑space indent; semicolons; single quotes; LF EOL (enforced by Prettier).
-- Linting: Next + TypeScript rules; `no-console` and unused vars warn.
-- File/folder names: kebab-case (e.g., `user-avatar-profile.tsx`).
-- Components: PascalCase for React components; hooks start with `use...`.
-- Types/interfaces: PascalCase in `src/types` or colocated.
-- Tailwind: prefer utility classes; plugin `prettier-plugin-tailwindcss` orders classes.
+- 语言：TypeScript/TSX；2 空格缩进；分号；单引号；LF 行尾（Prettier 强制）。
+- Lint：Next + TypeScript 规则；`no-console` 与未使用变量警告。
+- 文件/目录命名：kebab-case（例如 `user-avatar-profile.tsx`）。
+- 组件：React 组件用 PascalCase；hooks 以 `use...` 开头。
+- 类型/接口：PascalCase，位于 `src/types` 或就地定义。
+- Tailwind：优先使用工具类；`prettier-plugin-tailwindcss` 统一排序。
 
-## Testing Guidelines
+## 测试指南
 
-- No formal test setup in this repo yet. If adding tests:
-  - Use Vitest + React Testing Library.
-  - Name tests `*.test.ts` / `*.test.tsx` near source or in `__tests__/`.
-  - Add a `test` script in `package.json` and run via `pnpm test`.
+- 当前仓库无正式测试配置。如需添加测试：
+  - 使用 Vitest + React Testing Library。
+  - 测试命名为 `*.test.ts` / `*.test.tsx`，放在源码附近或 `__tests__/`。
+  - 在 `package.json` 添加 `test` 脚本，并用 `pnpm test` 运行。
 
-## Commit & Pull Request Guidelines
+## 提交与 PR 指南
 
-- Commits: keep small and scoped; prefer Conventional Commits (e.g., `feat: add stocks API route`).
-- Include context in body (what/why), not just code changes.
-- PRs: provide a clear description, screenshots for UI changes, and reference issues (e.g., `Closes #123`).
-- Ensure `pnpm lint` and `pnpm build` pass locally; avoid committing `.env`.
+- 提交保持小而聚焦；优先使用 Conventional Commits（例如 `feat: add stocks API route`）。
+- 提交正文包含上下文（做了什么/为什么），而不仅是代码变更。
+- PR 需提供清晰描述；UI 变更需截图；引用相关 Issue（例如 `Closes #123`）。
+- 本地需确保 `pnpm lint` 与 `pnpm build` 通过；避免提交 `.env`。
 
-## Security & Configuration Tips
+## 安全与配置提示
 
-- Auth: Clerk supports keyless mode; keys are optional to start. Set `NEXT_PUBLIC_CLERK_*` and `CLERK_SECRET_KEY` when ready.
-- Error tracking: Sentry supported; configure `NEXT_PUBLIC_SENTRY_*` and `SENTRY_AUTH_TOKEN` for source maps.
-- Never commit secrets. Copy `env.example.txt` to `.env` and fill values locally.
+- 认证：Clerk 支持无密钥模式；启动时可不设置。准备就绪后设置 `NEXT_PUBLIC_CLERK_*` 与 `CLERK_SECRET_KEY`。
+- 错误追踪：支持 Sentry；配置 `NEXT_PUBLIC_SENTRY_*` 与 `SENTRY_AUTH_TOKEN` 以生成 source maps。
+- 切勿提交密钥。将 `env.example.txt` 复制为 `.env` 并在本地填写。
 
-# Exception Catching
+# 异常捕获
 
-Use `Sentry.captureException(error)` to capture an exception and log the error in Sentry.
-Use this in try catch blocks or areas where exceptions are expected
+使用 `Sentry.captureException(error)` 捕获异常并记录到 Sentry。
+在 try/catch 或可预期异常的场景使用。
 
-# Tracing Examples
+# 追踪示例
 
-Spans should be created for meaningful actions within an applications like button clicks, API calls, and function calls
-Use the `Sentry.startSpan` function to create a span
-Child spans can exist within a parent span
+在按钮点击、API 调用、函数调用等关键动作中创建 span。
+使用 `Sentry.startSpan` 创建 span。
+父 span 中可创建子 span。
 
-## Custom Span instrumentation in component actions
+## 组件动作中的自定义 span
 
-The `name` and `op` properties should be meaninful for the activities in the call.
-Attach attributes based on relevant information and metrics from the request
+`name` 与 `op` 应对该行为具有明确含义。
+基于请求的相关信息与指标添加属性。
 
 ```javascript
 function TestComponent() {
@@ -94,10 +94,10 @@ function TestComponent() {
 }
 ```
 
-## Custom span instrumentation in API calls
+## API 调用中的自定义 span
 
-The `name` and `op` properties should be meaninful for the activities in the call.
-Attach attributes based on relevant information and metrics from the request
+`name` 与 `op` 应对该行为具有明确含义。
+基于请求的相关信息与指标添加属性。
 
 ```javascript
 async function fetchUserData(userId) {
@@ -115,19 +115,22 @@ async function fetchUserData(userId) {
 }
 ```
 
-# Logs
+# 日志
 
-Where logs are used, ensure Sentry is imported using `import * as Sentry from "@sentry/nextjs"`
-Enable logging in Sentry using `Sentry.init({  enableLogs: true })`
-Reference the logger using `const { logger } = Sentry`
-Sentry offers a consoleLoggingIntegration that can be used to log specific console error types automatically without instrumenting the individual logger calls
+需要日志时，确保使用 `import * as Sentry from "@sentry/nextjs"` 导入。
+通过 `Sentry.init({  enableLogs: true })` 启用日志。
+通过 `const { logger } = Sentry` 获取 logger。
+Sentry 提供 `consoleLoggingIntegration`，可自动捕获指定 console 错误类型日志。
 
-## Configuration
+## 配置
 
-In NextJS the client side Sentry initialization is in `instrumentation-client.(js|ts)`, the server initialization is in `sentry.server.config.ts` and the edge initialization is in `sentry.edge.config.ts`
-Initialization does not need to be repeated in other files, it only needs to happen the files mentioned above. You should use `import * as Sentry from "@sentry/nextjs"` to reference Sentry functionality
+在 NextJS 中，客户端初始化位于 `instrumentation-client.(js|ts)`，
+服务端初始化位于 `sentry.server.config.ts`，Edge 初始化位于
+`sentry.edge.config.ts`。
+无需在其他文件重复初始化；使用 `import * as Sentry from "@sentry/nextjs"`
+调用 Sentry 功能。
 
-### Baseline
+### 基线
 
 ```javascript
 import * as Sentry from "@sentry/nextjs";
@@ -139,7 +142,7 @@ Sentry.init({
 });
 ```
 
-### Logger Integration
+### Logger 集成
 
 ```javascript
 Sentry.init({
@@ -151,9 +154,9 @@ Sentry.init({
 });
 ```
 
-## Logger Examples
+## Logger 示例
 
-`logger.fmt` is a template literal function that should be used to bring variables into the structured logs.
+`logger.fmt` 是模板字符串函数，用于将变量注入结构化日志。
 
 ```javascript
 logger.trace("Starting database connection", { database: "users" });
