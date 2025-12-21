@@ -38,7 +38,6 @@ export class AlphaVantageClient {
       const response = await fetch(`${this.baseUrl}?${params.toString()}`, {
         signal: controller.signal
       });
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -89,6 +88,8 @@ export class AlphaVantageClient {
         details: { originalError: error }
       };
       throw apiError;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -106,7 +107,6 @@ export class AlphaVantageClient {
       const response = await fetch(`${this.baseUrl}?${params.toString()}`, {
         signal: controller.signal
       });
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -122,6 +122,8 @@ export class AlphaVantageClient {
         details: { originalError: error }
       };
       throw apiError;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 }
