@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+build/
+.next/
+out/
+
+# testing
+coverage/
+
+# logs
+*.log
+
+# env
+.env*
+
+# misc
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+
+# lockfiles
+pnpm-lock.yaml
+package-lock.json
+yarn.lock

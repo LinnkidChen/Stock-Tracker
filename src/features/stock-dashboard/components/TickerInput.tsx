@@ -23,6 +23,10 @@ export const TickerInput = forwardRef<HTMLInputElement, TickerInputProps>(
 
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
+      if (/[,\s]+/.test(ticker.trim())) {
+        setError('Multiple tickers are not supported. Enter one symbol.');
+        return;
+      }
       const res = validateTicker(ticker);
       if (!res.isValid) {
         setError(res.error ?? 'Invalid symbol');

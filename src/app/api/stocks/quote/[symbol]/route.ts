@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
-import {
-  APIResponse,
-  StockQuote,
-  APIError,
-  APIErrorCode
-} from '@/lib/types/stock-api';
+import { APIResponse, StockQuote, APIError } from '@/lib/types/stock-api';
 import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ symbol: string }> }
 ) {
+  const requestPath = request?.nextUrl?.pathname ?? 'unknown';
+
   try {
     const { symbol: rawSymbol } = await params;
     const symbol = normalizeTicker(rawSymbol);
@@ -28,7 +25,7 @@ export async function GET(
       logger.warn(`API Error: ${error.message}`, {
         symbol: rawSymbol,
         code: error.code,
-        path: request.nextUrl.pathname
+        path: requestPath
       });
 
       const response: APIResponse<null> = {
@@ -66,7 +63,7 @@ export async function GET(
       const statusCode = getStatusCodeForError(error.code);
       const logContext = {
         code: error.code,
-        path: request.nextUrl.pathname,
+        path: requestPath,
         originalError: error
       };
 
@@ -88,7 +85,7 @@ export async function GET(
 
     // Handle unexpected errors
     logger.error('API Unexpected Error', {
-      path: request.nextUrl.pathname,
+      path: requestPath,
       error
     });
 

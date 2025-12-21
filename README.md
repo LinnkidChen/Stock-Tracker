@@ -1,7 +1,7 @@
 # Stock Tracker
 
 <div align="center"><strong>全面的股票投资组合分析与指标平台</strong></div>
-<div align="center">基于 Next.js 15、React 19 与 TradingView Lightweight Charts 构建</div>
+<div align="center">基于 Next.js 15、React 19、TradingView Lightweight Charts 与 klinecharts 构建</div>
 <br />
 
 ## 概览
@@ -53,7 +53,7 @@ Stock Tracker 是一个全面的股票投资组合分析与指标平台，旨在
 
 - **样式**: [Tailwind CSS v4](https://tailwindcss.com)
 - **组件**: [Shadcn-ui](https://ui.shadcn.com)（Radix UI primitives）
-- **金融图表**: [TradingView Lightweight Charts™](https://www.tradingview.com/lightweight-charts/) - 股票价格、蜡烛图与成交量
+- **金融图表**: [TradingView Lightweight Charts™](https://www.tradingview.com/lightweight-charts/) 与 [klinecharts](https://klinecharts.com) - 价格图表与 K 线图
 - **分析图表**: [Recharts](https://recharts.org) - KPI、分布与非金融可视化
 - **命令面板**: [kbar](https://kbar.vercel.app/)
 
@@ -80,6 +80,7 @@ Stock Tracker 是一个全面的股票投资组合分析与指标平台，旨在
 | 功能 | 描述 |
 | :----------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **股票仪表盘** | 使用 TradingView Lightweight Charts 的实时价格图表，支持蜡烛图形态、成交量指标与技术分析工具 |
+| **K 线图 Tab** | 使用 klinecharts 展示 1 年日 K 线；仅支持单一 ticker，受 Alpha Vantage 限流影响 |
 | **投资组合追踪** | 监控多个组合的实时盈亏、资产配置可视化与绩效指标 |
 | **技术指标** | RSI、MACD、移动平均、布林带等综合指标套件 |
 | **关注列表与提醒** | 创建关注列表并设置价格提醒与指标提醒 |

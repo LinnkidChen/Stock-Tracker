@@ -1,7 +1,6 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { useEffect } from 'react';
 
 export default function SentryTestPage() {
   return (
@@ -13,7 +12,6 @@ export default function SentryTestPage() {
       <Button
         variant='destructive'
         onClick={() => {
-          console.log('Throwing test error...');
           throw new Error(
             'Sentry Client Test Error: ' + new Date().toISOString()
           );
