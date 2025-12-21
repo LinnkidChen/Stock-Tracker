@@ -31,7 +31,10 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- Rapid delivery with safe defaults: scope is small, phased, and avoids premature abstractions.
+- Documentation planned: docs/README/spec updates listed with owners and timing.
+- Logging and tracing planned: Sentry spans, logs, and error capture identified.
+- Unit tests planned: comprehensive unit test coverage defined for new/changed logic.
 
 ## Project Structure
 
