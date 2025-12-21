@@ -1,5 +1,6 @@
 import {
   StockQuote,
+  AlphaVantageResponse,
   AlphaVantageDailySeriesResponse,
   APIError,
   KLineSeries,
@@ -12,7 +13,7 @@ import { QuoteProviderFactory } from './quote-provider';
 
 export class StockService {
   private readonly BATCH_SIZE = 5; // Alpha Vantage free tier limit (5 calls/min)
-  private readonly BATCH_DELAY_MS = 61000; // 61 seconds between batches to be safe
+  private readonly BATCH_DELAY_MS = 12000; // 12 seconds between batches
 
   async getMultipleQuotes(
     symbols: string[],
@@ -96,6 +97,62 @@ export class StockService {
   private transformAlphaVantageToKLineSeries(
     response: AlphaVantageDailySeriesResponse,
     symbol: string
+  ): StockQuote {
+    const quote = response['Global Quote'];
+
+    if (!quote) {
+      throw {
+        code: 'INVALID_SYMBOL',
+        message: `No quote data found for symbol: ${symbol}`
+      } as APIError;
+    }
+
+    // Parse numeric values safely
+    const parseFloatSafe = (
+      value: string | undefined,
+      fallback: number = 0
+    ): number => {
+      if (!value || value === 'null' || value === 'None') return fallback;
+      const parsed = Number.parseFloat(value);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
+
+    const candles: KLineCandle[] = entries
+      .map(([date, data]) => {
+        const timestamp = new Date(date).getTime();
+        return {
+          timestamp,
+          open: parseNumber(data['1. open']),
+          high: parseNumber(data['2. high']),
+          low: parseNumber(data['3. low']),
+          close: parseNumber(data['4. close']),
+          volume: parseNumber(data['5. volume'])
+        };
+      })
+      .filter(
+        (candle) =>
+          candle.timestamp >= startDate.getTime() &&
+          candle.timestamp <= endDate.getTime()
+      )
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    const range: TimeRange = {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      interval: '1d'
+    };
+
+    return {
+      symbol,
+      range,
+      candles,
+      lastUpdated: endDate.toISOString()
+    };
+  }
+
+  private transformAlphaVantageToKLineSeries(
+    response: AlphaVantageDailySeriesResponse,
+    symbol: string
   ): KLineSeries {
     const series = response['Time Series (Daily)'] ?? {};
     const entries = Object.entries(series);
@@ -167,17 +224,29 @@ export class StockService {
   private getClient() {
     return getAlphaVantageClient();
   }
-  async getQuote(
-    symbol: string,
-    providerName: string = 'default'
-  ): Promise<StockQuote> {
-    const provider = QuoteProviderFactory.getProvider(providerName);
-    return provider.getQuote(symbol);
+
+  async getQuote(symbol: string): Promise<StockQuote> {
+    try {
+      const client = this.getClient();
+      const response = await client.fetchQuote(symbol);
+      return this.transformAlphaVantageToStockQuote(response, symbol);
+    } catch (error) {
+      if (this.isAPIError(error)) {
+        throw error;
+      }
+
+      const apiError: APIError = {
+        code: 'UNKNOWN_ERROR',
+        message: 'Failed to fetch kline series',
+        details: { originalError: error }
+      };
+      throw apiError;
+    }
   }
 
   async getKLineSeries(symbol: string): Promise<KLineSeries> {
     try {
-      const client = getAlphaVantageClient();
+      const client = this.getClient();
       const response = await client.fetchDailySeries(symbol);
       return this.transformAlphaVantageToKLineSeries(response, symbol);
     } catch (error) {
