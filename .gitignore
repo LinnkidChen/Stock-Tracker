@@ -19,9 +19,9 @@
 # misc
 .DS_Store
 Thumbs.db
+*.pem
 *.tmp
 *.swp
-*.pem
 
 # debug
 *.log

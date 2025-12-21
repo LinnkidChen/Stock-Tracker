@@ -246,6 +246,9 @@ importers:
       '@faker-js/faker':
         specifier: ^9.3.0
         version: 9.9.0
+      '@testing-library/dom':
+        specifier: ^10.4.1
+        version: 10.4.1
       '@testing-library/jest-dom':
         specifier: ^6.8.0
         version: 6.9.1

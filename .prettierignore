@@ -27,6 +27,7 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # local env files
+.env*
 .env.local
 .env.development.local
 .env.test.local
@@ -41,7 +42,6 @@ CHANGELOG.md
 pnpm-lock.yaml
 package-lock.json
 yarn.lock
-
 # Other common ignores
 node_modules
 .next

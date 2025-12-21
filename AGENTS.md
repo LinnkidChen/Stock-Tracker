@@ -175,3 +175,10 @@ logger.fatal("Database connection pool exhausted", {
   activeConnections: 100,
 });
 ```
+
+## Active Technologies
+- TypeScript 5.7, React 19, Next.js 16 (App Router) + Next.js App Router, React, Zustand, Radix UI Dialog, Sentry (001-ticker-error-modal)
+- In-memory watchlist (`/Users/tongchen/Projects/Stock-Tracker/src/app/api/watchlist/route.ts`), no external persistence (001-ticker-error-modal)
+
+## Recent Changes
+- 001-ticker-error-modal: Added TypeScript 5.7, React 19, Next.js 16 (App Router) + Next.js App Router, React, Zustand, Radix UI Dialog, Sentry

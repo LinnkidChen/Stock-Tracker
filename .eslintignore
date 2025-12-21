@@ -12,3 +12,14 @@ coverage/
 
 # minified assets
 *.min.js
+
+# logs and env
+*.log
+.env*
+
+# misc
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.idea/
