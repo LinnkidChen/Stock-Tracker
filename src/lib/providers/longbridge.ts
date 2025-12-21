@@ -20,7 +20,11 @@ export class LongbridgeProvider implements StockDataProvider {
   name = 'Longbridge';
 
   async getQuote(symbol: string): Promise<StockQuote> {
-    if (!process.env.LONGPORT_APP_KEY || !process.env.LONGPORT_ACCESS_TOKEN) {
+    if (
+      !process.env.LONGPORT_APP_KEY ||
+      !process.env.LONGPORT_APP_SECRET ||
+      !process.env.LONGPORT_ACCESS_TOKEN
+    ) {
       throw {
         code: 'INVALID_API_KEY',
         message: 'Longbridge credentials not configured'
@@ -43,8 +47,8 @@ export class LongbridgeProvider implements StockDataProvider {
 
       const q = quote[0];
       const lastUpdated = q.timestamp
-        ? new Date(Number(q.timestamp) * 1000).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
+        ? q.timestamp.toISOString()
+        : new Date().toISOString();
 
       const price = Number(q.lastDone);
       const prevClose = Number(q.prevClose);
@@ -89,7 +93,11 @@ export class LongbridgeProvider implements StockDataProvider {
   }
 
   async getKLines(symbol: string): Promise<KLineSeries> {
-    if (!process.env.LONGPORT_APP_KEY || !process.env.LONGPORT_ACCESS_TOKEN) {
+    if (
+      !process.env.LONGPORT_APP_KEY ||
+      !process.env.LONGPORT_APP_SECRET ||
+      !process.env.LONGPORT_ACCESS_TOKEN
+    ) {
       throw {
         code: 'INVALID_API_KEY',
         message: 'Longbridge credentials not configured'
@@ -132,7 +140,7 @@ export class LongbridgeProvider implements StockDataProvider {
   }
 
   private normalizeSymbol(symbol: string): string {
-    return symbol.includes('.') ? symbol : `US.${symbol}`;
+    return symbol.includes('.') ? symbol : `${symbol}.US`;
   }
 
   private transformCandlesticksToSeries(
@@ -140,11 +148,11 @@ export class LongbridgeProvider implements StockDataProvider {
     symbol: string
   ): KLineSeries {
     // Longbridge Candlestick: { close, high, low, open, timestamp, volume, ... }
-    // Timestamp is unix timestamp in seconds, we need milliseconds for JS Date
+    // Timestamp is a Date; convert to milliseconds for JS Date usage.
 
     const candles: KLineCandle[] = candlesData
       .map((c) => ({
-        timestamp: Number(c.timestamp) * 1000,
+        timestamp: c.timestamp.getTime(),
         open: Number(c.open),
         high: Number(c.high),
         low: Number(c.low),
