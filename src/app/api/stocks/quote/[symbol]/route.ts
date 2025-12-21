@@ -1,25 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStockService } from '@/lib/services/stock-service';
-import { validateTicker } from '@/lib/validation/ticker';
-import { APIResponse, StockQuote, APIError } from '@/lib/types/stock-api';
+import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
+import {
+  APIResponse,
+  StockQuote,
+  APIError,
+  APIErrorCode
+} from '@/lib/types/stock-api';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ symbol: string }> }
 ) {
   try {
-    const { symbol } = await params;
+    const { symbol: rawSymbol } = await params;
+    const symbol = normalizeTicker(rawSymbol);
 
     // Validate the ticker symbol
     const validation = validateTicker(symbol);
     if (!validation.isValid) {
+      const error: APIError = {
+        code: 'INVALID_SYMBOL',
+        message: validation.error || 'Invalid ticker symbol'
+      };
+
+      logger.warn(`API Error: ${error.message}`, {
+        symbol: rawSymbol,
+        code: error.code,
+        path: request.nextUrl.pathname
+      });
+
       const response: APIResponse<null> = {
         success: false,
         data: null,
-        error: {
-          code: 'INVALID_SYMBOL',
-          message: validation.error || 'Invalid ticker symbol'
-        },
+        error,
         timestamp: new Date().toISOString()
       };
 
@@ -47,6 +62,20 @@ export async function GET(
   } catch (error) {
     // Handle APIError
     if (isAPIError(error)) {
+      // Log based on severity (client error vs server error)
+      const statusCode = getStatusCodeForError(error.code);
+      const logContext = {
+        code: error.code,
+        path: request.nextUrl.pathname,
+        originalError: error
+      };
+
+      if (statusCode >= 500) {
+        logger.error(`API Error: ${error.message}`, logContext);
+      } else {
+        logger.warn(`API Warning: ${error.message}`, logContext);
+      }
+
       const response: APIResponse<null> = {
         success: false,
         data: null,
@@ -54,13 +83,15 @@ export async function GET(
         timestamp: new Date().toISOString()
       };
 
-      // Map error codes to HTTP status codes
-      const statusCode = getStatusCodeForError(error.code);
       return NextResponse.json(response, { status: statusCode });
     }
 
     // Handle unexpected errors
-    // TODO: Replace with proper logging service in production
+    logger.error('API Unexpected Error', {
+      path: request.nextUrl.pathname,
+      error
+    });
+
     const response: APIResponse<null> = {
       success: false,
       data: null,

@@ -2,7 +2,9 @@ import * as Sentry from '@sentry/nextjs';
 
 const sentryOptions: Sentry.NodeOptions | Sentry.EdgeOptions = {
   // Sentry DSN
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  dsn:
+    process.env.NEXT_PUBLIC_SENTRY_DSN ||
+    'https://fa838104be186449a1842b3ad2f21dd0@o4510546710626304.ingest.us.sentry.io/4510546712657920',
 
   // Enable Spotlight in development
   spotlight: process.env.NODE_ENV === 'development',
@@ -18,7 +20,7 @@ const sentryOptions: Sentry.NodeOptions | Sentry.EdgeOptions = {
 };
 
 export async function register() {
-  if (!process.env.NEXT_PUBLIC_SENTRY_DISABLED) {
+  if (process.env.NEXT_PUBLIC_SENTRY_DISABLED !== 'true') {
     if (process.env.NEXT_RUNTIME === 'nodejs') {
       // Node.js Sentry configuration
       Sentry.init(sentryOptions);
