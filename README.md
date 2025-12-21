@@ -1,228 +1,199 @@
 # Stock Tracker
 
-<div align="center"><strong>Comprehensive Stock Portfolio Analyzer & Indicator Platform</strong></div>
-<div align="center">Built with Next.js 15, React 19, and TradingView Lightweight Charts</div>
+<div align="center"><strong>全面的股票投资组合分析与指标平台</strong></div>
+<div align="center">基于 Next.js 15、React 19 与 TradingView Lightweight Charts 构建</div>
 <br />
 
-## Overview
+## 概览
 
-Stock Tracker is a comprehensive stock portfolio analyzer and indicator platform designed to empower investors with real-time market insights and portfolio performance tracking. It provides a unified dashboard for monitoring stocks, analyzing technical indicators, and making data-driven investment decisions.
+Stock Tracker 是一个全面的股票投资组合分析与指标平台，旨在为投资者提供实时市场洞察与组合表现跟踪。它提供统一的仪表盘，用于监控股票、分析技术指标并支持数据驱动的投资决策。
 
-- Framework - [Next.js 15](https://nextjs.org/13)
-- Language - [TypeScript](https://www.typescriptlang.org)
-- Auth - [Clerk](https://go.clerk.com/ILdYhn7)
-- Error tracking - [<picture><img alt="Sentry" src="public/assets/sentry.svg">
+- 框架 - [Next.js 15](https://nextjs.org/13)
+- 语言 - [TypeScript](https://www.typescriptlang.org)
+- 认证 - [Clerk](https://go.clerk.com/ILdYhn7)
+- 错误追踪 - [<picture><img alt="Sentry" src="public/assets/sentry.svg">
   </picture>](https://sentry.io/for/nextjs/?utm_source=github&utm_medium=paid-community&utm_campaign=general-fy26q2-nextjs&utm_content=github-banner-project-tryfree)
-- Styling - [Tailwind CSS v4](https://tailwindcss.com)
-- Components - [Shadcn-ui](https://ui.shadcn.com)
-- Schema Validations - [Zod](https://zod.dev)
-- State Management - [Zustand](https://zustand-demo.pmnd.rs)
-- Search params state manager - [Nuqs](https://nuqs.47ng.com/)
-- Tables - [Tanstack Data Tables](https://ui.shadcn.com/docs/components/data-table) • [Dice table](https://www.diceui.com/docs/components/data-table)
-- Forms - [React Hook Form](https://ui.shadcn.com/docs/components/form)
-- Command+k interface - [kbar](https://kbar.vercel.app/)
-- Linting - [ESLint](https://eslint.org)
-- Pre-commit Hooks - [Husky](https://typicode.github.io/husky/)
-- Formatting - [Prettier](https://prettier.io)
+- 样式 - [Tailwind CSS v4](https://tailwindcss.com)
+- 组件 - [Shadcn-ui](https://ui.shadcn.com)
+- Schema 校验 - [Zod](https://zod.dev)
+- 状态管理 - [Zustand](https://zustand-demo.pmnd.rs)
+- 搜索参数状态管理 - [Nuqs](https://nuqs.47ng.com/)
+- 表格 - [Tanstack Data Tables](https://ui.shadcn.com/docs/components/data-table) • [Dice table](https://www.diceui.com/docs/components/data-table)
+- 表单 - [React Hook Form](https://ui.shadcn.com/docs/components/form)
+- Command+k 面板 - [kbar](https://kbar.vercel.app/)
+- Lint - [ESLint](https://eslint.org)
+- 预提交钩子 - [Husky](https://typicode.github.io/husky/)
+- 格式化 - [Prettier](https://prettier.io)
 
-- **Real-time Stock Dashboard**: Interactive price charts with candlestick patterns, volume analysis, and market depth
-- **Technical Indicators**: RSI, MACD, Moving Averages, Bollinger Bands, and custom indicators
-- **Portfolio Management**: Track multiple portfolios with real-time valuation and P&L calculations
-- **Watchlist & Alerts**: Customizable watchlists with price alerts and indicator-based notifications
-- **Performance Analytics**: Portfolio metrics, risk analysis, and comparison against market indices
+- **实时股票仪表盘**：交互式价格图表，支持蜡烛图形态、成交量分析与市场深度
+- **技术指标**：RSI、MACD、移动平均、布林带与自定义指标
+- **组合管理**：追踪多个投资组合的实时估值与盈亏
+- **关注列表与提醒**：可配置关注列表与价格/指标提醒
+- **绩效分析**：组合指标、风险分析与市场指数对比
 
-## Technology Stack
+## 技术栈
 
-| Pages                                                                                                                                                                  | Specifications                                                                                                                                                                                                                                                          |
+| 页面 | 说明 |
 | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Signup / Signin](https://go.clerk.com/ILdYhn7)                                                                                                                        | Authentication with **Clerk** provides secure authentication and user management with multiple sign-in options including passwordless authentication, social logins, and enterprise SSO - all designed to enhance security while delivering a seamless user experience. |
-| [Dashboard (Overview)](https://shadcn-dashboard.kiranism.dev/dashboard)                                                                                                | Cards with Recharts graphs for analytics. Parallel routes in the overview sections feature independent loading, error handling, and isolated component rendering.                                                                                                       |
-| [Product](https://shadcn-dashboard.kiranism.dev/dashboard/product)                                                                                                     | Tanstack tables with server side searching, filter, pagination by Nuqs which is a Type-safe search params state manager in nextjs                                                                                                                                       |
-| [Product/new](https://shadcn-dashboard.kiranism.dev/dashboard/product/new)                                                                                             | A Product Form with shadcn form (react-hook-form + zod).                                                                                                                                                                                                                |
-| [Profile](https://shadcn-dashboard.kiranism.dev/dashboard/profile)                                                                                                     | Clerk's full-featured account management UI that allows users to manage their profile and security settings                                                                                                                                                             |
-| [Kanban Board](https://shadcn-dashboard.kiranism.dev/dashboard/kanban)                                                                                                 | A Drag n Drop task management board with dnd-kit and zustand to persist state locally.                                                                                                                                                                                  |
-| [Not Found](https://shadcn-dashboard.kiranism.dev/dashboard/notfound)                                                                                                  | Not Found Page Added in the root level                                                                                                                                                                                                                                  |
-| [Global Error](https://sentry.io/for/nextjs/?utm_source=github&utm_medium=paid-community&utm_campaign=general-fy26q2-nextjs&utm_content=github-banner-project-tryfree) | A centralized error page that captures and displays errors across the application. Integrated with **Sentry** to log errors, provide detailed reports, and enable replay functionality for better debugging.                                                            |
+| [Signup / Signin](https://go.clerk.com/ILdYhn7) | 使用 **Clerk** 提供安全认证与用户管理，支持无密码登录、社交登录与企业 SSO，兼顾安全性与体验。 |
+| [Dashboard (Overview)](https://shadcn-dashboard.kiranism.dev/dashboard) | 使用 Recharts 的卡片型分析图表。概览页采用并行路由，具备独立加载、错误处理与组件隔离渲染。 |
+| [Product](https://shadcn-dashboard.kiranism.dev/dashboard/product) | 使用 Tanstack tables，支持 Nuqs 管理的服务端搜索、过滤与分页。 |
+| [Product/new](https://shadcn-dashboard.kiranism.dev/dashboard/product/new) | 使用 shadcn 表单（react-hook-form + zod）。 |
+| [Profile](https://shadcn-dashboard.kiranism.dev/dashboard/profile) | 使用 Clerk 完整的账号管理 UI，支持个人资料与安全设置。 |
+| [Kanban Board](https://shadcn-dashboard.kiranism.dev/dashboard/kanban) | 使用 dnd-kit + zustand 的拖拽看板，状态本地持久化。 |
+| [Not Found](https://shadcn-dashboard.kiranism.dev/dashboard/notfound) | 根级 Not Found 页面。 |
+| [Global Error](https://sentry.io/for/nextjs/?utm_source=github&utm_medium=paid-community&utm_campaign=general-fy26q2-nextjs&utm_content=github-banner-project-tryfree) | 全局错误页面，集中捕获与展示错误。与 **Sentry** 集成以记录错误并提供调试信息。 |
 
-- **Framework**: [Next.js 15](https://nextjs.org) with App Router
-- **Language**: [TypeScript](https://www.typescriptlang.org) 5.7.2
-- **Runtime**: Node.js 20+
-- **Package Manager**: pnpm
+- **框架**: [Next.js 15](https://nextjs.org)（App Router）
+- **语言**: [TypeScript](https://www.typescriptlang.org) 5.7.2
+- **运行时**: Node.js 20+
+- **包管理器**: pnpm
 
-### UI & Visualization
+### UI 与可视化
 
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com)
-- **Components**: [Shadcn-ui](https://ui.shadcn.com) (Radix UI primitives)
-- **Financial Charts**: [TradingView Lightweight Charts™](https://www.tradingview.com/lightweight-charts/) - For stock price charts, candlesticks, and volume
-- **Analytics Charts**: [Recharts](https://recharts.org) - For KPIs, distributions, and non-financial visualizations
-- **Command Palette**: [kbar](https://kbar.vercel.app/)
+- **样式**: [Tailwind CSS v4](https://tailwindcss.com)
+- **组件**: [Shadcn-ui](https://ui.shadcn.com)（Radix UI primitives）
+- **金融图表**: [TradingView Lightweight Charts™](https://www.tradingview.com/lightweight-charts/) - 股票价格、蜡烛图与成交量
+- **分析图表**: [Recharts](https://recharts.org) - KPI、分布与非金融可视化
+- **命令面板**: [kbar](https://kbar.vercel.app/)
 
-### State & Data Management
+### 状态与数据管理
 
-- **Client State**: [Zustand](https://zustand-demo.pmnd.rs) v5
-- **Server State**: React Query via provider
-- **Forms**: [React Hook Form](https://ui.shadcn.com/docs/components/form) + [Zod](https://zod.dev)
-- **Tables**: [Tanstack Data Tables](https://ui.shadcn.com/docs/components/data-table)
+- **客户端状态**: [Zustand](https://zustand-demo.pmnd.rs) v5
+- **服务端状态**: 通过 provider 使用 React Query
+- **表单**: [React Hook Form](https://ui.shadcn.com/docs/components/form) + [Zod](https://zod.dev)
+- **表格**: [Tanstack Data Tables](https://ui.shadcn.com/docs/components/data-table)
 - **Search Params**: [Nuqs](https://nuqs.47ng.com/)
 
-### Infrastructure & DX
+### 基础设施与开发体验
 
-- **Auth**: [Clerk](https://go.clerk.com/ILdYhn7)
-- **Error Tracking**: [Sentry](https://sentry.io/for/nextjs/)
-- **Linting**: [ESLint](https://eslint.org)
-- **Formatting**: [Prettier](https://prettier.io)
-- **Pre-commit Hooks**: [Husky](https://typicode.github.io/husky/)
+- **认证**: [Clerk](https://go.clerk.com/ILdYhn7)
+- **错误追踪**: [Sentry](https://sentry.io/for/nextjs/)
+- **Lint**: [ESLint](https://eslint.org)
+- **格式化**: [Prettier](https://prettier.io)
+- **预提交钩子**: [Husky](https://typicode.github.io/husky/)
 
-## Features & Pages
+## 功能与页面
 
-### Stock Analysis Features
+### 股票分析功能
 
-| Feature                  | Description                                                                                                                                       |
+| 功能 | 描述 |
 | :----------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Stock Dashboard**      | Real-time stock price charts with TradingView Lightweight Charts, featuring candlestick patterns, volume indicators, and technical analysis tools |
-| **Portfolio Tracker**    | Monitor multiple portfolios with real-time P&L, asset allocation visualization, and performance metrics                                           |
-| **Technical Indicators** | Comprehensive indicator suite including RSI, MACD, Moving Averages, Bollinger Bands for informed trading decisions                                |
-| **Watchlist & Alerts**   | Create custom watchlists and set price alerts with indicator-based notifications                                                                  |
-| **Market Overview**      | Track sector performance, market indices, and trending stocks with interactive visualizations                                                     |
+| **股票仪表盘** | 使用 TradingView Lightweight Charts 的实时价格图表，支持蜡烛图形态、成交量指标与技术分析工具 |
+| **投资组合追踪** | 监控多个组合的实时盈亏、资产配置可视化与绩效指标 |
+| **技术指标** | RSI、MACD、移动平均、布林带等综合指标套件 |
+| **关注列表与提醒** | 创建关注列表并设置价格提醒与指标提醒 |
+| **市场概览** | 通过交互式可视化跟踪板块表现、市场指数与热门股票 |
 
-### Core Dashboard Pages
+### 核心仪表盘页面
 
-| Page                     | Description                                                                                       |
+| 页面 | 描述 |
 | :----------------------- | :------------------------------------------------------------------------------------------------ |
-| **Dashboard (Overview)** | Main dashboard with portfolio summary, market indices, and key performance metrics using Recharts |
-| **Stock Details**        | Individual stock analysis page with price charts, indicators, and company information             |
-| **Portfolio Management** | Manage holdings, track transactions, and analyze portfolio performance                            |
-| **Watchlists**           | Create and manage custom stock watchlists with real-time updates                                  |
-| **Settings**             | User preferences, alert configurations, and account management via Clerk                          |
-| **Reports**              | Generate portfolio reports and export data for tax purposes                                       |
+| **Dashboard (Overview)** | 使用 Recharts 的组合总览与市场指数、关键绩效指标 |
+| **Stock Details** | 单只股票分析页面，包含价格图表、指标与公司信息 |
+| **Portfolio Management** | 管理持仓、跟踪交易并分析组合绩效 |
+| **Watchlists** | 创建与管理关注列表，实时更新 |
+| **Settings** | 用户偏好、提醒配置与 Clerk 账号管理 |
+| **Reports** | 生成投资组合报告并导出数据用于税务 | 
 
-## Project Structure
+## 项目结构
 
 ```plaintext
 src/
 ├── app/                      # Next.js App Router
-│   ├── (auth)/              # Authentication routes
-│   ├── (dashboard)/         # Dashboard routes
+│   ├── (auth)/              # 认证路由
+│   ├── (dashboard)/         # 仪表盘路由
 │   │   ├── dashboard/
-│   │   │   ├── stocks/      # Stock analysis pages
-│   │   │   ├── portfolio/   # Portfolio management
-│   │   │   └── watchlist/   # Watchlist features
-│   └── api/                 # API routes
+│   │   │   ├── stocks/      # 股票分析页面
+│   │   │   ├── portfolio/   # 组合管理
+│   │   │   └── watchlist/   # 关注列表功能
+│   └── api/                 # API 路由
 │
-├── components/              # Shared components
-│   ├── ui/                  # shadcn/ui components
-│   ├── layout/              # Layout components
-│   └── charts/              # Chart components
+├── components/              # 共享组件
+│   ├── ui/                  # shadcn/ui 组件
+│   ├── layout/              # 布局组件
+│   └── charts/              # 图表组件
 │
-├── features/                # Feature modules
-│   ├── stock-dashboard/     # Stock analysis features
-│   │   ├── components/      # Stock-specific components
-│   │   ├── hooks/          # Custom hooks
-│   │   ├── lib/            # Chart configurations
-│   │   └── types/          # TypeScript types
-│   ├── portfolio/          # Portfolio management
-│   ├── watchlist/          # Watchlist features
-│   └── overview/           # Dashboard overview
+├── features/                # 功能模块
+│   ├── stock-dashboard/     # 股票分析功能
+│   │   ├── components/      # 股票专用组件
+│   │   ├── hooks/          # 自定义 hooks
+│   │   ├── lib/            # 图表配置
+│   │   └── types/          # TypeScript 类型
+│   ├── portfolio/          # 投资组合管理
+│   ├── watchlist/          # 关注列表功能
+│   └── overview/           # 仪表盘概览
 │
-├── lib/                    # Core utilities
-│   ├── auth/              # Clerk configuration
-│   ├── api/               # API clients
-│   └── utils/             # Shared utilities
+├── lib/                    # 核心工具
+│   ├── auth/              # Clerk 配置
+│   ├── api/               # API 客户端
+│   └── utils/             # 共享工具
 │
-├── hooks/                  # Global custom hooks
+├── hooks/                  # 全局自定义 hooks
 ├── stores/                 # Zustand stores
-└── types/                  # Global TypeScript types
+└── types/                  # 全局 TypeScript 类型
 ```
 
-## Getting Started
+## 快速开始
 
-### Prerequisites
+### 前置条件
 
 - Node.js 20+
-- pnpm package manager
+- pnpm 包管理器
 - Git
 
-### Installation
+### 安装
 
-1. Clone the repository:
+1. 克隆仓库:
 
 ```bash
 git clone https://github.com/your-username/stock-tracker.git
 cd stock-tracker
 ```
 
-2. Install dependencies:
+2. 安装依赖:
 
 ```bash
 pnpm install
 ```
 
-3. Set up environment variables:
+3. 配置环境变量:
 
 ```bash
 cp env.example.txt .env.local
 ```
 
-4. Configure your `.env.local` file with:
+4. 在 `.env.local` 中配置：
 
-   - Clerk authentication keys (optional for initial setup)
-   - Sentry DSN for error tracking (optional). Set `NEXT_PUBLIC_SENTRY_DISABLED=true` to disable.
-   - Alpha Vantage API key (when ready for real data). Note: Free tier is limited to 5 calls/minute.
+   - Clerk 认证密钥（初始化可选）
+   - Sentry DSN（可选）。设置 `NEXT_PUBLIC_SENTRY_DISABLED=true` 可禁用。
+   - Alpha Vantage API Key（准备接入真实数据时）。注意：免费额度 5 次/分钟。
 
-5. Run the development server:
+5. 启动开发服务:
 
 ```bash
 pnpm dev
 ```
 
-The application will be available at http://localhost:3000
+应用将运行在 http://localhost:3000
 
-### Development Commands
+### 开发命令
 
 ```bash
-pnpm dev          # Start development server
-pnpm build        # Build for production
-pnpm start        # Start production server
-pnpm lint         # Run ESLint
-pnpm lint:fix     # Fix linting issues
-pnpm format       # Format code with Prettier
-pnpm format:check # Check formatting
+pnpm dev          # 启动开发服务器
+pnpm build        # 构建生产版本
+pnpm start        # 启动生产服务器
+pnpm lint         # 运行 ESLint
+pnpm lint:fix     # 修复 lint 问题
+pnpm format       # 使用 Prettier 格式化代码
+pnpm format:check # 校验格式
 ```
 
-## Specification-Driven Development
+## 规范驱动开发
 
-This project uses a structured specification workflow for feature development. Specifications are managed in the `.spec-workflow/` directory.
+本项目使用结构化规范流程进行功能开发，规范位于 `.spec-workflow/` 目录。
 
-### Current Specifications
+### 当前规范
 
-- **stock-dashboard-page**: Complete stock analysis dashboard implementation (25 tasks completed)
-- **stocks-only-cleanup**: Focused cleanup for stock-specific features (7 tasks completed)
-
-### Workflow Process
-
-1. **Requirements Phase**: Define EARS-format requirements
-2. **Design Phase**: Create technical design documents
-3. **Tasks Phase**: Generate actionable implementation tasks
-4. **Implementation Phase**: Execute tasks with progress tracking
-
-For more details, see the `.spec-workflow/` directory.
-
-## Contributing
-
-Please follow these guidelines when contributing:
-
-1. **Code Style**: Follow TypeScript/TSX standards with Prettier formatting
-2. **Commits**: Use conventional commits (e.g., `feat:`, `fix:`, `docs:`)
-3. **Testing**: Ensure `pnpm lint` and `pnpm build` pass
-4. **Documentation**: Update relevant docs for new features
-
-## Security Notes
-
-- Never commit `.env` files or secrets
-- Use environment variables for all sensitive data
-- Follow Clerk's security best practices for authentication
-- Implement proper data validation for all user inputs
-
-## License
-
-[MIT License](LICENSE)
+- **stock-dashboard-page**: 股票分析仪表盘实现（25 个任务已完成）
+- **stocks-only-cleanup**: 股票相关功能清理（7 个任务已完成）
