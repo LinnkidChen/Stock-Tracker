@@ -6,6 +6,8 @@ const sentryOptions: Sentry.NodeOptions | Sentry.EdgeOptions = {
     process.env.NEXT_PUBLIC_SENTRY_DSN ||
     'https://fa838104be186449a1842b3ad2f21dd0@o4510546710626304.ingest.us.sentry.io/4510546712657920',
 
+  enableLogs: true,
+
   // Enable Spotlight in development
   spotlight: process.env.NODE_ENV === 'development',
 

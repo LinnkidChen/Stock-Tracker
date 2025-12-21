@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+coverage/
+.next/
+out/
+
+# minified assets
+*.min.js
+
+# logs and env
+*.log
+.env*
+
+# misc
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.idea/

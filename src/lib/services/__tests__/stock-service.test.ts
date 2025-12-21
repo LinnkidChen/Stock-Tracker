@@ -544,7 +544,7 @@ describe('StockService', () => {
   describe('constants', () => {
     it('should have correct batch size and delay', () => {
       expect((stockService as any).BATCH_SIZE).toBe(5);
-      expect((stockService as any).BATCH_DELAY_MS).toBe(12000);
+      expect((stockService as any).BATCH_DELAY_MS).toBe(61000);
     });
   });
 });

@@ -91,7 +91,7 @@ describe('WatchlistCard integration', () => {
 
     // Add AAPL
     await user.type(
-      screen.getByPlaceholderText('Add symbol (e.g., MSFT)'),
+      screen.getByPlaceholderText('Add symbol (1-5 letters, e.g., MSFT)'),
       'AAPL'
     );
     await user.click(screen.getByRole('button', { name: /add/i }));
@@ -134,7 +134,7 @@ describe('WatchlistCard integration', () => {
     renderWithProviders(<WatchlistCard />);
 
     await user.type(
-      screen.getByPlaceholderText('Add symbol (e.g., MSFT)'),
+      screen.getByPlaceholderText('Add symbol (1-5 letters, e.g., MSFT)'),
       'BAD'
     );
     await user.click(screen.getByRole('button', { name: /add/i }));
@@ -208,7 +208,7 @@ describe('WatchlistCard integration', () => {
     const { container } = renderWithProviders(<WatchlistCard />);
 
     await user.type(
-      screen.getByPlaceholderText('Add symbol (e.g., MSFT)'),
+      screen.getByPlaceholderText('Add symbol (1-5 letters, e.g., MSFT)'),
       'SLOW'
     );
     await user.click(screen.getByRole('button', { name: /add/i }));
