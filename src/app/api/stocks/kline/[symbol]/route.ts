@@ -88,7 +88,15 @@ export async function GET(
             timestamp: new Date().toISOString()
           };
 
-          return NextResponse.json(response, { status: statusCode });
+          const options: { status: number; headers?: Record<string, string> } =
+            { status: statusCode };
+          if (statusCode === 429) {
+            options.headers = {
+              'Retry-After': '60'
+            };
+          }
+
+          return NextResponse.json(response, options);
         }
 
         logger.error('API Unexpected Error', {

@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import type { KLineData } from 'klinecharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -38,20 +39,43 @@ export function KLineChart({ ticker }: KLineChartProps) {
   const chartRef = useRef<KLineChartHandle | null>(null);
   const [chartReady, setChartReady] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
+  const [retryTrigger, setRetryTrigger] = useState(0);
 
-  const chartData = useMemo(() => (data?.candles ?? []) as KLineData[], [data]);
+  // Fix: Safe type mapping instead of assertion
+  const chartData = useMemo(
+    () =>
+      data?.candles.map(
+        (candle) =>
+          ({
+            timestamp: candle.timestamp,
+            open: candle.open,
+            high: candle.high,
+            low: candle.low,
+            close: candle.close,
+            volume: candle.volume,
+            turnover: 0 // KLineData requires turnover, setting default or if available
+          }) as KLineData
+      ) ?? [],
+    [data]
+  );
 
   const rangeLabel = useMemo(
     () => formatRangeLabel(data?.range),
     [data?.range]
   );
 
-  const initChart = useCallback(() => {
-    if (!containerRef.current) return () => {};
+  useEffect(() => {
+    if (!containerRef.current) return;
 
+    let currentChart: KLineChartHandle | null = null;
     let cancelled = false;
-    chartRef.current?.destroy();
-    chartRef.current = null;
+
+    // Cleanup previous chart if it exists (though effect cleanup handles this usually, proper flow ensures it)
+    if (chartRef.current) {
+      chartRef.current.destroy();
+      chartRef.current = null;
+    }
+
     setChartReady(false);
     setChartError(null);
 
@@ -64,11 +88,14 @@ export function KLineChart({ ticker }: KLineChartProps) {
           handle.destroy();
           return;
         }
+        currentChart = handle;
         chartRef.current = handle;
         setChartReady(true);
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) {
+          console.error('Chart initialization failed:', err);
+          Sentry.captureException(err);
           setChartError('Failed to initialize chart');
           setChartReady(false);
         }
@@ -76,18 +103,14 @@ export function KLineChart({ ticker }: KLineChartProps) {
 
     return () => {
       cancelled = true;
+      // Destroy the chart created in this effect
+      currentChart?.destroy();
+      // Ensure ref is cleaned if it matches
+      if (chartRef.current === currentChart) {
+        chartRef.current = null;
+      }
     };
-  }, [ticker]);
-
-  useEffect(() => {
-    const cancelInit = initChart();
-    return () => {
-      cancelInit();
-      chartRef.current?.destroy();
-      chartRef.current = null;
-      setChartReady(false);
-    };
-  }, [initChart]);
+  }, [ticker, retryTrigger]);
 
   useEffect(() => {
     if (!chartRef.current || !querySymbol) return;
@@ -96,7 +119,7 @@ export function KLineChart({ ticker }: KLineChartProps) {
 
   const handleRetry = () => {
     if (chartError) {
-      initChart();
+      setRetryTrigger((prev) => prev + 1);
     }
     refetch();
   };

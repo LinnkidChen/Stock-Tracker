@@ -19,10 +19,10 @@ export class AlphaVantageClient {
 
   async fetchQuote(symbol: string): Promise<AlphaVantageResponse> {
     // Validate symbol
-    if (!/^[A-Za-z0-9]+$/.test(symbol)) {
+    if (!/^[A-Za-z]{1,5}$/.test(symbol)) {
       throw {
         code: 'INVALID_SYMBOL',
-        message: 'Symbol must contain only alphanumeric characters'
+        message: 'Symbol must be 1-5 alphabetic characters'
       } as APIError;
     }
 
@@ -131,10 +131,10 @@ export class AlphaVantageClient {
   async fetchDailySeries(
     symbol: string
   ): Promise<AlphaVantageDailySeriesResponse> {
-    if (!/^[A-Za-z0-9]+$/.test(symbol)) {
+    if (!/^[A-Za-z]{1,5}$/.test(symbol)) {
       throw {
         code: 'INVALID_SYMBOL',
-        message: 'Symbol must contain only alphanumeric characters'
+        message: 'Symbol must be 1-5 alphabetic characters'
       } as APIError;
     }
 

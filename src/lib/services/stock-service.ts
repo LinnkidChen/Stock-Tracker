@@ -155,10 +155,10 @@ export class StockService {
 
     const endDate = entries.length
       ? new Date(
-          entries
-            .map(([date]) => date)
-            .sort()
-            .slice(-1)[0]
+          entries.reduce(
+            (max, [date]) => (date > max ? date : max),
+            entries[0][0]
+          )
         )
       : new Date();
 
