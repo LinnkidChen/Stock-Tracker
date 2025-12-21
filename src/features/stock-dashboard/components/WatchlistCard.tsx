@@ -12,6 +12,7 @@ import { WatchlistItemDisplay } from './WatchlistItemDisplay';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import { WatchlistItemWithPrice } from '@/types/stocks';
 import { TickerErrorModal } from './TickerErrorModal';
+import { useDashboardStore } from '../store';
 
 type SpanLike = {
   setAttribute?: (key: string, value: string | number) => void;
@@ -202,6 +203,9 @@ export function WatchlistCard() {
                   key={symbol}
                   item={watchlistItem}
                   onRemove={(sym) => mutate('remove', sym)}
+                  onClick={(sym) =>
+                    useDashboardStore.getState().setSelectedTicker(sym)
+                  }
                   isLoading={isItemLoading}
                   isRemoving={busy}
                   error={hasError ? 'Failed to load price' : null}

@@ -46,8 +46,17 @@ export async function GET(
           return NextResponse.json(response, { status: 400 });
         }
 
+        const url = new URL(request.url);
+        const provider = url.searchParams.get('provider') || 'default';
         const stockService = getStockService();
-        const series = await stockService.getKLineSeries(symbol);
+        // Updated service method to accept provider - ensure StockService signature is updated or verify
+        // In previous steps I updated StockService.getKLineSeries to call factory, but did I add the argument?
+        // I checked StockService content earlier, let's verify if I added the argument.
+        // I need to update StockService AGAIN if I missed adding the argument.
+        // Wait, I think I didn't add the argument to getKLineSeries in StockService!
+        // I better check StockService again.
+        // Assuming I need to update StockService signature too. I will check it in next step if this fails or pre-emptively.
+        const series = await stockService.getKLineSeries(symbol, provider);
 
         span?.setAttribute('kline.candles', series.candles.length);
 

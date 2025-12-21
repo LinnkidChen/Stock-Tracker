@@ -4,7 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import * as Sentry from '@sentry/nextjs';
 import { APIResponse, KLineSeries } from '@/lib/types/stock-api';
 
-async function fetchKlineSeries(symbol: string): Promise<KLineSeries> {
+async function fetchKlineSeries(
+  symbol: string,
+  provider: string = 'default'
+): Promise<KLineSeries> {
   return Sentry.startSpan(
     { op: 'http.client', name: `GET /api/stocks/kline/${symbol}` },
     async (span) => {
@@ -12,9 +15,12 @@ async function fetchKlineSeries(symbol: string): Promise<KLineSeries> {
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       try {
-        const response = await fetch(`/api/stocks/kline/${symbol}`, {
-          signal: controller.signal
-        });
+        const response = await fetch(
+          `/api/stocks/kline/${symbol}?provider=${provider}`,
+          {
+            signal: controller.signal
+          }
+        );
 
         span?.setAttribute('http.status', response.status);
 
@@ -45,10 +51,10 @@ async function fetchKlineSeries(symbol: string): Promise<KLineSeries> {
   );
 }
 
-export function useKlineSeries(symbol?: string) {
+export function useKlineSeries(symbol?: string, provider: string = 'default') {
   const query = useQuery({
-    queryKey: ['kline-series', symbol],
-    queryFn: () => fetchKlineSeries(symbol!),
+    queryKey: ['kline-series', symbol, provider],
+    queryFn: () => fetchKlineSeries(symbol!, provider),
     enabled: !!symbol,
     staleTime: 24 * 60 * 60 * 1000,
     refetchInterval: false as const,

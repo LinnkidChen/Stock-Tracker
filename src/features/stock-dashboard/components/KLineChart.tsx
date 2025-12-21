@@ -14,6 +14,8 @@ import { createKLineChart, type KLineChartHandle } from '../lib/klinecharts';
 
 interface KLineChartProps {
   ticker: string;
+  className?: string;
+  provider?: string;
 }
 
 function formatRangeLabel(range?: TimeRange) {
@@ -29,11 +31,17 @@ function formatRangeLabel(range?: TimeRange) {
   return `${start} - ${end} · 1D`;
 }
 
-export function KLineChart({ ticker }: KLineChartProps) {
+export function KLineChart({
+  ticker,
+  className,
+  provider = 'default'
+}: KLineChartProps) {
   const validation = useMemo(() => validateTicker(ticker), [ticker]);
   const querySymbol = validation.isValid ? ticker : undefined;
-  const { data, isLoading, isError, error, noData, refetch } =
-    useKlineSeries(querySymbol);
+  const { data, isLoading, isError, error, noData, refetch } = useKlineSeries(
+    querySymbol,
+    provider
+  );
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<KLineChartHandle | null>(null);
@@ -161,7 +169,7 @@ export function KLineChart({ ticker }: KLineChartProps) {
   }
 
   return (
-    <Card className='overflow-hidden'>
+    <Card className={`overflow-hidden ${className}`}>
       <CardHeader className='pb-3'>
         <div className='flex items-start justify-between gap-3'>
           <div className='space-y-1'>
@@ -176,12 +184,13 @@ export function KLineChart({ ticker }: KLineChartProps) {
         </div>
       </CardHeader>
       <CardContent className='p-0'>
-        <div className='bg-background relative h-96 w-full'>
+        <div className='bg-background relative h-[500px] min-h-[400px] w-full lg:h-[600px]'>
           <div
             ref={containerRef}
             aria-busy={busy}
             aria-label='KLine chart'
             className='absolute inset-0'
+            style={{ width: '100%', height: '100%' }}
           />
           {busy && <Skeleton className='absolute inset-0' />}
           {overlay && (
