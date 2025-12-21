@@ -1,3 +1,6 @@
 [mcp_servers.spec-workflow]
 command = "npx"
 args = ["-y", "@pimzino/spec-workflow-mcp@latest","--AutoStartDashboard"]
+
+[projects."/Users/tongchen/Projects/Stock-Tracker"]
+trust_level = "trusted"

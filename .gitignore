@@ -48,3 +48,4 @@ next-env.d.ts
 .env.sentry-build-plugin
 CLAUDE.local.md
 .claude/
+.codex/
