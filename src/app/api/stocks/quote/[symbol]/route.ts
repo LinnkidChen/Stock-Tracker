@@ -39,8 +39,10 @@ export async function GET(
     }
 
     // Get the stock quote
+    const url = new URL(request.url);
+    const provider = url.searchParams.get('provider') || 'default';
     const stockService = getStockService();
-    const quote = await stockService.getQuote(symbol);
+    const quote = await stockService.getQuote(symbol, provider);
 
     // Return successful response
     const response: APIResponse<StockQuote> = {

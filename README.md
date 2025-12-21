@@ -169,6 +169,7 @@ cp env.example.txt .env.local
    - Clerk 认证密钥（初始化可选）
    - Sentry DSN（可选）。设置 `NEXT_PUBLIC_SENTRY_DISABLED=true` 可禁用。
    - Alpha Vantage API Key（准备接入真实数据时）。注意：免费额度 5 次/分钟。
+   - Longbridge API Config（如需使用 Longbridge 数据源）：`LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`, `LONGPORT_ACCESS_TOKEN`.
 
 5. 启动开发服务:
 

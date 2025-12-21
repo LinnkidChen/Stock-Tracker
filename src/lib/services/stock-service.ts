@@ -9,20 +9,27 @@ import {
 } from '../types/stock-api';
 import { Stock } from '../types';
 import { getAlphaVantageClient } from './alpha-vantage-client';
-import { logger } from '../logger';
+import { QuoteProviderFactory } from './quote-provider';
 
 export class StockService {
   private readonly BATCH_SIZE = 5; // Alpha Vantage free tier limit (5 calls/min)
   private readonly BATCH_DELAY_MS = 12000; // 12 seconds between batches
 
-  async getMultipleQuotes(symbols: string[]): Promise<StockQuote[]> {
+  async getMultipleQuotes(
+    symbols: string[],
+    providerName: string = 'default'
+  ): Promise<StockQuote[]> {
     const quotes: StockQuote[] = [];
     const errors: Array<{ symbol: string; error: APIError }> = [];
 
     // Process in batches to respect rate limits
+    // Note: This logic is primarily optimized for AlphaVantage rate limits.
+    // Longbridge might have different limits, but basic throttling is safe for now.
     for (let i = 0; i < symbols.length; i += this.BATCH_SIZE) {
       const batch = symbols.slice(i, i + this.BATCH_SIZE);
-      const promises = batch.map((symbol) => this.getQuote(symbol));
+      const promises = batch.map((symbol) =>
+        this.getQuote(symbol, providerName)
+      );
       const results = await Promise.allSettled(promises);
 
       results.forEach((result, index) => {
@@ -61,7 +68,8 @@ export class StockService {
 
   async searchStocks(keywords: string): Promise<Stock[]> {
     try {
-      const client = this.getClient();
+      // Search currently relies on AlphaVantage as Longbridge search implementation is different/not done
+      const client = this.getClient(); // Keep direct client usage for search for now
       const searchResults = await client.searchSymbol(keywords);
 
       // Transform search results to basic Stock interface
@@ -86,65 +94,7 @@ export class StockService {
     }
   }
 
-  private transformAlphaVantageToStockQuote(
-    response: AlphaVantageResponse,
-    symbol: string
-  ): StockQuote {
-    const quote = response['Global Quote'];
-
-    if (!quote) {
-      throw {
-        code: 'INVALID_SYMBOL',
-        message: `No quote data found for symbol: ${symbol}`
-      } as APIError;
-    }
-
-    // Parse numeric values safely
-    const parseFloatSafe = (
-      value: string | undefined,
-      fallback: number = 0
-    ): number => {
-      if (!value || value === 'null' || value === 'None') return fallback;
-      const parsed = Number.parseFloat(value);
-      if (isNaN(parsed)) {
-        // Log warning in development only
-        if (value && value !== 'null' && value !== 'None' && isNaN(parsed)) {
-          logger.warn(`Invalid numeric value received from API: ${value}`, {
-            symbol
-          });
-        }
-        return fallback;
-      }
-      return parsed;
-    };
-
-    // Parse change percent (remove % sign)
-    const changePercentStr = quote['10. change percent'] || '0%';
-    const changePercent = parseFloatSafe(changePercentStr.replace('%', ''));
-
-    return {
-      symbol: quote['01. symbol'] || symbol,
-      name: symbol, // Alpha Vantage doesn't provide company name in Global Quote
-      price: parseFloatSafe(quote['05. price']),
-      change: parseFloatSafe(quote['09. change']),
-      changePercent,
-      volume: parseFloatSafe(quote['06. volume']),
-      high: parseFloatSafe(quote['03. high']),
-      low: parseFloatSafe(quote['04. low']),
-      open: parseFloatSafe(quote['02. open']),
-      previousClose: parseFloatSafe(quote['08. previous close']),
-      // Extended fields - would require additional API calls
-      marketCap: null,
-      peRatio: null,
-      eps: null,
-      dividendYield: null,
-      week52High: null,
-      week52Low: null,
-      avgVolume: null,
-      beta: null,
-      lastUpdated: quote['07. latest trading day'] || new Date().toISOString()
-    };
-  }
+  // Broken duplicate method transformAlphaVantageToKLineSeries removed here
 
   private transformAlphaVantageToKLineSeries(
     response: AlphaVantageDailySeriesResponse,
@@ -221,18 +171,19 @@ export class StockService {
     return getAlphaVantageClient();
   }
 
-  async getQuote(symbol: string): Promise<StockQuote> {
+  async getQuote(
+    symbol: string,
+    provider: string = 'default'
+  ): Promise<StockQuote> {
     try {
-      const client = this.getClient();
-      const response = await client.fetchQuote(symbol);
-      return this.transformAlphaVantageToStockQuote(response, symbol);
+      // Use the provider factory to get the appropriate provider
+      const quoteProvider = QuoteProviderFactory.getProvider(provider);
+      return await quoteProvider.getQuote(symbol);
     } catch (error) {
-      // Re-throw APIError as is
       if (this.isAPIError(error)) {
         throw error;
       }
 
-      // Wrap unexpected errors
       const apiError: APIError = {
         code: 'UNKNOWN_ERROR',
         message: 'Failed to fetch stock quote',

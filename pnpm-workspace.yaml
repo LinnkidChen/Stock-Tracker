@@ -1,0 +1,5 @@
+onlyBuiltDependencies:
+  - '@clerk/shared'
+  - '@sentry/cli'
+  - sharp
+  - unrs-resolver

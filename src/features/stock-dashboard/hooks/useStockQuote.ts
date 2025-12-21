@@ -2,15 +2,27 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { APIResponse, StockQuote } from '@/lib/types/stock-api';
+import { useDashboardStore } from '../store';
 
-async function fetchStockQuote(symbol: string): Promise<StockQuote> {
+async function fetchStockQuote(
+  symbol: string,
+  provider: string
+): Promise<StockQuote> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
   try {
-    const response = await fetch(`/api/stocks/quote/${symbol}`, {
-      signal: controller.signal
-    });
+    const searchParams = new URLSearchParams();
+    if (provider) {
+      searchParams.set('provider', provider);
+    }
+
+    const response = await fetch(
+      `/api/stocks/quote/${symbol}?${searchParams.toString()}`,
+      {
+        signal: controller.signal
+      }
+    );
     clearTimeout(timeoutId);
 
     if (!response.ok) {
@@ -33,9 +45,11 @@ async function fetchStockQuote(symbol: string): Promise<StockQuote> {
 }
 
 export function useStockQuote(symbol?: string) {
+  const quoteProvider = useDashboardStore((state) => state.quoteProvider);
+
   return useQuery({
-    queryKey: ['stock-quote', symbol],
-    queryFn: () => fetchStockQuote(symbol!),
+    queryKey: ['stock-quote', symbol, quoteProvider],
+    queryFn: () => fetchStockQuote(symbol!, quoteProvider),
     enabled: !!symbol,
     staleTime: 5 * 60 * 1000, // 5 minutes to respect API rate limits
     refetchInterval: false as const, // Disabled auto-refresh to prevent rate limit issues
