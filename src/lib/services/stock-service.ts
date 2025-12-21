@@ -94,61 +94,7 @@ export class StockService {
     }
   }
 
-  private transformAlphaVantageToKLineSeries(
-    response: AlphaVantageDailySeriesResponse,
-    symbol: string
-  ): StockQuote {
-    const quote = response['Global Quote'];
-
-    if (!quote) {
-      throw {
-        code: 'INVALID_SYMBOL',
-        message: `No quote data found for symbol: ${symbol}`
-      } as APIError;
-    }
-
-    // Parse numeric values safely
-    const parseFloatSafe = (
-      value: string | undefined,
-      fallback: number = 0
-    ): number => {
-      if (!value || value === 'null' || value === 'None') return fallback;
-      const parsed = Number.parseFloat(value);
-      return Number.isNaN(parsed) ? 0 : parsed;
-    };
-
-    const candles: KLineCandle[] = entries
-      .map(([date, data]) => {
-        const timestamp = new Date(date).getTime();
-        return {
-          timestamp,
-          open: parseNumber(data['1. open']),
-          high: parseNumber(data['2. high']),
-          low: parseNumber(data['3. low']),
-          close: parseNumber(data['4. close']),
-          volume: parseNumber(data['5. volume'])
-        };
-      })
-      .filter(
-        (candle) =>
-          candle.timestamp >= startDate.getTime() &&
-          candle.timestamp <= endDate.getTime()
-      )
-      .sort((a, b) => a.timestamp - b.timestamp);
-
-    const range: TimeRange = {
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      interval: '1d'
-    };
-
-    return {
-      symbol,
-      range,
-      candles,
-      lastUpdated: endDate.toISOString()
-    };
-  }
+  // Broken duplicate method transformAlphaVantageToKLineSeries removed here
 
   private transformAlphaVantageToKLineSeries(
     response: AlphaVantageDailySeriesResponse,
@@ -225,11 +171,14 @@ export class StockService {
     return getAlphaVantageClient();
   }
 
-  async getQuote(symbol: string): Promise<StockQuote> {
+  async getQuote(
+    symbol: string,
+    provider: string = 'default'
+  ): Promise<StockQuote> {
     try {
-      const client = this.getClient();
-      const response = await client.fetchQuote(symbol);
-      return this.transformAlphaVantageToStockQuote(response, symbol);
+      // Use the provider factory to get the appropriate provider
+      const quoteProvider = QuoteProviderFactory.getProvider(provider);
+      return await quoteProvider.getQuote(symbol);
     } catch (error) {
       if (this.isAPIError(error)) {
         throw error;
@@ -237,7 +186,7 @@ export class StockService {
 
       const apiError: APIError = {
         code: 'UNKNOWN_ERROR',
-        message: 'Failed to fetch kline series',
+        message: 'Failed to fetch stock quote',
         details: { originalError: error }
       };
       throw apiError;
