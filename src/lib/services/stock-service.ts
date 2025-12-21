@@ -1,15 +1,7 @@
-import {
-  StockQuote,
-  AlphaVantageResponse,
-  AlphaVantageDailySeriesResponse,
-  APIError,
-  KLineSeries,
-  KLineCandle,
-  TimeRange
-} from '../types/stock-api';
+import { StockQuote, APIError, KLineSeries } from '../types/stock-api';
 import { Stock } from '../types';
+import { StockProviderFactory } from '../providers/factory';
 import { getAlphaVantageClient } from './alpha-vantage-client';
-import { QuoteProviderFactory } from './quote-provider';
 
 export class StockService {
   private readonly BATCH_SIZE = 5; // Alpha Vantage free tier limit (5 calls/min)
@@ -36,14 +28,20 @@ export class StockService {
         if (result.status === 'fulfilled') {
           quotes.push(result.value);
         } else {
+          // Type guard for APIError is now handled by the provider wrapper or catch block
+          // but we still need to reshape the error for the details array
+          const reason = result.reason;
+          const apiError: APIError =
+            reason && typeof reason === 'object' && 'code' in reason
+              ? (reason as APIError)
+              : {
+                  code: 'UNKNOWN_ERROR',
+                  message: reason?.message || 'Unknown error'
+                };
+
           errors.push({
             symbol: batch[index],
-            error: this.isAPIError(result.reason)
-              ? result.reason
-              : ({
-                  code: 'UNKNOWN_ERROR',
-                  message: result.reason?.message || 'Unknown error'
-                } as APIError)
+            error: apiError
           });
         }
       });
@@ -69,7 +67,30 @@ export class StockService {
   async searchStocks(keywords: string): Promise<Stock[]> {
     try {
       // Search currently relies on AlphaVantage as Longbridge search implementation is different/not done
-      const client = this.getClient(); // Keep direct client usage for search for now
+      // We will temporarily instantiate AlphaVantage provider directly or use the default provider from factory
+
+      // Note: Search is not part of the common interface yet, so we have to cast or allow it only for AlphaVantageProvider
+      // Ideally we should add search to the provider interface.
+      // For now, let's keep using getAlphaVantageClient directly here?
+      // But we removed the import.
+      // Let's re-import client just for this method OR add search to interface.
+      // The plan didn't specify search, let's update interface later.
+      // For now, I'll cheat and use `any` or import the client again if needed.
+      // Better: let's update the interface to include search!
+
+      // Wait, I cannot easily update the interface in this single MultiReplace.
+      // I'll stick to using the client via a new import or just use the provider.
+      // Actually `provider` doesn't have search method in my new interface.
+      // I should update the interface first? No, let's just use the client inside this function.
+
+      // Re-importing client inside the function effectively? No, top level.
+      // I replaced top level imports. I need to keep `getAlphaVantageClient` if I use it here.
+
+      // Let's restore the import line but ONLY for search use.
+      // Actually, let's just leave `getAlphaVantageClient` logic here but I need to import it.
+
+      // I will add the import back.
+      const client = getAlphaVantageClient();
       const searchResults = await client.searchSymbol(keywords);
 
       // Transform search results to basic Stock interface
@@ -94,66 +115,6 @@ export class StockService {
     }
   }
 
-  // Broken duplicate method transformAlphaVantageToKLineSeries removed here
-
-  private transformAlphaVantageToKLineSeries(
-    response: AlphaVantageDailySeriesResponse,
-    symbol: string
-  ): KLineSeries {
-    const series = response['Time Series (Daily)'] ?? {};
-    const entries = Object.entries(series);
-
-    const endDate = entries.length
-      ? new Date(
-          entries.reduce(
-            (max, [date]) => (date > max ? date : max),
-            entries[0][0]
-          )
-        )
-      : new Date();
-
-    const startDate = new Date(endDate);
-    startDate.setFullYear(startDate.getFullYear() - 1);
-
-    const parseNumber = (value: string | undefined): number => {
-      if (!value || value === 'null' || value === 'None') return 0;
-      const parsed = Number.parseFloat(value);
-      return Number.isNaN(parsed) ? 0 : parsed;
-    };
-
-    const candles: KLineCandle[] = entries
-      .map(([date, data]) => {
-        const timestamp = new Date(date).getTime();
-        return {
-          timestamp,
-          open: parseNumber(data['1. open']),
-          high: parseNumber(data['2. high']),
-          low: parseNumber(data['3. low']),
-          close: parseNumber(data['4. close']),
-          volume: parseNumber(data['5. volume'])
-        };
-      })
-      .filter(
-        (candle) =>
-          candle.timestamp >= startDate.getTime() &&
-          candle.timestamp <= endDate.getTime()
-      )
-      .sort((a, b) => a.timestamp - b.timestamp);
-
-    const range: TimeRange = {
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      interval: '1d'
-    };
-
-    return {
-      symbol,
-      range,
-      candles,
-      lastUpdated: endDate.toISOString()
-    };
-  }
-
   private isAPIError(error: any): error is APIError {
     return (
       error &&
@@ -167,18 +128,14 @@ export class StockService {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  private getClient() {
-    return getAlphaVantageClient();
-  }
-
   async getQuote(
     symbol: string,
     provider: string = 'default'
   ): Promise<StockQuote> {
     try {
       // Use the provider factory to get the appropriate provider
-      const quoteProvider = QuoteProviderFactory.getProvider(provider);
-      return await quoteProvider.getQuote(symbol);
+      const stockProvider = StockProviderFactory.getProvider(provider);
+      return await stockProvider.getQuote(symbol);
     } catch (error) {
       if (this.isAPIError(error)) {
         throw error;
@@ -193,11 +150,13 @@ export class StockService {
     }
   }
 
-  async getKLineSeries(symbol: string): Promise<KLineSeries> {
+  async getKLineSeries(
+    symbol: string,
+    provider: string = 'default'
+  ): Promise<KLineSeries> {
     try {
-      const client = this.getClient();
-      const response = await client.fetchDailySeries(symbol);
-      return this.transformAlphaVantageToKLineSeries(response, symbol);
+      const stockProvider = StockProviderFactory.getProvider(provider);
+      return await stockProvider.getKLines(symbol);
     } catch (error) {
       if (this.isAPIError(error)) {
         throw error;

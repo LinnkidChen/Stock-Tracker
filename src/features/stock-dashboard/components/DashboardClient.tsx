@@ -5,13 +5,13 @@ import { MarketOverview } from './MarketOverview';
 import { WatchlistCard } from './WatchlistCard';
 import { PortfolioCard } from './PortfolioCard';
 import { TickerInput } from './TickerInput';
-import { StockChartTabs } from './StockChartTabs';
+
 import { useDashboardStore } from '../store';
 
 import { QuoteProviderToggle } from './QuoteProviderToggle';
 
 export function DashboardClient() {
-  const { selectedTicker, hydrateFromStorage } = useDashboardStore();
+  const { hydrateFromStorage } = useDashboardStore();
   const tickerInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -48,8 +48,6 @@ export function DashboardClient() {
       </div>
 
       <MarketOverview />
-
-      {selectedTicker && <StockChartTabs ticker={selectedTicker} />}
 
       <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
         <WatchlistCard />

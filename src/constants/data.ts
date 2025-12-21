@@ -20,6 +20,14 @@ export const navItems: NavItem[] = [
     isActive: true,
     shortcut: ['s', 's'],
     items: []
+  },
+  {
+    title: 'Charts',
+    url: '/dashboard/charts',
+    icon: 'kanban',
+    isActive: false,
+    shortcut: ['c', 'c'],
+    items: []
   }
 ];
 

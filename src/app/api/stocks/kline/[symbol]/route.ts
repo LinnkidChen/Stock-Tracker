@@ -46,8 +46,10 @@ export async function GET(
           return NextResponse.json(response, { status: 400 });
         }
 
+        const url = new URL(request.url);
+        const provider = url.searchParams.get('provider') || 'default';
         const stockService = getStockService();
-        const series = await stockService.getKLineSeries(symbol);
+        const series = await stockService.getKLineSeries(symbol, provider);
 
         span?.setAttribute('kline.candles', series.candles.length);
 

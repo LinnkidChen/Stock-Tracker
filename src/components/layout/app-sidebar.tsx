@@ -42,6 +42,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as React from 'react';
 import { Icons } from '../icons';
+import { useDashboardStore } from '@/features/stock-dashboard/store';
 import { OrgSwitcher } from '../org-switcher';
 export const company = {
   name: 'Acme Inc',
@@ -59,6 +60,8 @@ export default function AppSidebar() {
   const pathname = usePathname();
   const { isOpen } = useMediaQuery();
   const { user } = useUser();
+  const { selectedTicker } = useDashboardStore(); // Import this!
+
   const handleSwitchTenant = (_tenantId: string) => {
     // mark parameter as used to satisfy lint while keeping signature
     void _tenantId;
@@ -86,6 +89,11 @@ export default function AppSidebar() {
           <SidebarMenu>
             {navItems.map((item) => {
               const Icon = item.icon ? Icons[item.icon] : Icons.logo;
+              let itemUrl = item.url;
+              if (item.title === 'Charts' && selectedTicker) {
+                itemUrl = `${item.url}?symbol=${selectedTicker}`;
+              }
+
               return item?.items && item?.items?.length > 0 ? (
                 <Collapsible
                   key={item.title}
@@ -127,9 +135,9 @@ export default function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     tooltip={item.title}
-                    isActive={pathname === item.url}
+                    isActive={pathname === itemUrl}
                   >
-                    <Link href={item.url}>
+                    <Link href={itemUrl}>
                       <Icon />
                       <span>{item.title}</span>
                     </Link>

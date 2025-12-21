@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 interface WatchlistItemDisplayProps {
   item: WatchlistItemWithPrice;
   onRemove: (symbol: string) => void;
+  onClick?: (symbol: string) => void;
   isLoading?: boolean;
   isRemoving?: boolean;
   error?: string | null;
@@ -18,6 +19,7 @@ interface WatchlistItemDisplayProps {
 export function WatchlistItemDisplay({
   item,
   onRemove,
+  onClick,
   isLoading = false,
   isRemoving = false,
   error,
@@ -28,14 +30,17 @@ export function WatchlistItemDisplay({
     item.change !== undefined &&
     item.changePercent !== undefined;
 
-  const handleRemove = () => {
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
     onRemove(item.symbol);
   };
 
   return (
     <div
+      onClick={() => onClick?.(item.symbol)}
       className={cn(
         'bg-card flex items-center justify-between rounded-lg border p-3',
+        onClick && 'hover:bg-accent/50 cursor-pointer transition-colors',
         className
       )}
     >
