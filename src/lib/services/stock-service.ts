@@ -167,7 +167,6 @@ export class StockService {
   private getClient() {
     return getAlphaVantageClient();
   }
-
   async getQuote(
     symbol: string,
     providerName: string = 'default'
@@ -178,7 +177,7 @@ export class StockService {
 
   async getKLineSeries(symbol: string): Promise<KLineSeries> {
     try {
-      const client = this.getClient();
+      const client = getAlphaVantageClient();
       const response = await client.fetchDailySeries(symbol);
       return this.transformAlphaVantageToKLineSeries(response, symbol);
     } catch (error) {
