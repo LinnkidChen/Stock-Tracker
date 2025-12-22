@@ -5,6 +5,10 @@ import { GET } from '../route';
 import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { APIResponse, StockQuote, APIError } from '@/lib/types/stock-api';
+import {
+  createMockRequest,
+  createMockParams
+} from '../../../__tests__/request-fixtures';
 
 // Mock Next.js server utilities
 jest.mock('next/server', () => ({
@@ -30,7 +34,8 @@ jest.mock('next/server', () => ({
         }
       };
     })
-  }
+  },
+  NextRequest: jest.requireActual('next/server').NextRequest
 }));
 
 // Mock dependencies
@@ -97,11 +102,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
       mockValidateTicker.mockReturnValue({ isValid: true });
       mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
-      const mockRequest = {} as any;
-      const params = Promise.resolve({ symbol: 'AAPL' });
+      const request = createMockRequest();
+      const params = createMockParams('AAPL').params;
 
       // Act
-      const response = await GET(mockRequest, { params });
+      const response = await GET(request, { params });
       const responseData: APIResponse<StockQuote> = await response.json();
 
       // Assert
@@ -114,7 +119,10 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
       });
 
       expect(mockValidateTicker).toHaveBeenCalledWith('AAPL');
-      expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith('AAPL');
+      expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith(
+        'AAPL',
+        'default'
+      );
     });
 
     it('should include cache headers in successful response', async () => {
@@ -122,11 +130,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
       mockValidateTicker.mockReturnValue({ isValid: true });
       mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
-      const mockRequest = {} as any;
-      const params = Promise.resolve({ symbol: 'AAPL' });
+      const request = createMockRequest();
+      const params = createMockParams('AAPL').params;
 
       // Act
-      const response = await GET(mockRequest, { params });
+      const response = await GET(request, { params });
 
       // Assert
       expect(response.headers.get('Cache-Control')).toBe(
@@ -142,11 +150,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
           error: 'Ticker symbol is required'
         });
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: '' });
+        const request = createMockRequest();
+        const params = createMockParams('').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -171,11 +179,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
           error: 'Ticker symbol must be 5 characters or less'
         });
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'TOOLONG' });
+        const request = createMockRequest();
+        const params = createMockParams('TOOLONG').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -198,11 +206,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
           error: 'Ticker symbol must contain only letters'
         });
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAP@' });
+        const request = createMockRequest();
+        const params = createMockParams('AAP@').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -220,11 +228,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
           error: 'Ticker symbol must contain only letters'
         });
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAP1' });
+        const request = createMockRequest();
+        const params = createMockParams('AAP1').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -236,11 +244,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         // Arrange
         mockValidateTicker.mockReturnValue({ isValid: false });
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'INVALID' });
+        const request = createMockRequest();
+        const params = createMockParams('INVALID').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -262,11 +270,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         };
         mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'INVALID' });
+        const request = createMockRequest();
+        const params = createMockParams('INVALID').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -287,11 +295,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         };
         mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAPL' });
+        const request = createMockRequest();
+        const params = createMockParams('AAPL').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -307,11 +315,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         };
         mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAPL' });
+        const request = createMockRequest();
+        const params = createMockParams('AAPL').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
 
         // Assert
         expect(response.status).toBe(401);
@@ -325,11 +333,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         };
         mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAPL' });
+        const request = createMockRequest();
+        const params = createMockParams('AAPL').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
 
         // Assert
         expect(response.status).toBe(502);
@@ -343,11 +351,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         };
         mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAPL' });
+        const request = createMockRequest();
+        const params = createMockParams('AAPL').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
 
         // Assert
         expect(response.status).toBe(500);
@@ -361,11 +369,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         };
         mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAPL' });
+        const request = createMockRequest();
+        const params = createMockParams('AAPL').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
 
         // Assert
         expect(response.status).toBe(500);
@@ -382,11 +390,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         const unexpectedError = new Error('Database connection failed');
         mockStockServiceInstance.getQuote.mockRejectedValue(unexpectedError);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAPL' });
+        const request = createMockRequest();
+        const params = createMockParams('AAPL').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -406,11 +414,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         // Arrange
         mockStockServiceInstance.getQuote.mockRejectedValue(null);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAPL' });
+        const request = createMockRequest();
+        const params = createMockParams('AAPL').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -424,11 +432,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
           'Something went wrong'
         );
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAPL' });
+        const request = createMockRequest();
+        const params = createMockParams('AAPL').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
 
         // Assert
         expect(response.status).toBe(500);
@@ -443,11 +451,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         };
         mockStockServiceInstance.getQuote.mockRejectedValue(fakeApiError);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAPL' });
+        const request = createMockRequest();
+        const params = createMockParams('AAPL').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<null> = await response.json();
 
         // Assert
@@ -463,11 +471,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockValidateTicker.mockReturnValue({ isValid: true });
         mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAPL' });
+        const request = createMockRequest();
+        const params = createMockParams('AAPL').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<StockQuote> = await response.json();
 
         // Assert
@@ -484,11 +492,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockValidateTicker.mockReturnValue({ isValid: true });
         mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAPL' });
+        const request = createMockRequest();
+        const params = createMockParams('AAPL').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<StockQuote> = await response.json();
 
         // Assert
@@ -504,15 +512,18 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockValidateTicker.mockReturnValue({ isValid: true });
         mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: ' AAPL ' });
+        const request = createMockRequest();
+        const params = createMockParams(' AAPL ').params;
 
         // Act
-        await GET(mockRequest, { params });
+        await GET(request, { params });
 
         // Assert
         expect(mockValidateTicker).toHaveBeenCalledWith('AAPL');
-        expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith('AAPL');
+        expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith(
+          'AAPL',
+          'default'
+        );
       });
 
       it('should handle lowercase symbols', async () => {
@@ -520,15 +531,18 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockValidateTicker.mockReturnValue({ isValid: true });
         mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'aapl' });
+        const request = createMockRequest();
+        const params = createMockParams('aapl').params;
 
         // Act
-        await GET(mockRequest, { params });
+        await GET(request, { params });
 
         // Assert
         expect(mockValidateTicker).toHaveBeenCalledWith('AAPL');
-        expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith('AAPL');
+        expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith(
+          'AAPL',
+          'default'
+        );
       });
 
       it('should handle quote data with null optional fields', async () => {
@@ -548,11 +562,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         mockValidateTicker.mockReturnValue({ isValid: true });
         mockStockServiceInstance.getQuote.mockResolvedValue(quoteWithNulls);
 
-        const mockRequest = {} as any;
-        const params = Promise.resolve({ symbol: 'AAPL' });
+        const request = createMockRequest();
+        const params = createMockParams('AAPL').params;
 
         // Act
-        const response = await GET(mockRequest, { params });
+        const response = await GET(request, { params });
         const responseData: APIResponse<StockQuote> = await response.json();
 
         // Assert
@@ -583,11 +597,12 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
         error: 'Ticker symbol is required'
       });
 
-      const mockRequest = {} as any;
-      const params = Promise.resolve({ symbol: undefined as any });
+      const request = createMockRequest();
+      // @ts-ignore
+      const params = createMockParams(undefined).params;
 
       // Act
-      const response = await GET(mockRequest, { params });
+      const response = await GET(request, { params });
       const responseData: APIResponse<null> = await response.json();
 
       // Assert
@@ -602,11 +617,11 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
       mockValidateTicker.mockReturnValue({ isValid: true });
       mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
-      const mockRequest = {} as any;
-      const params = Promise.resolve({ symbol: 'AAPL' });
+      const request = createMockRequest();
+      const params = createMockParams('AAPL').params;
 
       // Act
-      await GET(mockRequest, { params });
+      await GET(request, { params });
 
       // Assert
       expect(mockGetStockService).toHaveBeenCalledTimes(1);
@@ -619,15 +634,16 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
       mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
       const testSymbol = 'TSLA';
-      const mockRequest = {} as any;
-      const params = Promise.resolve({ symbol: testSymbol });
+      const request = createMockRequest();
+      const params = createMockParams(testSymbol).params;
 
       // Act
-      await GET(mockRequest, { params });
+      await GET(request, { params });
 
       // Assert
       expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith(
-        testSymbol
+        testSymbol,
+        'default'
       );
     });
   });

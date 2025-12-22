@@ -5,6 +5,10 @@ import { GET } from '../route';
 import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { APIResponse, KLineSeries } from '@/lib/types/stock-api';
+import {
+  createMockRequest,
+  createMockParams
+} from '../../../__tests__/request-fixtures';
 
 jest.mock('next/server', () => ({
   NextResponse: {
@@ -29,7 +33,8 @@ jest.mock('next/server', () => ({
         }
       };
     })
-  }
+  },
+  NextRequest: jest.requireActual('next/server').NextRequest
 }));
 
 jest.mock('@sentry/nextjs', () => ({
@@ -96,12 +101,12 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
     mockValidateTicker.mockReturnValue({ isValid: true });
     mockStockServiceInstance.getKLineSeries.mockResolvedValue(mockSeries);
 
-    const mockRequest = {
-      nextUrl: { pathname: '/api/stocks/kline/AAPL' }
-    } as any;
-    const params = Promise.resolve({ symbol: 'AAPL' });
+    const request = createMockRequest(
+      'http://localhost:3000/api/stocks/kline/AAPL'
+    );
+    const params = createMockParams('AAPL').params;
 
-    const response = await GET(mockRequest, { params });
+    const response = await GET(request, { params });
     const responseData: APIResponse<KLineSeries> = await response.json();
 
     expect(response.status).toBe(200);
@@ -113,7 +118,8 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
     });
     expect(mockValidateTicker).toHaveBeenCalledWith('AAPL');
     expect(mockStockServiceInstance.getKLineSeries).toHaveBeenCalledWith(
-      'AAPL'
+      'AAPL',
+      'default'
     );
   });
 
@@ -121,12 +127,12 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
     mockValidateTicker.mockReturnValue({ isValid: true });
     mockStockServiceInstance.getKLineSeries.mockResolvedValue(mockSeries);
 
-    const mockRequest = {
-      nextUrl: { pathname: '/api/stocks/kline/AAPL' }
-    } as any;
-    const params = Promise.resolve({ symbol: 'AAPL' });
+    const request = createMockRequest(
+      'http://localhost:3000/api/stocks/kline/AAPL'
+    );
+    const params = createMockParams('AAPL').params;
 
-    const response = await GET(mockRequest, { params });
+    const response = await GET(request, { params });
 
     expect(response.headers.get('Cache-Control')).toBe(
       'public, s-maxage=86400, stale-while-revalidate=604800'
@@ -139,12 +145,12 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
       error: 'Ticker symbol is required'
     });
 
-    const mockRequest = {
-      nextUrl: { pathname: '/api/stocks/kline/' }
-    } as any;
-    const params = Promise.resolve({ symbol: '' });
+    const request = createMockRequest(
+      'http://localhost:3000/api/stocks/kline/'
+    );
+    const params = createMockParams('').params;
 
-    const response = await GET(mockRequest, { params });
+    const response = await GET(request, { params });
     const responseData: APIResponse<null> = await response.json();
 
     expect(response.status).toBe(400);
@@ -163,12 +169,12 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
         message: 'Invalid API key'
       });
 
-      const mockRequest = {
-        nextUrl: { pathname: '/api/stocks/kline/AAPL' }
-      } as any;
-      const params = Promise.resolve({ symbol: 'AAPL' });
+      const request = createMockRequest(
+        'http://localhost:3000/api/stocks/kline/AAPL'
+      );
+      const params = createMockParams('AAPL').params;
 
-      const response = await GET(mockRequest, { params });
+      const response = await GET(request, { params });
 
       expect(response.status).toBe(401);
     });
@@ -179,12 +185,12 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
         message: 'Rate limit'
       });
 
-      const mockRequest = {
-        nextUrl: { pathname: '/api/stocks/kline/AAPL' }
-      } as any;
-      const params = Promise.resolve({ symbol: 'AAPL' });
+      const request = createMockRequest(
+        'http://localhost:3000/api/stocks/kline/AAPL'
+      );
+      const params = createMockParams('AAPL').params;
 
-      const response = await GET(mockRequest, { params });
+      const response = await GET(request, { params });
 
       expect(response.status).toBe(429);
     });
@@ -195,12 +201,12 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
         message: 'Upstream error'
       });
 
-      const mockRequest = {
-        nextUrl: { pathname: '/api/stocks/kline/AAPL' }
-      } as any;
-      const params = Promise.resolve({ symbol: 'AAPL' });
+      const request = createMockRequest(
+        'http://localhost:3000/api/stocks/kline/AAPL'
+      );
+      const params = createMockParams('AAPL').params;
 
-      const response = await GET(mockRequest, { params });
+      const response = await GET(request, { params });
 
       expect(response.status).toBe(502);
     });
@@ -211,12 +217,12 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
         message: 'Unknown'
       });
 
-      const mockRequest = {
-        nextUrl: { pathname: '/api/stocks/kline/AAPL' }
-      } as any;
-      const params = Promise.resolve({ symbol: 'AAPL' });
+      const request = createMockRequest(
+        'http://localhost:3000/api/stocks/kline/AAPL'
+      );
+      const params = createMockParams('AAPL').params;
 
-      const response = await GET(mockRequest, { params });
+      const response = await GET(request, { params });
 
       expect(response.status).toBe(500);
     });
