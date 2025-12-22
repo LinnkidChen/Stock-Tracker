@@ -24,7 +24,16 @@ export async function createClient() {
     // We'll use getToken({ template: 'supabase' }) if configured, or just trust the standard one if that's the setup.
     // For this implementation, we'll try to get a token. If using standard Clerk-Supabase integration, a template is usually recommended.
     // Let's assume standard template 'supabase' for now, or fall back to default if not present.
-    supabaseToken = await session.getToken({ template: 'supabase' });
+    try {
+      supabaseToken = await session.getToken({ template: 'supabase' });
+    } catch (error) {
+      // If the template 'supabase' is not defined in Clerk, it might throw a 404.
+      // We can ignore this specific error and fall back to the default token.
+      console.warn(
+        'Failed to get Supabase token with template, falling back to default',
+        error
+      );
+    }
 
     // Fallback: if no specific template is used, we might try the raw token,
     // but typically Supabase expects a signed JWT with its own secret unless utilizing custom auth.
