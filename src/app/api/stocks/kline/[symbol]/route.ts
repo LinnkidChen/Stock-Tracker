@@ -14,7 +14,7 @@ export async function GET(
   return Sentry.startSpan(
     { op: 'http.server', name: 'GET /api/stocks/kline/[symbol]' },
     async (span) => {
-      const requestPath = request?.nextUrl?.pathname ?? 'unknown';
+      const requestPath = getRequestPath(request);
 
       try {
         const { symbol: rawSymbol } = await params;
@@ -145,4 +145,20 @@ function getStatusCodeForError(code: string): number {
     default:
       return 500;
   }
+}
+
+function getRequestPath(request: NextRequest): string {
+  if (request?.nextUrl?.pathname) {
+    return request.nextUrl.pathname;
+  }
+
+  if (typeof request?.url === 'string') {
+    try {
+      return new URL(request.url).pathname;
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  return 'unknown';
 }

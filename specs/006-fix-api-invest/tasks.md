@@ -52,7 +52,7 @@ description: "功能实现的任务列表"
 ### 用户故事 1 的实现
 
 - [x] T005 [US1] 修复报价路由 URL 解析与缺失 URL 错误处理，路径 /Users/tongchen/Projects/Stock-Tracker-1/src/app/api/stocks/quote/[symbol]/route.ts
-- [ ] T006 [US1] 修复 K 线路由 URL 解析与缺失 URL 错误处理，路径 /Users/tongchen/Projects/Stock-Tracker-1/src/app/api/stocks/kline/[symbol]/route.ts
+- [x] T006 [US1] 修复 K 线路由 URL 解析与缺失 URL 错误处理，路径 /Users/tongchen/Projects/Stock-Tracker-1/src/app/api/stocks/kline/[symbol]/route.ts
 
 **检查点**: 此时用户故事 1 应可独立运行并可测试
 
