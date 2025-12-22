@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { APIResponse, StockQuote, APIError } from '@/lib/types/stock-api';
@@ -8,101 +9,111 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ symbol: string }> }
 ) {
-  const requestPath = getRequestPath(request);
+  return Sentry.startSpan(
+    { op: 'http.server', name: 'GET /api/stocks/quote/[symbol]' },
+    async (span) => {
+      const requestPath = getRequestPath(request);
 
-  try {
-    const { symbol: rawSymbol } = await params;
-    const symbol = normalizeTicker(rawSymbol);
+      try {
+        const { symbol: rawSymbol } = await params;
+        const symbol = normalizeTicker(rawSymbol);
 
-    // Validate the ticker symbol
-    const validation = validateTicker(symbol);
-    if (!validation.isValid) {
-      const error: APIError = {
-        code: 'INVALID_SYMBOL',
-        message: validation.error || 'Invalid ticker symbol'
-      };
+        span?.setAttribute('symbol', symbol);
+        span?.setAttribute('path', requestPath);
 
-      logger.warn(`API Error: ${error.message}`, {
-        symbol: rawSymbol,
-        code: error.code,
-        path: requestPath
-      });
+        // Validate the ticker symbol
+        const validation = validateTicker(symbol);
+        if (!validation.isValid) {
+          const error: APIError = {
+            code: 'INVALID_SYMBOL',
+            message: validation.error || 'Invalid ticker symbol'
+          };
 
-      const response: APIResponse<null> = {
-        success: false,
-        data: null,
-        error,
-        timestamp: new Date().toISOString()
-      };
+          logger.warn(`API Error: ${error.message}`, {
+            symbol: rawSymbol,
+            code: error.code,
+            path: requestPath
+          });
 
-      return NextResponse.json(response, { status: 400 });
-    }
+          const response: APIResponse<null> = {
+            success: false,
+            data: null,
+            error,
+            timestamp: new Date().toISOString()
+          };
 
-    // Get the stock quote
-    const url = new URL(request.url);
-    const provider = url.searchParams.get('provider') || 'default';
-    const stockService = getStockService();
-    const quote = await stockService.getQuote(symbol, provider);
+          return NextResponse.json(response, { status: 400 });
+        }
 
-    // Return successful response
-    const response: APIResponse<StockQuote> = {
-      success: true,
-      data: quote,
-      error: null,
-      timestamp: new Date().toISOString()
-    };
+        // Get the stock quote
+        const url = new URL(request.url);
+        const provider = url.searchParams.get('provider') || 'default';
+        const stockService = getStockService();
+        const quote = await stockService.getQuote(symbol, provider);
 
-    return NextResponse.json(response, {
-      status: 200,
-      headers: {
-        'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30'
+        // Return successful response
+        const response: APIResponse<StockQuote> = {
+          success: true,
+          data: quote,
+          error: null,
+          timestamp: new Date().toISOString()
+        };
+
+        return NextResponse.json(response, {
+          status: 200,
+          headers: {
+            'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30'
+          }
+        });
+      } catch (error) {
+        Sentry.captureException(error);
+
+        // Handle APIError
+        if (isAPIError(error)) {
+          // Log based on severity (client error vs server error)
+          const statusCode = getStatusCodeForError(error.code);
+          const logContext = {
+            code: error.code,
+            path: requestPath,
+            originalError: error
+          };
+
+          if (statusCode >= 500) {
+            logger.error(`API Error: ${error.message}`, logContext);
+          } else {
+            logger.warn(`API Warning: ${error.message}`, logContext);
+          }
+
+          const response: APIResponse<null> = {
+            success: false,
+            data: null,
+            error: error,
+            timestamp: new Date().toISOString()
+          };
+
+          return NextResponse.json(response, { status: statusCode });
+        }
+
+        // Handle unexpected errors
+        logger.error('API Unexpected Error', {
+          path: requestPath,
+          error
+        });
+
+        const response: APIResponse<null> = {
+          success: false,
+          data: null,
+          error: {
+            code: 'UNKNOWN_ERROR',
+            message: 'An unexpected error occurred'
+          },
+          timestamp: new Date().toISOString()
+        };
+
+        return NextResponse.json(response, { status: 500 });
       }
-    });
-  } catch (error) {
-    // Handle APIError
-    if (isAPIError(error)) {
-      // Log based on severity (client error vs server error)
-      const statusCode = getStatusCodeForError(error.code);
-      const logContext = {
-        code: error.code,
-        path: requestPath,
-        originalError: error
-      };
-
-      if (statusCode >= 500) {
-        logger.error(`API Error: ${error.message}`, logContext);
-      } else {
-        logger.warn(`API Warning: ${error.message}`, logContext);
-      }
-
-      const response: APIResponse<null> = {
-        success: false,
-        data: null,
-        error: error,
-        timestamp: new Date().toISOString()
-      };
-
-      return NextResponse.json(response, { status: statusCode });
     }
-
-    // Handle unexpected errors
-    logger.error('API Unexpected Error', {
-      path: requestPath,
-      error
-    });
-
-    const response: APIResponse<null> = {
-      success: false,
-      data: null,
-      error: {
-        code: 'UNKNOWN_ERROR',
-        message: 'An unexpected error occurred'
-      },
-      timestamp: new Date().toISOString()
-    };
-
-    return NextResponse.json(response, { status: 500 });
-  }
+  );
 }
 
 function isAPIError(error: unknown): error is APIError {

@@ -1,0 +1,297 @@
+openapi: 3.0.3
+info:
+  title: Stock Market Data API
+  version: 1.0.0
+  description: Quote and K-line endpoints with consistent success/error responses.
+servers:
+  - url: /api
+paths:
+  /stocks/quote/{symbol}:
+    get:
+      summary: Get stock quote
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: provider
+          in: query
+          required: false
+          schema:
+            type: string
+            default: default
+      responses:
+        '200':
+          description: Quote response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+        '400':
+          description: Invalid symbol or request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unknown error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stocks/kline/{symbol}:
+    get:
+      summary: Get K-line series
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: provider
+          in: query
+          required: false
+          schema:
+            type: string
+            default: default
+      responses:
+        '200':
+          description: K-line response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KLineResponse'
+        '400':
+          description: Invalid symbol or request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited
+          headers:
+            Retry-After:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unknown error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        data:
+          nullable: true
+        error:
+          $ref: '#/components/schemas/APIError'
+        timestamp:
+          type: string
+      required:
+        - success
+        - data
+        - error
+        - timestamp
+    QuoteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/StockQuote'
+        error:
+          nullable: true
+        timestamp:
+          type: string
+      required:
+        - success
+        - data
+        - error
+        - timestamp
+    KLineResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/KLineSeries'
+        error:
+          nullable: true
+        timestamp:
+          type: string
+      required:
+        - success
+        - data
+        - error
+        - timestamp
+    APIError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: INVALID_SYMBOL
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+      required:
+        - code
+        - message
+    StockQuote:
+      type: object
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        price:
+          type: number
+        currency:
+          type: string
+        exchange:
+          type: string
+        volume:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        open:
+          type: number
+        previousClose:
+          type: number
+        marketCap:
+          type: number
+          nullable: true
+        peRatio:
+          type: number
+          nullable: true
+        eps:
+          type: number
+          nullable: true
+        dividendYield:
+          type: number
+          nullable: true
+        week52High:
+          type: number
+          nullable: true
+        week52Low:
+          type: number
+          nullable: true
+        avgVolume:
+          type: number
+          nullable: true
+        beta:
+          type: number
+          nullable: true
+        lastUpdated:
+          type: string
+      required:
+        - symbol
+        - price
+        - currency
+        - exchange
+        - volume
+        - high
+        - low
+        - open
+        - previousClose
+        - lastUpdated
+    TimeRange:
+      type: object
+      properties:
+        startDate:
+          type: string
+        endDate:
+          type: string
+        interval:
+          type: string
+          example: 1d
+      required:
+        - startDate
+        - endDate
+        - interval
+    KLineCandle:
+      type: object
+      properties:
+        timestamp:
+          type: integer
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        close:
+          type: number
+        volume:
+          type: number
+      required:
+        - timestamp
+        - open
+        - high
+        - low
+        - close
+        - volume
+    KLineSeries:
+      type: object
+      properties:
+        symbol:
+          type: string
+        range:
+          $ref: '#/components/schemas/TimeRange'
+        candles:
+          type: array
+          items:
+            $ref: '#/components/schemas/KLineCandle'
+        lastUpdated:
+          type: string
+      required:
+        - symbol
+        - range
+        - candles
+        - lastUpdated
