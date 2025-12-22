@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { isValidTicker, normalizeTicker } from '@/lib/validation/ticker';
+import { logger } from '@/lib/logger';
 import {
   getWatchlist,
   addToWatchlist,
@@ -87,10 +88,7 @@ export async function GET() {
       data: { watchlist: list }
     });
   } catch (error) {
-    console.error('Watchlist fetch error:', error);
-    // Dynamic import to avoid edge runtime issues if applicable, though this is Node runtime
-    const Sentry = await import('@sentry/nextjs');
-    Sentry.captureException(error);
+    logger.error('Watchlist fetch error', { error });
     return NextResponse.json(
       { success: false, error: { message: 'Failed to fetch watchlist' } },
       { status: 500 }
@@ -166,9 +164,7 @@ export async function POST(req: Request) {
       data: { watchlist: list }
     });
   } catch (error) {
-    console.error('Watchlist update error:', error);
-    const Sentry = await import('@sentry/nextjs');
-    Sentry.captureException(error);
+    logger.error('Watchlist update error', { error });
     return NextResponse.json(
       { success: false, error: { message: 'Failed to update watchlist' } },
       { status: 500 }
