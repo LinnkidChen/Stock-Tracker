@@ -68,6 +68,7 @@ Stock Tracker 是一个全面的股票投资组合分析与指标平台，旨在
 ### 基础设施与开发体验
 
 - **认证**: [Clerk](https://go.clerk.com/ILdYhn7)
+- **数据库**: [Supabase](https://supabase.com) (关注列表持久化)
 - **错误追踪**: [Sentry](https://sentry.io/for/nextjs/)
 - **Lint**: [ESLint](https://eslint.org)
 - **格式化**: [Prettier](https://prettier.io)
@@ -170,6 +171,7 @@ cp env.example.txt .env.local
    - Sentry DSN（可选）。设置 `NEXT_PUBLIC_SENTRY_DISABLED=true` 可禁用。
    - Alpha Vantage API Key（准备接入真实数据时）。注意：免费额度 5 次/分钟。
    - Longbridge API Config（如需使用 Longbridge 数据源）：`LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`, `LONGPORT_ACCESS_TOKEN`.
+   - Supabase Config (用于关注列表持久化): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 5. 启动开发服务:
 

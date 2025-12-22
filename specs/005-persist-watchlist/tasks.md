@@ -30,10 +30,10 @@ description: "自选列表持久化的任务列表"
 
 **目的**: 用户故事实现前必须完成的存储与访问基础设施
 
-- [ ] T002 新增 Supabase 环境配置读取与校验在 `/Users/tongchen/Projects/Stock-Tracker-2/src/lib/supabase/env.ts`
-- [ ] T003 新增 Supabase server 客户端工厂（支持 Clerk JWT）在 `/Users/tongchen/Projects/Stock-Tracker-2/src/lib/supabase/server.ts`
-- [ ] T004 新增 watchlist 持久化访问模块（get/add/remove）在 `/Users/tongchen/Projects/Stock-Tracker-2/src/lib/watchlist/storage.ts`
-- [ ] T005 [P] 定义 watchlist 类型与接口在 `/Users/tongchen/Projects/Stock-Tracker-2/src/types/watchlist.ts`
+- [x] T002 新增 Supabase 环境配置读取与校验在 `/Users/tongchen/Projects/Stock-Tracker-2/src/lib/supabase/env.ts`
+- [x] T003 新增 Supabase server 客户端工厂（支持 Clerk JWT）在 `/Users/tongchen/Projects/Stock-Tracker-2/src/lib/supabase/server.ts`
+- [x] T004 新增 watchlist 持久化访问模块（get/add/remove）在 `/Users/tongchen/Projects/Stock-Tracker-2/src/lib/watchlist/storage.ts`
+- [x] T005 [P] 定义 watchlist 类型与接口在 `/Users/tongchen/Projects/Stock-Tracker-2/src/types/watchlist.ts`
 
 **检查点**: 基础设施完成后，用户故事可并行进行
 
@@ -47,14 +47,14 @@ description: "自选列表持久化的任务列表"
 
 ### 用户故事 1 的测试
 
-- [ ] T006 [P] [US1] 新增 GET /api/watchlist 与 add 行为的路由测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/app/api/watchlist/route.test.ts`
-- [ ] T007 [P] [US1] 扩展持久化加载的集成测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/features/stock-dashboard/components/__tests__/WatchlistCard.integration.test.tsx`
-- [ ] T008 [P] [US1] 扩展初始加载与重复添加的单元测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/features/stock-dashboard/components/__tests__/watchlist-card.test.tsx`
+- [x] T006 [P] [US1] 新增 GET /api/watchlist 与 add 行为的路由测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/app/api/watchlist/route.test.ts`
+- [x] T007 [P] [US1] 扩展持久化加载的集成测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/features/stock-dashboard/components/__tests__/WatchlistCard.integration.test.tsx`
+- [x] T008 [P] [US1] 扩展初始加载与重复添加的单元测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/features/stock-dashboard/components/__tests__/watchlist-card.test.tsx`
 
 ### 用户故事 1 的实现
 
-- [ ] T009 [US1] 实现 GET /api/watchlist 与 add 持久化逻辑在 `/Users/tongchen/Projects/Stock-Tracker-2/src/app/api/watchlist/route.ts`
-- [ ] T010 [US1] 在初始渲染加载 watchlist 并记录 span/log 于 `/Users/tongchen/Projects/Stock-Tracker-2/src/features/stock-dashboard/components/WatchlistCard.tsx`
+- [x] T009 [US1] 实现 GET /api/watchlist 与 add 持久化逻辑在 `/Users/tongchen/Projects/Stock-Tracker-2/src/app/api/watchlist/route.ts`
+- [x] T010 [US1] 在初始渲染加载 watchlist 并记录 span/log 于 `/Users/tongchen/Projects/Stock-Tracker-2/src/features/stock-dashboard/components/WatchlistCard.tsx`
 
 **检查点**: 用户故事 1 可独立运行并通过测试
 
@@ -68,12 +68,12 @@ description: "自选列表持久化的任务列表"
 
 ### 用户故事 2 的测试
 
-- [ ] T011 [P] [US2] 增加 remove 持久化的路由测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/app/api/watchlist/route.test.ts`
-- [ ] T012 [P] [US2] 扩展移除持久化的集成测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/features/stock-dashboard/components/__tests__/WatchlistCard.integration.test.tsx`
+- [x] T011 [P] [US2] 增加 remove 持久化的路由测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/app/api/watchlist/route.test.ts`
+- [x] T012 [P] [US2] 扩展移除持久化的集成测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/features/stock-dashboard/components/__tests__/WatchlistCard.integration.test.tsx`
 
 ### 用户故事 2 的实现
 
-- [ ] T013 [US2] 实现 remove 持久化逻辑在 `/Users/tongchen/Projects/Stock-Tracker-2/src/app/api/watchlist/route.ts`
+- [x] T013 [US2] 实现 remove 持久化逻辑在 `/Users/tongchen/Projects/Stock-Tracker-2/src/app/api/watchlist/route.ts`
 
 **检查点**: 用户故事 2 可独立运行并通过测试
 
@@ -87,13 +87,13 @@ description: "自选列表持久化的任务列表"
 
 ### 用户故事 3 的测试
 
-- [ ] T014 [P] [US3] 添加鉴权缺失与存储失败的路由测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/app/api/watchlist/route.test.ts`
-- [ ] T015 [P] [US3] 添加加载失败与保存失败提示的 UI 测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/features/stock-dashboard/components/__tests__/watchlist-card.test.tsx`
+- [x] T014 [P] [US3] 添加鉴权缺失与存储失败的路由测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/app/api/watchlist/route.test.ts`
+- [x] T015 [P] [US3] 添加加载失败与保存失败提示的 UI 测试在 `/Users/tongchen/Projects/Stock-Tracker-2/src/features/stock-dashboard/components/__tests__/watchlist-card.test.tsx`
 
 ### 用户故事 3 的实现
 
-- [ ] T016 [US3] 在 API 层加入错误映射与 Sentry 捕获日志于 `/Users/tongchen/Projects/Stock-Tracker-2/src/app/api/watchlist/route.ts`
-- [ ] T017 [US3] 在 UI 层加入加载失败提示与重试入口于 `/Users/tongchen/Projects/Stock-Tracker-2/src/features/stock-dashboard/components/WatchlistCard.tsx`
+- [x] T016 [US3] 在 API 层加入错误映射与 Sentry 捕获日志于 `/Users/tongchen/Projects/Stock-Tracker-2/src/app/api/watchlist/route.ts`
+- [x] T017 [US3] 在 UI 层加入加载失败提示与重试入口于 `/Users/tongchen/Projects/Stock-Tracker-2/src/features/stock-dashboard/components/WatchlistCard.tsx`
 
 **检查点**: 用户故事 3 可独立运行并通过测试
 
@@ -103,8 +103,8 @@ description: "自选列表持久化的任务列表"
 
 **目的**: 完成文档更新与交付验证
 
-- [ ] T018 [P] 更新持久化说明与环境变量文档于 `/Users/tongchen/Projects/Stock-Tracker-2/README.md`
-- [ ] T019 更新验证步骤与故障排查于 `/Users/tongchen/Projects/Stock-Tracker-2/specs/005-persist-watchlist/quickstart.md`
+- [x] T018 [P] 更新持久化说明与环境变量文档于 `/Users/tongchen/Projects/Stock-Tracker-2/README.md`
+- [x] T019 更新验证步骤与故障排查于 `/Users/tongchen/Projects/Stock-Tracker-2/specs/005-persist-watchlist/quickstart.md`
 
 ---
 
