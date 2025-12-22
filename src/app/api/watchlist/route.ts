@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import { isValidTicker, normalizeTicker } from '@/lib/validation/ticker';
+import { logger } from '@/lib/logger';
+import {
+  getWatchlist,
+  addToWatchlist,
+  removeFromWatchlist
+} from '@/lib/watchlist/storage';
 
 /**
  * Action types for watchlist operations
@@ -34,15 +41,7 @@ export interface WatchlistErrorResponse {
   };
 }
 
-/**
- * Combined response type for watchlist API
- */
-export type WatchlistApiResponse = WatchlistResponse | WatchlistErrorResponse;
-
-type Body = WatchlistRequestBody;
-
-// Very simple in-memory stores keyed by client id (ip header)
-const watchlists = new Map<string, Set<string>>();
+// Very simple in-memory stores keyed by client id (ip header) for rate limiting
 const rateBuckets = new Map<string, { count: number; reset: number }>();
 
 /**
@@ -73,12 +72,30 @@ function rateLimit(id: string, limit = 60, windowMs = 60_000) {
   return { allowed: true };
 }
 
-/**
- * Handles POST requests for watchlist operations (add/remove symbols)
- *
- * @param req - The incoming request
- * @returns Response with updated watchlist or error
- */
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json(
+      { success: false, error: { message: 'Unauthorized' } },
+      { status: 401 }
+    );
+  }
+
+  try {
+    const list = await getWatchlist(userId);
+    return NextResponse.json({
+      success: true,
+      data: { watchlist: list }
+    });
+  } catch (error) {
+    logger.error('Watchlist fetch error', { error });
+    return NextResponse.json(
+      { success: false, error: { message: 'Failed to fetch watchlist' } },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(req: Request) {
   const id = getClientId(req);
   const rl = rateLimit(id);
@@ -97,7 +114,15 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: Body;
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json(
+      { success: false, error: { message: 'Unauthorized' } },
+      { status: 401 }
+    );
+  }
+
+  let body: WatchlistRequestBody;
   try {
     body = await req.json();
   } catch {
@@ -107,7 +132,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const action: WatchlistAction | undefined = body.action;
+  const action = body.action;
   const symbol = body.symbol ? normalizeTicker(body.symbol) : undefined;
 
   if (action !== 'add' && action !== 'remove') {
@@ -126,13 +151,23 @@ export async function POST(req: Request) {
     );
   }
 
-  const list = watchlists.get(id) ?? new Set<string>();
-  if (action === 'add') list.add(symbol);
-  if (action === 'remove') list.delete(symbol);
-  watchlists.set(id, list);
+  try {
+    let list: string[];
+    if (action === 'add') {
+      list = await addToWatchlist(userId, symbol);
+    } else {
+      list = await removeFromWatchlist(userId, symbol);
+    }
 
-  return NextResponse.json({
-    success: true,
-    data: { watchlist: Array.from(list) }
-  });
+    return NextResponse.json({
+      success: true,
+      data: { watchlist: list }
+    });
+  } catch (error) {
+    logger.error('Watchlist update error', { error });
+    return NextResponse.json(
+      { success: false, error: { message: 'Failed to update watchlist' } },
+      { status: 500 }
+    );
+  }
 }

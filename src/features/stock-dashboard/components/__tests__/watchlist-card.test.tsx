@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WatchlistCard } from '../WatchlistCard';
 
@@ -17,11 +17,52 @@ function renderWithProviders(ui: React.ReactElement) {
   return { ...utils, queryClient };
 }
 
+describe('WatchlistCard initial load', () => {
+  const originalFetch = global.fetch as any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.fetch = jest.fn() as any;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  test('fetches watchlist from API on mount', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { watchlist: ['AAPL'] }
+      })
+    });
+
+    renderWithProviders(<WatchlistCard />);
+
+    expect(global.fetch).toHaveBeenCalledWith('/api/watchlist');
+  });
+
+  test('shows error message if load fails', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 500
+    });
+
+    renderWithProviders(<WatchlistCard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load watchlist')).toBeInTheDocument();
+    });
+  });
+});
+
 describe('WatchlistCard add error modal flows', () => {
   const originalFetch = global.fetch as any;
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    jest.clearAllMocks();
+    global.fetch = jest.fn() as any;
   });
 
   afterEach(() => {
@@ -29,10 +70,25 @@ describe('WatchlistCard add error modal flows', () => {
   });
 
   test('shows validation modal and preserves input for invalid symbol', async () => {
-    global.fetch = jest.fn() as any;
+    global.fetch = jest.fn((url) => {
+      // Handle initial load
+      if (typeof url === 'string' && url.endsWith('/api/watchlist')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true, data: { watchlist: [] } })
+        });
+      }
+      return Promise.resolve({ ok: true });
+    }) as any;
 
     const user = userEvent.setup();
     renderWithProviders(<WatchlistCard />);
+
+    // Wait for initial load
+    await waitFor(() =>
+      expect(global.fetch).toHaveBeenCalledWith('/api/watchlist')
+    );
+    (global.fetch as jest.Mock).mockClear();
 
     const input = screen.getByPlaceholderText(
       'Add symbol (1-5 letters, e.g., MSFT)'
@@ -56,6 +112,15 @@ describe('WatchlistCard add error modal flows', () => {
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url.endsWith('/api/watchlist')) {
+          if (!init || !init.method || init.method === 'GET') {
+            return {
+              ok: true,
+              json: async () => ({
+                success: true,
+                data: { watchlist: [...watchlist] }
+              })
+            } as any;
+          }
           const body = init?.body ? JSON.parse(String(init.body)) : {};
           if (body.action === 'add') {
             addCalls += 1;

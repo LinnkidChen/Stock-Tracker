@@ -180,6 +180,8 @@ logger.fatal("Database connection pool exhausted", {
 ## Active Technologies
 - TypeScript 5.7, React 19, Next.js 16 (App Router) + Next.js App Router, React, Zustand, Radix UI Dialog, Sentry (001-ticker-error-modal)
 - In-memory watchlist (`/Users/tongchen/Projects/Stock-Tracker/src/app/api/watchlist/route.ts`), no external persistence (001-ticker-error-modal)
+- TypeScript 5.7 + Next.js 16 (App Router), React 19, @clerk/nextjs, @sentry/nextjs, @supabase/supabase-js (005-persist-watchlist)
+- Supabase Postgres (stock_watchlist_items) (005-persist-watchlist)
 
 ## Recent Changes
 - 001-ticker-error-modal: Added TypeScript 5.7, React 19, Next.js 16 (App Router) + Next.js App Router, React, Zustand, Radix UI Dialog, Sentry

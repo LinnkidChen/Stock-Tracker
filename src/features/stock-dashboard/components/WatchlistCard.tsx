@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,8 @@ import { LoadingSkeleton } from './LoadingSkeleton';
 import { WatchlistItemWithPrice } from '@/types/stocks';
 import { TickerErrorModal } from './TickerErrorModal';
 import { useDashboardStore } from '../store';
+import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 type SpanLike = {
   setAttribute?: (key: string, value: string | number) => void;
@@ -51,10 +53,53 @@ export function WatchlistCard() {
   const [items, setItems] = useState<string[]>([]);
   const [symbol, setSymbol] = useState('');
   const [busy, setBusy] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [addError, setAddError] = useState<AddTickerError | null>(null);
 
+  const [retryCount, setRetryCount] = useState(0);
+
   const { pricesMap, isLoading, errorSymbols } = useWatchlistPrices(items);
-  const { logger } = Sentry;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function load() {
+      await runWithSpan(
+        { op: 'ui.load', name: 'Load Watchlist' },
+        async (span) => {
+          try {
+            const res = await fetch('/api/watchlist', {
+              signal: controller.signal
+            });
+            span?.setAttribute?.('http.status_code', res.status);
+
+            if (!res.ok) throw new Error('Failed to load');
+            const json = await res.json();
+
+            if (!controller.signal.aborted && json.success) {
+              setItems(json.data.watchlist);
+              span?.setAttribute?.(
+                'watchlist.count',
+                json.data.watchlist.length
+              );
+            } else if (!controller.signal.aborted) {
+              throw new Error(json.error?.message || 'Failed to load');
+            }
+          } catch (e) {
+            if (e instanceof Error && e.name === 'AbortError') return;
+            logger.error('Failed to load watchlist', { error: e });
+            if (!controller.signal.aborted) setLoadError(true);
+          } finally {
+            if (!controller.signal.aborted) setInitialLoading(false);
+          }
+        }
+      );
+    }
+    load();
+    return () => {
+      controller.abort();
+    };
+  }, [retryCount]);
 
   async function mutate(action: 'add' | 'remove', sym: string) {
     setBusy(true);
@@ -82,6 +127,7 @@ export function WatchlistCard() {
       );
       if (!res.ok || !json?.success) {
         setItems(prev);
+        toast.error('Failed to update watchlist');
         return {
           ok: false as const,
           status: res.status,
@@ -91,8 +137,9 @@ export function WatchlistCard() {
       setItems(json.data.watchlist);
       return { ok: true as const };
     } catch (error) {
-      Sentry.captureException(error);
+      logger.error('Watchlist mutation failed', { error });
       setItems(prev); // rollback
+      toast.error('Failed to update watchlist');
       return { ok: false as const, error };
     } finally {
       setBusy(false);
@@ -176,7 +223,26 @@ export function WatchlistCard() {
             Add
           </Button>
         </form>
-        {items.length === 0 ? (
+        {initialLoading ? (
+          <LoadingSkeleton count={3} />
+        ) : loadError ? (
+          <div className='flex flex-col items-center gap-2'>
+            <div className='text-destructive text-sm'>
+              Failed to load watchlist
+            </div>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => {
+                setLoadError(false);
+                setInitialLoading(true);
+                setRetryCount((c) => c + 1);
+              }}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : items.length === 0 ? (
           <div className='text-muted-foreground text-sm'>No symbols yet.</div>
         ) : isLoading && Object.keys(pricesMap).length === 0 ? (
           <LoadingSkeleton count={items.length} />
