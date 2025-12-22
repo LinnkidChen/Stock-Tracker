@@ -13,7 +13,7 @@ export async function createClient() {
   const cookieStore = await cookies();
 
   // Get Clerk token to pass to Supabase
-  let supabaseToken: string | undefined;
+  let supabaseToken: string | null = null;
   try {
     const session = await auth();
     // According to Clerk docs for Supabase integration, we get the token with a specific template
