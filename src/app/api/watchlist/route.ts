@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { isValidTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { logger } from '@/lib/logger';
+import { isSupabaseAuthConfigError } from '@/lib/supabase/server';
 import {
   getWatchlist,
   addToWatchlist,
@@ -38,7 +39,29 @@ export interface WatchlistErrorResponse {
   success: false;
   error: {
     message: string;
+    code?: string;
   };
+}
+
+export const WATCHLIST_AUTH_MISCONFIGURED_CODE = 'WATCHLIST_AUTH_MISCONFIGURED';
+const WATCHLIST_AUTH_MISCONFIGURED_MESSAGE =
+  'Watchlist authentication is not configured on the server.';
+
+function createWatchlistAuthMisconfiguredResponse() {
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code: WATCHLIST_AUTH_MISCONFIGURED_CODE,
+        message: WATCHLIST_AUTH_MISCONFIGURED_MESSAGE
+      }
+    },
+    { status: 503 }
+  );
+}
+
+function isWatchlistAuthMisconfigured(error: unknown): boolean {
+  return isSupabaseAuthConfigError(error);
 }
 
 // Very simple in-memory stores keyed by client id (ip header) for rate limiting
@@ -88,6 +111,15 @@ export async function GET() {
       data: { watchlist: list }
     });
   } catch (error) {
+    if (isWatchlistAuthMisconfigured(error)) {
+      logger.error('Watchlist fetch unavailable due to auth misconfiguration', {
+        error,
+        remediation:
+          'Configure Clerk JWT template "supabase" and configure Supabase JWT verification for Clerk-issued tokens.'
+      });
+      return createWatchlistAuthMisconfiguredResponse();
+    }
+
     logger.error('Watchlist fetch error', { error });
     return NextResponse.json(
       { success: false, error: { message: 'Failed to fetch watchlist' } },
@@ -164,6 +196,18 @@ export async function POST(req: Request) {
       data: { watchlist: list }
     });
   } catch (error) {
+    if (isWatchlistAuthMisconfigured(error)) {
+      logger.error(
+        'Watchlist update unavailable due to auth misconfiguration',
+        {
+          error,
+          remediation:
+            'Configure Clerk JWT template "supabase" and configure Supabase JWT verification for Clerk-issued tokens.'
+        }
+      );
+      return createWatchlistAuthMisconfiguredResponse();
+    }
+
     logger.error('Watchlist update error', { error });
     return NextResponse.json(
       { success: false, error: { message: 'Failed to update watchlist' } },
