@@ -46,6 +46,8 @@ export interface WatchlistErrorResponse {
 export const WATCHLIST_AUTH_MISCONFIGURED_CODE = 'WATCHLIST_AUTH_MISCONFIGURED';
 const WATCHLIST_AUTH_MISCONFIGURED_MESSAGE =
   'Watchlist authentication is not configured on the server.';
+const WATCHLIST_AUTH_MISCONFIGURED_REMEDIATION =
+  'Configure Clerk JWT template "supabase" and configure Supabase JWT verification for Clerk-issued tokens.';
 
 function createWatchlistAuthMisconfiguredResponse() {
   return NextResponse.json(
@@ -58,6 +60,15 @@ function createWatchlistAuthMisconfiguredResponse() {
     },
     { status: 503 }
   );
+}
+
+function handleWatchlistAuthMisconfiguration(message: string, error: unknown) {
+  logger.error(message, {
+    error,
+    remediation: WATCHLIST_AUTH_MISCONFIGURED_REMEDIATION
+  });
+
+  return createWatchlistAuthMisconfiguredResponse();
 }
 
 // Very simple in-memory stores keyed by client id (ip header) for rate limiting
@@ -108,12 +119,10 @@ export async function GET() {
     });
   } catch (error) {
     if (isSupabaseAuthConfigError(error)) {
-      logger.error('Watchlist fetch unavailable due to auth misconfiguration', {
-        error,
-        remediation:
-          'Configure Clerk JWT template "supabase" and configure Supabase JWT verification for Clerk-issued tokens.'
-      });
-      return createWatchlistAuthMisconfiguredResponse();
+      return handleWatchlistAuthMisconfiguration(
+        'Watchlist fetch unavailable due to auth misconfiguration',
+        error
+      );
     }
 
     logger.error('Watchlist fetch error', { error });
@@ -193,15 +202,10 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     if (isSupabaseAuthConfigError(error)) {
-      logger.error(
+      return handleWatchlistAuthMisconfiguration(
         'Watchlist update unavailable due to auth misconfiguration',
-        {
-          error,
-          remediation:
-            'Configure Clerk JWT template "supabase" and configure Supabase JWT verification for Clerk-issued tokens.'
-        }
+        error
       );
-      return createWatchlistAuthMisconfiguredResponse();
     }
 
     logger.error('Watchlist update error', { error });

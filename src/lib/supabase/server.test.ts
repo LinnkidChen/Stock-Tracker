@@ -4,6 +4,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { auth } from '@clerk/nextjs/server';
+import { logger } from '@/lib/logger';
 import {
   createClient,
   SupabaseAuthConfigError,
@@ -34,12 +35,18 @@ describe('createClient', () => {
   const mockCreateServerClient = createServerClient as jest.Mock;
   const mockCookies = cookies as jest.Mock;
   const mockAuth = auth as jest.Mock;
+  const mockLogger = logger as {
+    error: jest.Mock;
+    info: jest.Mock;
+    warn: jest.Mock;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
-    delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY =
+      'publishable-key';
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     mockCookies.mockResolvedValue({
       getAll: jest.fn(() => []),
@@ -57,7 +64,7 @@ describe('createClient', () => {
     expect(client).toEqual({ kind: 'supabase-client' });
     expect(mockCreateServerClient).toHaveBeenCalledWith(
       'https://example.supabase.co',
-      'anon-key',
+      'publishable-key',
       expect.objectContaining({
         global: { headers: {} },
         cookies: expect.objectContaining({
@@ -78,7 +85,7 @@ describe('createClient', () => {
     expect(getToken).toHaveBeenCalledWith({ template: SUPABASE_JWT_TEMPLATE });
     expect(mockCreateServerClient).toHaveBeenCalledWith(
       'https://example.supabase.co',
-      'anon-key',
+      'publishable-key',
       expect.objectContaining({
         global: {
           headers: { Authorization: 'Bearer supabase-jwt' }
@@ -87,19 +94,29 @@ describe('createClient', () => {
     );
   });
 
-  it('uses the legacy publishable key env var when the anon key is missing', async () => {
-    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY =
-      'legacy-publishable-key';
+  it('uses the legacy anon key env var when the publishable key is missing', async () => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'legacy-anon-key';
     mockAuth.mockResolvedValue({ userId: null, getToken: jest.fn() });
 
     await createClient();
 
     expect(mockCreateServerClient).toHaveBeenCalledWith(
       'https://example.supabase.co',
-      'legacy-publishable-key',
+      'legacy-anon-key',
       expect.any(Object)
     );
+  });
+
+  it('logs and rethrows if Clerk auth() fails before token lookup', async () => {
+    const authError = new Error('Clerk is not configured');
+    mockAuth.mockRejectedValue(authError);
+
+    await expect(createClient()).rejects.toBe(authError);
+    expect(mockLogger.error).toHaveBeenCalledWith('Auth check failed', {
+      error: authError
+    });
+    expect(mockCreateServerClient).not.toHaveBeenCalled();
   });
 
   it('throws a config error when the Clerk supabase JWT template is missing', async () => {

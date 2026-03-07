@@ -171,7 +171,7 @@ cp env.example.txt .env.local
    - Sentry DSN（可选）。设置 `NEXT_PUBLIC_SENTRY_DISABLED=true` 可禁用。
    - Alpha Vantage API Key（准备接入真实数据时）。注意：免费额度 5 次/分钟。
    - Longbridge API Config（如需使用 Longbridge 数据源）：`LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`, `LONGPORT_ACCESS_TOKEN`.
-   - Supabase Config (用于关注列表持久化): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+   - Supabase Config (用于关注列表持久化): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`.
    - 关注列表认证集成：Clerk 中必须存在名为 `supabase` 的 JWT template，且 Supabase 必须配置为验证 Clerk 签发的 JWT。
 
 5. 启动开发服务:

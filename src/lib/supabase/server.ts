@@ -49,9 +49,17 @@ function isClerkTemplateMissingError(error: unknown): boolean {
  * allowing Row Level Security (RLS) policies to work with Clerk users.
  */
 export async function createClient() {
-  const { url, anonKey } = validateEnv();
+  const { url, publishableKey } = validateEnv();
   const cookieStore = await cookies();
-  const { userId, getToken } = await auth();
+  let userId: string | null;
+  let getToken: Awaited<ReturnType<typeof auth>>['getToken'];
+
+  try {
+    ({ userId, getToken } = await auth());
+  } catch (error) {
+    logger.error('Auth check failed', { error });
+    throw error;
+  }
 
   let supabaseToken: string | null = null;
 
@@ -102,7 +110,7 @@ export async function createClient() {
     }
   }
 
-  return createServerClient(url, anonKey, {
+  return createServerClient(url, publishableKey, {
     global: {
       headers: supabaseToken ? { Authorization: `Bearer ${supabaseToken}` } : {}
     },
