@@ -14,10 +14,6 @@ export class StockProviderFactory {
       } as APIError;
     }
 
-    switch (provider) {
-      case 'longbridge':
-      default:
-        return new LongbridgeProvider();
-    }
+    return new LongbridgeProvider();
   }
 }

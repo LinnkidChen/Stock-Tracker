@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
-import { LEGACY_DEFAULT_QUOTE_PROVIDER } from '@/lib/providers/config';
+import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { APIResponse, KLineSeries, APIError } from '@/lib/types/stock-api';
@@ -49,7 +49,7 @@ export async function GET(
 
         const url = new URL(request.url);
         const provider =
-          url.searchParams.get('provider') || LEGACY_DEFAULT_QUOTE_PROVIDER;
+          url.searchParams.get('provider') || CANONICAL_QUOTE_PROVIDER;
         span?.setAttribute('provider', provider);
         const stockService = getStockService();
         const series = await stockService.getKLineSeries(symbol, provider);

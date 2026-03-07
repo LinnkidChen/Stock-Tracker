@@ -100,7 +100,7 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
     jest.restoreAllMocks();
   });
 
-  it('returns kline data when no provider is supplied', async () => {
+  it('returns kline data with the canonical provider when no provider is supplied', async () => {
     mockStockServiceInstance.getKLineSeries.mockResolvedValue(mockSeries);
 
     const response = await GET(

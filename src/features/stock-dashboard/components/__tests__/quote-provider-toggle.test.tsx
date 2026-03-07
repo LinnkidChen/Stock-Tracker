@@ -20,6 +20,6 @@ describe('QuoteProviderToggle', () => {
     expect(screen.getByText('Source:')).toBeInTheDocument();
     expect(screen.getByText('Longbridge')).toBeInTheDocument();
     expect(screen.queryByText('Default')).not.toBeInTheDocument();
-    expect(screen.getByRole('combobox')).toBeDisabled();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 });

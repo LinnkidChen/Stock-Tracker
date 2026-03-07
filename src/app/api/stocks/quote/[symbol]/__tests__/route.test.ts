@@ -102,7 +102,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
     jest.restoreAllMocks();
   });
 
-  it('returns a quote when no provider is supplied', async () => {
+  it('returns a quote with the canonical provider when no provider is supplied', async () => {
     mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
     const response = await GET(createMockRequest(), {
