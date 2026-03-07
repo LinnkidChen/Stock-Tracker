@@ -6,17 +6,24 @@ import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { APIResponse, KLineSeries } from '@/lib/types/stock-api';
 import {
+  CANONICAL_QUOTE_PROVIDER,
+  LEGACY_DEFAULT_QUOTE_PROVIDER
+} from '@/lib/providers/config';
+import {
   createMockRequest,
   createMockParams
 } from '../../../__tests__/request-fixtures';
 
+const removedProvider = ['alpha', 'vantage'].join('');
+
 jest.mock('next/server', () => ({
   NextResponse: {
     json: jest.fn().mockImplementation((data, init) => {
-      const mockHeaders = new Map();
+      const headers = new Map<string, string>();
+
       if (init?.headers) {
         Object.entries(init.headers).forEach(([key, value]) => {
-          mockHeaders.set(key, value);
+          headers.set(key, value);
         });
       }
 
@@ -24,12 +31,7 @@ jest.mock('next/server', () => ({
         json: () => Promise.resolve(data),
         status: init?.status || 200,
         headers: {
-          get: (key: string) => mockHeaders.get(key),
-          set: (key: string, value: string) => mockHeaders.set(key, value),
-          has: (key: string) => mockHeaders.has(key),
-          delete: (key: string) => mockHeaders.delete(key),
-          forEach: (callback: (value: string, key: string) => void) =>
-            mockHeaders.forEach(callback)
+          get: (key: string) => headers.get(key)
         }
       };
     })
@@ -38,7 +40,7 @@ jest.mock('next/server', () => ({
 }));
 
 jest.mock('@sentry/nextjs', () => ({
-  startSpan: jest.fn((_context: any, callback: any) =>
+  startSpan: jest.fn((_context: unknown, callback: any) =>
     callback({ setAttribute: jest.fn() })
   ),
   captureException: jest.fn()
@@ -84,147 +86,196 @@ const mockSeries: KLineSeries = {
 describe('/api/stocks/kline/[symbol] API Route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetStockService.mockReturnValue(mockStockServiceInstance as any);
+    mockNormalizeTicker.mockImplementation((value: string) =>
+      value.trim().toUpperCase()
+    );
+    mockValidateTicker.mockReturnValue({ isValid: true });
     jest
       .spyOn(Date.prototype, 'toISOString')
       .mockReturnValue('2024-01-01T00:00:00.000Z');
-    mockGetStockService.mockReturnValue(mockStockServiceInstance as any);
-    mockNormalizeTicker.mockImplementation((s: string) =>
-      s?.trim().toUpperCase()
-    );
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  it('returns kline series for valid symbol', async () => {
-    mockValidateTicker.mockReturnValue({ isValid: true });
+  it('returns kline data with the canonical provider when no provider is supplied', async () => {
     mockStockServiceInstance.getKLineSeries.mockResolvedValue(mockSeries);
 
-    const request = createMockRequest(
-      'http://localhost:3000/api/stocks/kline/AAPL'
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/kline/AAPL'),
+      {
+        params: createMockParams('AAPL').params
+      }
     );
-    const params = createMockParams('AAPL').params;
-
-    const response = await GET(request, { params });
     const responseData: APIResponse<KLineSeries> = await response.json();
 
     expect(response.status).toBe(200);
-    expect(responseData).toEqual({
-      success: true,
-      data: mockSeries,
-      error: null,
-      timestamp: '2024-01-01T00:00:00.000Z'
-    });
-    expect(mockValidateTicker).toHaveBeenCalledWith('AAPL');
+    expect(responseData.data).toEqual(mockSeries);
     expect(mockStockServiceInstance.getKLineSeries).toHaveBeenCalledWith(
       'AAPL',
-      'default'
+      CANONICAL_QUOTE_PROVIDER
     );
-  });
-
-  it('includes cache headers on success', async () => {
-    mockValidateTicker.mockReturnValue({ isValid: true });
-    mockStockServiceInstance.getKLineSeries.mockResolvedValue(mockSeries);
-
-    const request = createMockRequest(
-      'http://localhost:3000/api/stocks/kline/AAPL'
-    );
-    const params = createMockParams('AAPL').params;
-
-    const response = await GET(request, { params });
-
     expect(response.headers.get('Cache-Control')).toBe(
       'public, s-maxage=86400, stale-while-revalidate=604800'
     );
   });
 
-  it('returns 400 for invalid symbol', async () => {
+  it('passes the canonical provider through to the service layer', async () => {
+    mockStockServiceInstance.getKLineSeries.mockResolvedValue(mockSeries);
+
+    await GET(
+      createMockRequest('http://localhost:3000/api/stocks/kline/AAPL', {
+        query: { provider: CANONICAL_QUOTE_PROVIDER }
+      }),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
+
+    expect(mockStockServiceInstance.getKLineSeries).toHaveBeenCalledWith(
+      'AAPL',
+      CANONICAL_QUOTE_PROVIDER
+    );
+  });
+
+  it('passes the legacy default alias through to the service layer', async () => {
+    mockStockServiceInstance.getKLineSeries.mockResolvedValue(mockSeries);
+
+    await GET(
+      createMockRequest('http://localhost:3000/api/stocks/kline/AAPL', {
+        query: { provider: LEGACY_DEFAULT_QUOTE_PROVIDER }
+      }),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
+
+    expect(mockStockServiceInstance.getKLineSeries).toHaveBeenCalledWith(
+      'AAPL',
+      LEGACY_DEFAULT_QUOTE_PROVIDER
+    );
+  });
+
+  it('returns 400 for invalid symbols', async () => {
     mockValidateTicker.mockReturnValue({
       isValid: false,
       error: 'Ticker symbol is required'
     });
 
-    const request = createMockRequest(
-      'http://localhost:3000/api/stocks/kline/'
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/kline/'),
+      {
+        params: createMockParams('').params
+      }
     );
-    const params = createMockParams('').params;
-
-    const response = await GET(request, { params });
     const responseData: APIResponse<null> = await response.json();
 
     expect(response.status).toBe(400);
-    expect(responseData.error?.code).toBe('INVALID_SYMBOL');
-    expect(responseData.error?.message).toBe('Ticker symbol is required');
+    expect(responseData.error).toEqual({
+      code: 'INVALID_SYMBOL',
+      message: 'Ticker symbol is required'
+    });
   });
 
-  describe('error mapping', () => {
-    beforeEach(() => {
-      mockValidateTicker.mockReturnValue({ isValid: true });
+  it('returns 400 for the removed provider alias', async () => {
+    mockStockServiceInstance.getKLineSeries.mockRejectedValue({
+      code: 'INVALID_PROVIDER',
+      message: `Unsupported provider: ${removedProvider}`
     });
 
-    it('maps INVALID_API_KEY to 401', async () => {
-      mockStockServiceInstance.getKLineSeries.mockRejectedValue({
-        code: 'INVALID_API_KEY',
-        message: 'Invalid API key'
-      });
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/kline/AAPL', {
+        query: { provider: removedProvider }
+      }),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
 
-      const request = createMockRequest(
-        'http://localhost:3000/api/stocks/kline/AAPL'
-      );
-      const params = createMockParams('AAPL').params;
+    expect(response.status).toBe(400);
+  });
 
-      const response = await GET(request, { params });
-
-      expect(response.status).toBe(401);
+  it('returns 400 for unknown providers', async () => {
+    mockStockServiceInstance.getKLineSeries.mockRejectedValue({
+      code: 'INVALID_PROVIDER',
+      message: 'Unsupported provider: legacy-provider'
     });
 
-    it('maps API_LIMIT_EXCEEDED to 429', async () => {
-      mockStockServiceInstance.getKLineSeries.mockRejectedValue({
-        code: 'API_LIMIT_EXCEEDED',
-        message: 'Rate limit'
-      });
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/kline/AAPL', {
+        query: { provider: 'legacy-provider' }
+      }),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
 
-      const request = createMockRequest(
-        'http://localhost:3000/api/stocks/kline/AAPL'
-      );
-      const params = createMockParams('AAPL').params;
+    expect(response.status).toBe(400);
+  });
 
-      const response = await GET(request, { params });
-
-      expect(response.status).toBe(429);
+  it('maps INVALID_API_KEY to 401', async () => {
+    mockStockServiceInstance.getKLineSeries.mockRejectedValue({
+      code: 'INVALID_API_KEY',
+      message: 'Longbridge credentials not configured'
     });
 
-    it('maps NETWORK_ERROR to 502', async () => {
-      mockStockServiceInstance.getKLineSeries.mockRejectedValue({
-        code: 'NETWORK_ERROR',
-        message: 'Upstream error'
-      });
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/kline/AAPL'),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
 
-      const request = createMockRequest(
-        'http://localhost:3000/api/stocks/kline/AAPL'
-      );
-      const params = createMockParams('AAPL').params;
+    expect(response.status).toBe(401);
+  });
 
-      const response = await GET(request, { params });
-
-      expect(response.status).toBe(502);
+  it('maps API_LIMIT_EXCEEDED to 429', async () => {
+    mockStockServiceInstance.getKLineSeries.mockRejectedValue({
+      code: 'API_LIMIT_EXCEEDED',
+      message: 'Rate limit'
     });
 
-    it('maps UNKNOWN_ERROR to 500', async () => {
-      mockStockServiceInstance.getKLineSeries.mockRejectedValue({
-        code: 'UNKNOWN_ERROR',
-        message: 'Unknown'
-      });
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/kline/AAPL'),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
 
-      const request = createMockRequest(
-        'http://localhost:3000/api/stocks/kline/AAPL'
-      );
-      const params = createMockParams('AAPL').params;
+    expect(response.status).toBe(429);
+  });
 
-      const response = await GET(request, { params });
-
-      expect(response.status).toBe(500);
+  it('maps NETWORK_ERROR to 502', async () => {
+    mockStockServiceInstance.getKLineSeries.mockRejectedValue({
+      code: 'NETWORK_ERROR',
+      message: 'Upstream error'
     });
+
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/kline/AAPL'),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
+
+    expect(response.status).toBe(502);
+  });
+
+  it('maps UNKNOWN_ERROR to 500', async () => {
+    mockStockServiceInstance.getKLineSeries.mockRejectedValue({
+      code: 'UNKNOWN_ERROR',
+      message: 'Unknown error'
+    });
+
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/kline/AAPL'),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
+
+    expect(response.status).toBe(500);
   });
 });

@@ -1,37 +1,27 @@
 'use client';
 
 import { useDashboardStore } from '../store';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
+import { QUOTE_PROVIDER_OPTIONS } from '@/lib/providers/config';
+import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 
 export function QuoteProviderToggle() {
-  const { quoteProvider, setQuoteProvider } = useDashboardStore();
+  const quoteProvider = useDashboardStore((state) => state.quoteProvider);
+  const providerLabel =
+    QUOTE_PROVIDER_OPTIONS.find((provider) => provider.value === quoteProvider)
+      ?.label ?? quoteProvider;
 
   return (
     <div className='flex items-center space-x-2'>
-      <Label
-        htmlFor='quote-provider'
-        className='text-muted-foreground text-sm font-medium'
-      >
+      <Label className='text-muted-foreground text-sm font-medium'>
         Source:
       </Label>
-      <Select value={quoteProvider} onValueChange={setQuoteProvider}>
-        <SelectTrigger id='quote-provider' className='h-8 w-[140px]'>
-          <div className='flex items-center gap-2'>
-            <SelectValue placeholder='Select provider' />
-          </div>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value='default'>Default</SelectItem>
-          <SelectItem value='longbridge'>Longbridge</SelectItem>
-        </SelectContent>
-      </Select>
+      <Badge
+        variant='outline'
+        className='h-8 min-w-[140px] justify-center rounded-md px-3 text-xs font-medium'
+      >
+        {providerLabel}
+      </Badge>
     </div>
   );
 }
