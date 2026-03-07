@@ -8,11 +8,11 @@ import { useDashboardStore } from '../store';
 import { mockStocks } from '@/lib/mock-data/stocks';
 
 interface TickerInputProps {
-  // Add any specific props here if needed
+  onTickerSubmit?: (ticker: string) => void;
 }
 
 export const TickerInput = forwardRef<HTMLInputElement, TickerInputProps>(
-  (props, ref) => {
+  ({ onTickerSubmit }, ref) => {
     const [ticker, setTicker] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [isFocused, setIsFocused] = useState(false);
@@ -33,7 +33,11 @@ export const TickerInput = forwardRef<HTMLInputElement, TickerInputProps>(
         return;
       }
       const sym = normalizeTicker(ticker);
-      setSelectedTicker(sym);
+      if (onTickerSubmit) {
+        onTickerSubmit(sym);
+      } else {
+        setSelectedTicker(sym);
+      }
       setTicker('');
       setIsFocused(false);
       setError(null);
