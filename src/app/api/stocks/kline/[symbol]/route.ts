@@ -57,9 +57,9 @@ export async function GET(
         const provider =
           url.searchParams.get('provider') || CANONICAL_QUOTE_PROVIDER;
         const rawInterval = url.searchParams.get('interval');
-        const interval = rawInterval?.toLowerCase();
+        const normalizedInterval = rawInterval?.toLowerCase();
 
-        if (rawInterval && !isKLineInterval(interval)) {
+        if (rawInterval && !isKLineInterval(normalizedInterval)) {
           const error: APIError = {
             code: 'INVALID_INTERVAL',
             message: `Unsupported kline interval: ${rawInterval}`
@@ -82,12 +82,16 @@ export async function GET(
           return NextResponse.json(response, { status: 400 });
         }
 
+        const interval = isKLineInterval(normalizedInterval)
+          ? normalizedInterval
+          : DEFAULT_KLINE_INTERVAL;
+
         span?.setAttribute('provider', provider);
-        span?.setAttribute('interval', interval || DEFAULT_KLINE_INTERVAL);
+        span?.setAttribute('interval', interval);
         const stockService = getStockService();
         const series = await stockService.getKLineSeries(
           symbol,
-          interval || DEFAULT_KLINE_INTERVAL,
+          interval,
           provider
         );
 
