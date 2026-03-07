@@ -60,10 +60,6 @@ function createWatchlistAuthMisconfiguredResponse() {
   );
 }
 
-function isWatchlistAuthMisconfigured(error: unknown): boolean {
-  return isSupabaseAuthConfigError(error);
-}
-
 // Very simple in-memory stores keyed by client id (ip header) for rate limiting
 const rateBuckets = new Map<string, { count: number; reset: number }>();
 
@@ -111,7 +107,7 @@ export async function GET() {
       data: { watchlist: list }
     });
   } catch (error) {
-    if (isWatchlistAuthMisconfigured(error)) {
+    if (isSupabaseAuthConfigError(error)) {
       logger.error('Watchlist fetch unavailable due to auth misconfiguration', {
         error,
         remediation:
@@ -196,7 +192,7 @@ export async function POST(req: Request) {
       data: { watchlist: list }
     });
   } catch (error) {
-    if (isWatchlistAuthMisconfigured(error)) {
+    if (isSupabaseAuthConfigError(error)) {
       logger.error(
         'Watchlist update unavailable due to auth misconfiguration',
         {

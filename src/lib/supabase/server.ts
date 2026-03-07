@@ -23,11 +23,23 @@ export function isSupabaseAuthConfigError(
 }
 
 function isClerkTemplateMissingError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+
+  const candidate = error as {
+    status?: unknown;
+    clerkError?: unknown;
+    code?: unknown;
+    message?: unknown;
+  };
+
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'status' in error &&
-    (error as { status?: unknown }).status === 404
+    candidate.clerkError === true &&
+    candidate.status === 404 &&
+    (candidate.code === 'api_response_error' ||
+      (typeof candidate.message === 'string' &&
+        candidate.message.toLowerCase().includes('not found')))
   );
 }
 
@@ -70,6 +82,9 @@ export async function createClient() {
         error,
         template: SUPABASE_JWT_TEMPLATE
       });
+      // Only the missing-template case is treated as a configuration error.
+      // Other Clerk failures should propagate to the generic 500 path instead
+      // of being mislabeled as a persistent watchlist auth misconfiguration.
       throw error;
     }
 

@@ -103,16 +103,31 @@ describe('createClient', () => {
   });
 
   it('throws a config error when the Clerk supabase JWT template is missing', async () => {
-    const getToken = jest
-      .fn()
-      .mockRejectedValue(
-        Object.assign(new Error('Not Found'), { status: 404 })
-      );
+    const getToken = jest.fn().mockRejectedValue(
+      Object.assign(new Error('Not Found'), {
+        clerkError: true,
+        code: 'api_response_error',
+        status: 404
+      })
+    );
     mockAuth.mockResolvedValue({ userId: 'user_123', getToken });
 
     await expect(createClient()).rejects.toBeInstanceOf(
       SupabaseAuthConfigError
     );
+    expect(getToken).toHaveBeenCalledTimes(1);
+    expect(getToken).toHaveBeenCalledWith({ template: SUPABASE_JWT_TEMPLATE });
+    expect(mockCreateServerClient).not.toHaveBeenCalled();
+  });
+
+  it('does not classify non-Clerk 404 errors as auth misconfiguration', async () => {
+    const notClerkError = Object.assign(new Error('Not Found'), {
+      status: 404
+    });
+    const getToken = jest.fn().mockRejectedValue(notClerkError);
+    mockAuth.mockResolvedValue({ userId: 'user_123', getToken });
+
+    await expect(createClient()).rejects.toBe(notClerkError);
     expect(getToken).toHaveBeenCalledTimes(1);
     expect(getToken).toHaveBeenCalledWith({ template: SUPABASE_JWT_TEMPLATE });
     expect(mockCreateServerClient).not.toHaveBeenCalled();
