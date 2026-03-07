@@ -5,13 +5,15 @@
 
 export function validateEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !anonKey) {
+  if (!url || !publishableKey) {
     throw new Error(
-      'Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY'
+      'Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY (or legacy NEXT_PUBLIC_SUPABASE_ANON_KEY)'
     );
   }
 
-  return { url, anonKey };
+  return { url, publishableKey };
 }

@@ -4,6 +4,7 @@
 import { POST, GET } from './route';
 import { NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { SupabaseAuthConfigError } from '@/lib/supabase/server';
 import {
   getWatchlist,
   addToWatchlist,
@@ -20,12 +21,6 @@ jest.mock('@/lib/watchlist/storage', () => ({
   addToWatchlist: jest.fn(),
   removeFromWatchlist: jest.fn()
 }));
-
-// Mock rate limiting to avoid interference?
-// The current route.ts has internal rate limiting.
-// Ideally we should mock the internal functions or just accept it works.
-// Since we are rewriting route.ts, we will need to handle how we test it.
-// For now, let's assume valid requests.
 
 describe('/api/watchlist', () => {
   const mockAuth = auth as jest.Mock;
@@ -68,12 +63,6 @@ describe('/api/watchlist', () => {
         body: JSON.stringify({ action: 'add', symbol: 'AAPL' })
       });
       const res = await POST(req);
-      // Currently the route might not check auth, but our plan says it should.
-      // So this test expects the new behavior.
-      // If we run this now against OLD implementation, it might fail or pass depending on existing code.
-      // Existing code uses IP for rate limit but doesn't strictly check auth for logic?
-      // Actually existing code just uses "anonymous" if no IP?
-      // Existing code does NOT check auth() from Clerk. So this will fail until we implement T009.
       expect(res.status).toBe(401);
     });
 
@@ -127,6 +116,51 @@ describe('/api/watchlist', () => {
       expect(res.status).toBe(500);
       expect(json.success).toBe(false);
       expect(json.error).toBeDefined();
+    });
+
+    it('returns 503 if watchlist auth is misconfigured', async () => {
+      mockAuth.mockResolvedValue({ userId: 'user_123' });
+      mockAdd.mockRejectedValue(
+        new SupabaseAuthConfigError(
+          'Clerk Supabase JWT template is not configured'
+        )
+      );
+
+      const req = new NextRequest('http://localhost/api/watchlist', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'add', symbol: 'AAPL' })
+      });
+      const res = await POST(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(503);
+      expect(json.success).toBe(false);
+      expect(json.error).toEqual({
+        code: 'WATCHLIST_AUTH_MISCONFIGURED',
+        message: 'Watchlist authentication is not configured on the server.'
+      });
+    });
+  });
+
+  describe('misconfiguration handling', () => {
+    it('returns 503 on GET if watchlist auth is misconfigured', async () => {
+      mockAuth.mockResolvedValue({ userId: 'user_123' });
+      mockGet.mockRejectedValue(
+        new SupabaseAuthConfigError(
+          'Clerk Supabase JWT template is not configured'
+        )
+      );
+
+      const req = new NextRequest('http://localhost/api/watchlist');
+      const res = await GET(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(503);
+      expect(json.success).toBe(false);
+      expect(json.error).toEqual({
+        code: 'WATCHLIST_AUTH_MISCONFIGURED',
+        message: 'Watchlist authentication is not configured on the server.'
+      });
     });
   });
 });
