@@ -17,17 +17,17 @@ jest.mock('@sentry/nextjs', () => ({
 
 function TestHarness({
   symbol,
-  provider = CANONICAL_QUOTE_PROVIDER,
-  interval = 'day'
+  interval = 'day',
+  provider = CANONICAL_QUOTE_PROVIDER
 }: {
   symbol?: string;
-  provider?: string;
   interval?: KLineInterval;
+  provider?: string;
 }) {
   const { data, isLoading, noData } = useKlineSeries(
     symbol,
-    provider,
-    interval
+    interval,
+    provider
   );
 
   return (
@@ -159,6 +159,56 @@ describe('useKlineSeries', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('symbol')).toHaveTextContent('week')
+    );
+  });
+
+  it('refetches when the provider changes', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const provider = url.searchParams.get('provider') || '';
+
+      return {
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            symbol: provider,
+            range: {
+              startDate: '2023-01-01T00:00:00.000Z',
+              endDate: '2024-01-01T00:00:00.000Z',
+              interval: 'day'
+            },
+            candles: [],
+            lastUpdated: '2024-01-01T00:00:00.000Z'
+          }
+        })
+      } as any;
+    }) as any;
+
+    const { rerender } = renderWithClient(
+      <TestHarness symbol='AAPL' provider={CANONICAL_QUOTE_PROVIDER} />
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('symbol')).toHaveTextContent(
+        CANONICAL_QUOTE_PROVIDER
+      )
+    );
+
+    rerender(
+      <QueryClientProvider
+        client={
+          new QueryClient({
+            defaultOptions: { queries: { retry: 0 } }
+          })
+        }
+      >
+        <TestHarness symbol='AAPL' provider='default' />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('symbol')).toHaveTextContent('default')
     );
   });
 });

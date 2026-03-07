@@ -12,8 +12,8 @@ import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 
 async function fetchKlineSeries(
   symbol: string,
-  provider: string = CANONICAL_QUOTE_PROVIDER,
-  interval: KLineInterval = DEFAULT_KLINE_INTERVAL
+  interval: KLineInterval = DEFAULT_KLINE_INTERVAL,
+  provider: string = CANONICAL_QUOTE_PROVIDER
 ): Promise<KLineSeries> {
   return Sentry.startSpan(
     { op: 'http.client', name: `GET /api/stocks/kline/${symbol}` },
@@ -61,12 +61,12 @@ async function fetchKlineSeries(
 
 export function useKlineSeries(
   symbol?: string,
-  provider: string = CANONICAL_QUOTE_PROVIDER,
-  interval: KLineInterval = DEFAULT_KLINE_INTERVAL
+  interval: KLineInterval = DEFAULT_KLINE_INTERVAL,
+  provider: string = CANONICAL_QUOTE_PROVIDER
 ) {
   const query = useQuery({
     queryKey: ['kline-series', symbol, provider, interval],
-    queryFn: () => fetchKlineSeries(symbol!, provider, interval),
+    queryFn: () => fetchKlineSeries(symbol!, interval, provider),
     enabled: !!symbol,
     staleTime: 24 * 60 * 60 * 1000,
     refetchInterval: false as const,

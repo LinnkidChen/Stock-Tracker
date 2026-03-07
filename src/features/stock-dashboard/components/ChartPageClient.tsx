@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { QuoteProviderToggle } from './QuoteProviderToggle';
 import { useDashboardStore } from '../store';
@@ -47,28 +47,31 @@ export function ChartPageClient() {
   const interval = isKLineInterval(rawInterval)
     ? rawInterval
     : DEFAULT_KLINE_INTERVAL;
+  const intervalRef = useRef(interval);
 
-  // Sync URL symbol to store
+  intervalRef.current = interval;
+
   useEffect(() => {
-    if (symbol && symbol !== selectedTicker) {
-      setSelectedTicker(symbol);
-    } else if (!symbol && selectedTicker) {
-      router.replace(
-        buildChartsHref(
-          new URLSearchParams(searchParams.toString()),
-          selectedTicker,
-          interval
-        )
-      );
+    if (!symbol || symbol === selectedTicker) {
+      return;
     }
-  }, [
-    interval,
-    router,
-    searchParams,
-    selectedTicker,
-    setSelectedTicker,
-    symbol
-  ]);
+
+    setSelectedTicker(symbol);
+  }, [selectedTicker, setSelectedTicker, symbol]);
+
+  useEffect(() => {
+    if (symbol || !selectedTicker) {
+      return;
+    }
+
+    router.replace(
+      buildChartsHref(
+        new URLSearchParams(),
+        selectedTicker,
+        intervalRef.current
+      )
+    );
+  }, [router, selectedTicker, symbol]);
 
   const activeTicker = symbol || selectedTicker;
   const handleTickerSubmit = (ticker: string) => {

@@ -27,24 +27,33 @@ interface KLineChartProps {
   onIntervalChange?: (interval: KLineInterval) => void;
 }
 
+const KLINE_INTERVAL_META: Record<
+  KLineInterval,
+  {
+    badge: string;
+    label: string;
+    subtitle: string;
+  }
+> = {
+  day: { label: 'Day', badge: '1D', subtitle: 'Daily candles' },
+  week: { label: 'Week', badge: '1W', subtitle: 'Weekly candles' },
+  month: { label: 'Month', badge: '1M', subtitle: 'Monthly candles' },
+  year: { label: 'Year', badge: '1Y', subtitle: 'Yearly candles' }
+};
+
 const KLINE_INTERVAL_OPTIONS: Array<{
-  value: KLineInterval;
   label: string;
-  badge: string;
-  subtitle: string;
-}> = [
-  { value: 'day', label: 'Day', badge: '1D', subtitle: 'Daily candles' },
-  { value: 'week', label: 'Week', badge: '1W', subtitle: 'Weekly candles' },
-  { value: 'month', label: 'Month', badge: '1M', subtitle: 'Monthly candles' },
-  { value: 'year', label: 'Year', badge: '1Y', subtitle: 'Yearly candles' }
-];
+  value: KLineInterval;
+}> = (['day', 'week', 'month', 'year'] as const).map((value) => ({
+  value,
+  label: KLINE_INTERVAL_META[value].label
+}));
 
 function getIntervalMeta(interval: KLineInterval) {
-  return KLINE_INTERVAL_OPTIONS.find((option) => option.value === interval)!;
+  return KLINE_INTERVAL_META[interval];
 }
 
-function formatRangeLabel(range: TimeRange, fallbackInterval: KLineInterval) {
-  const activeInterval = range.interval ?? fallbackInterval;
+function formatRangeLabel(range: TimeRange) {
   const start = new Date(range.startDate).toLocaleDateString('en', {
     month: 'short',
     day: 'numeric',
@@ -55,7 +64,7 @@ function formatRangeLabel(range: TimeRange, fallbackInterval: KLineInterval) {
     day: 'numeric',
     year: 'numeric'
   });
-  return `${start} - ${end} · ${getIntervalMeta(activeInterval).badge}`;
+  return `${start} - ${end} · ${getIntervalMeta(range.interval).badge}`;
 }
 
 export function KLineChart({
@@ -69,8 +78,8 @@ export function KLineChart({
   const querySymbol = validation.isValid ? ticker : undefined;
   const { data, isLoading, isError, error, noData, refetch } = useKlineSeries(
     querySymbol,
-    provider,
-    interval
+    interval,
+    provider
   );
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -100,7 +109,7 @@ export function KLineChart({
   const rangeLabel = useMemo(
     () =>
       data?.range
-        ? formatRangeLabel(data.range, interval)
+        ? formatRangeLabel(data.range)
         : getIntervalMeta(interval).badge,
     [data?.range, interval]
   );

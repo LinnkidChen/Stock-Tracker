@@ -20,6 +20,7 @@ import {
 
 const LONG_BRIDGE_KLINE_COUNT = 1000;
 
+// Longbridge exposes const-enum Period values where 17 is Quarter and 18 is Year.
 const LONG_BRIDGE_PERIOD_MAP: Record<KLineInterval, number> = {
   day: 14,
   week: 15,

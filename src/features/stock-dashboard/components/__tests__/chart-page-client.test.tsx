@@ -108,6 +108,27 @@ describe('ChartPageClient', () => {
     expect(screen.getByTestId('kline-chart')).toHaveTextContent('AAPL:day');
   });
 
+  test('hydrates the missing symbol in the URL from the store without dropping the interval', () => {
+    const replace = jest.fn();
+
+    (useRouter as jest.Mock).mockReturnValue({ replace });
+    (useSearchParams as jest.Mock).mockReturnValue({
+      get: (key: string) => (key === 'interval' ? 'month' : null),
+      toString: () => 'interval=month'
+    });
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue({
+      selectedTicker: 'NVDA',
+      setSelectedTicker: jest.fn(),
+      quoteProvider: 'default'
+    });
+
+    render(<ChartPageClient />);
+
+    expect(replace).toHaveBeenCalledWith(
+      '/dashboard/charts?symbol=NVDA&interval=month'
+    );
+  });
+
   test('preserves the symbol when the chart interval changes', () => {
     const replace = jest.fn();
 
