@@ -40,7 +40,7 @@ const mockSeries: KLineSeries = {
   range: {
     startDate: '2023-01-01T00:00:00.000Z',
     endDate: '2024-01-01T00:00:00.000Z',
-    interval: '1d'
+    interval: 'day'
   },
   candles: [
     {
@@ -91,9 +91,9 @@ describe('StockService', () => {
       };
       provider.getQuote.mockRejectedValue(apiError);
 
-      await expect(stockService.getQuote('AAPL', 'legacy-provider')).rejects.toBe(
-        apiError
-      );
+      await expect(
+        stockService.getQuote('AAPL', 'legacy-provider')
+      ).rejects.toBe(apiError);
     });
 
     it('wraps unknown provider failures', async () => {
@@ -112,11 +112,24 @@ describe('StockService', () => {
     it('returns series data from the configured provider', async () => {
       provider.getKLines.mockResolvedValue(mockSeries);
 
-      const result = await stockService.getKLineSeries('AAPL', 'default');
+      const result = await stockService.getKLineSeries(
+        'AAPL',
+        'week',
+        'default'
+      );
 
       expect(mockGetProvider).toHaveBeenCalledWith('default');
-      expect(provider.getKLines).toHaveBeenCalledWith('AAPL');
+      expect(provider.getKLines).toHaveBeenCalledWith('AAPL', 'week');
       expect(result).toEqual(mockSeries);
+    });
+
+    it('defaults to the day interval when none is provided', async () => {
+      provider.getKLines.mockResolvedValue(mockSeries);
+
+      await stockService.getKLineSeries('AAPL');
+
+      expect(provider.getKLines).toHaveBeenCalledWith('AAPL', 'day');
+      expect(mockGetProvider).toHaveBeenCalledWith(CANONICAL_QUOTE_PROVIDER);
     });
 
     it('wraps unexpected kline errors', async () => {

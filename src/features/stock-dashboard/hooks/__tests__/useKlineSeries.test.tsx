@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import { useKlineSeries } from '../useKlineSeries';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
+import type { KLineInterval } from '@/lib/types/stock-api';
 
 jest.mock('@sentry/nextjs', () => ({
   startSpan: jest.fn((_context: unknown, callback: any) =>
@@ -16,12 +17,18 @@ jest.mock('@sentry/nextjs', () => ({
 
 function TestHarness({
   symbol,
-  provider = CANONICAL_QUOTE_PROVIDER
+  provider = CANONICAL_QUOTE_PROVIDER,
+  interval = 'day'
 }: {
   symbol?: string;
   provider?: string;
+  interval?: KLineInterval;
 }) {
-  const { data, isLoading, noData } = useKlineSeries(symbol, provider);
+  const { data, isLoading, noData } = useKlineSeries(
+    symbol,
+    provider,
+    interval
+  );
 
   return (
     <div>
@@ -60,6 +67,7 @@ describe('useKlineSeries', () => {
 
       expect(url.pathname).toBe('/api/stocks/kline/AAPL');
       expect(url.searchParams.get('provider')).toBe(CANONICAL_QUOTE_PROVIDER);
+      expect(url.searchParams.get('interval')).toBe('day');
 
       return {
         ok: true,
@@ -70,7 +78,7 @@ describe('useKlineSeries', () => {
             range: {
               startDate: '2023-01-01T00:00:00.000Z',
               endDate: '2024-01-01T00:00:00.000Z',
-              interval: '1d'
+              interval: 'day'
             },
             candles: [
               {
@@ -106,21 +114,21 @@ describe('useKlineSeries', () => {
     expect(screen.getByTestId('loading')).toHaveTextContent('true');
   });
 
-  it('refetches when the provider changes', async () => {
+  it('refetches when the interval changes', async () => {
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), 'http://localhost:3000');
-      const provider = url.searchParams.get('provider') || '';
+      const interval = url.searchParams.get('interval') || '';
 
       return {
         ok: true,
         json: async () => ({
           success: true,
           data: {
-            symbol: provider,
+            symbol: interval,
             range: {
               startDate: '2023-01-01T00:00:00.000Z',
               endDate: '2024-01-01T00:00:00.000Z',
-              interval: '1d'
+              interval: interval as KLineInterval
             },
             candles: [],
             lastUpdated: '2024-01-01T00:00:00.000Z'
@@ -130,13 +138,11 @@ describe('useKlineSeries', () => {
     }) as any;
 
     const { rerender } = renderWithClient(
-      <TestHarness symbol='AAPL' provider={CANONICAL_QUOTE_PROVIDER} />
+      <TestHarness symbol='AAPL' interval='day' />
     );
 
     await waitFor(() =>
-      expect(screen.getByTestId('symbol')).toHaveTextContent(
-        CANONICAL_QUOTE_PROVIDER
-      )
+      expect(screen.getByTestId('symbol')).toHaveTextContent('day')
     );
 
     rerender(
@@ -147,12 +153,12 @@ describe('useKlineSeries', () => {
           })
         }
       >
-        <TestHarness symbol='AAPL' provider='default' />
+        <TestHarness symbol='AAPL' interval='week' />
       </QueryClientProvider>
     );
 
     await waitFor(() =>
-      expect(screen.getByTestId('symbol')).toHaveTextContent('default')
+      expect(screen.getByTestId('symbol')).toHaveTextContent('week')
     );
   });
 });

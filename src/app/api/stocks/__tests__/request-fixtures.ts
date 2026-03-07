@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 /**
  * Type definition for Next.js App Router dynamic route params

@@ -36,7 +36,7 @@ jest.mock('next/server', () => ({
       };
     })
   },
-  NextRequest: jest.requireActual('next/server').NextRequest
+  NextRequest: class NextRequestMock {}
 }));
 
 jest.mock('@sentry/nextjs', () => ({

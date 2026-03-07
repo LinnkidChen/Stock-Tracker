@@ -1,6 +1,12 @@
 import { CANONICAL_QUOTE_PROVIDER } from '../providers/config';
 import { StockProviderFactory } from '../providers/factory';
-import { APIError, KLineSeries, StockQuote } from '../types/stock-api';
+import {
+  APIError,
+  DEFAULT_KLINE_INTERVAL,
+  type KLineInterval,
+  KLineSeries,
+  StockQuote
+} from '../types/stock-api';
 
 export class StockService {
   async getMultipleQuotes(
@@ -68,11 +74,12 @@ export class StockService {
 
   async getKLineSeries(
     symbol: string,
+    interval: KLineInterval = DEFAULT_KLINE_INTERVAL,
     provider: string = CANONICAL_QUOTE_PROVIDER
   ): Promise<KLineSeries> {
     try {
       const stockProvider = StockProviderFactory.getProvider(provider);
-      return await stockProvider.getKLines(symbol);
+      return await stockProvider.getKLines(symbol, interval);
     } catch (error) {
       if (this.isAPIError(error)) {
         throw error;
