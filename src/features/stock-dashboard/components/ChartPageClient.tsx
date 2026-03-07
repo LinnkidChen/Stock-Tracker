@@ -27,6 +27,11 @@ export function ChartPageClient() {
   }, [symbol, selectedTicker, setSelectedTicker, router]);
 
   const activeTicker = symbol || selectedTicker;
+  const handleTickerSubmit = (ticker: string) => {
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.set('symbol', ticker);
+    router.replace(`/dashboard/charts?${nextSearchParams.toString()}`);
+  };
 
   return (
     <div className='flex h-full flex-col gap-6'>
@@ -35,7 +40,7 @@ export function ChartPageClient() {
         <div className='flex items-center gap-4'>
           <QuoteProviderToggle />
           <div className='w-[300px]'>
-            <TickerInput />
+            <TickerInput onTickerSubmit={handleTickerSubmit} />
           </div>
         </div>
       </div>
