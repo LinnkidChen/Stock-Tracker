@@ -21,8 +21,21 @@ jest.mock('../QuoteProviderToggle', () => ({
 }));
 
 jest.mock('../KLineChart', () => ({
-  KLineChart: ({ ticker }: { ticker: string }) => (
-    <div data-testid='kline-chart'>{ticker}</div>
+  KLineChart: ({
+    ticker,
+    interval,
+    onIntervalChange
+  }: {
+    ticker: string;
+    interval: string;
+    onIntervalChange?: (interval: 'day' | 'week' | 'month' | 'year') => void;
+  }) => (
+    <div>
+      <div data-testid='kline-chart'>{`${ticker}:${interval}`}</div>
+      <button type='button' onClick={() => onIntervalChange?.('year')}>
+        Switch Interval
+      </button>
+    </div>
   )
 }));
 
@@ -31,14 +44,15 @@ describe('ChartPageClient', () => {
     jest.resetAllMocks();
   });
 
-  test('replaces the symbol query param when searching from the charts page', () => {
+  test('replaces the symbol query param when searching from the charts page and preserves the interval', () => {
     const replace = jest.fn();
     const setSelectedTicker = jest.fn();
 
     (useRouter as jest.Mock).mockReturnValue({ replace });
     (useSearchParams as jest.Mock).mockReturnValue({
-      get: (key: string) => (key === 'symbol' ? 'GOOGL' : null),
-      toString: () => 'symbol=GOOGL'
+      get: (key: string) =>
+        key === 'symbol' ? 'GOOGL' : key === 'interval' ? 'week' : null,
+      toString: () => 'symbol=GOOGL&interval=week'
     });
     (useDashboardStore as unknown as jest.Mock).mockReturnValue({
       selectedTicker: 'GOOGL',
@@ -53,7 +67,88 @@ describe('ChartPageClient', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Search' }));
 
-    expect(replace).toHaveBeenCalledWith('/dashboard/charts?symbol=AAPL');
+    expect(replace).toHaveBeenCalledWith(
+      '/dashboard/charts?symbol=AAPL&interval=week'
+    );
     expect(setSelectedTicker).not.toHaveBeenCalled();
+  });
+
+  test('passes the selected interval from the URL into the chart', () => {
+    (useRouter as jest.Mock).mockReturnValue({ replace: jest.fn() });
+    (useSearchParams as jest.Mock).mockReturnValue({
+      get: (key: string) =>
+        key === 'symbol' ? 'GOOGL' : key === 'interval' ? 'month' : null,
+      toString: () => 'symbol=GOOGL&interval=month'
+    });
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue({
+      selectedTicker: 'GOOGL',
+      setSelectedTicker: jest.fn(),
+      quoteProvider: 'default'
+    });
+
+    render(<ChartPageClient />);
+
+    expect(screen.getByTestId('kline-chart')).toHaveTextContent('GOOGL:month');
+  });
+
+  test('defaults the chart interval to day when the URL omits it', () => {
+    (useRouter as jest.Mock).mockReturnValue({ replace: jest.fn() });
+    (useSearchParams as jest.Mock).mockReturnValue({
+      get: (key: string) => (key === 'symbol' ? 'AAPL' : null),
+      toString: () => 'symbol=AAPL'
+    });
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue({
+      selectedTicker: 'AAPL',
+      setSelectedTicker: jest.fn(),
+      quoteProvider: 'default'
+    });
+
+    render(<ChartPageClient />);
+
+    expect(screen.getByTestId('kline-chart')).toHaveTextContent('AAPL:day');
+  });
+
+  test('hydrates the missing symbol in the URL from the store without dropping the interval', () => {
+    const replace = jest.fn();
+
+    (useRouter as jest.Mock).mockReturnValue({ replace });
+    (useSearchParams as jest.Mock).mockReturnValue({
+      get: (key: string) => (key === 'interval' ? 'month' : null),
+      toString: () => 'interval=month'
+    });
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue({
+      selectedTicker: 'NVDA',
+      setSelectedTicker: jest.fn(),
+      quoteProvider: 'default'
+    });
+
+    render(<ChartPageClient />);
+
+    expect(replace).toHaveBeenCalledWith(
+      '/dashboard/charts?symbol=NVDA&interval=month'
+    );
+  });
+
+  test('preserves the symbol when the chart interval changes', () => {
+    const replace = jest.fn();
+
+    (useRouter as jest.Mock).mockReturnValue({ replace });
+    (useSearchParams as jest.Mock).mockReturnValue({
+      get: (key: string) =>
+        key === 'symbol' ? 'MSFT' : key === 'interval' ? 'week' : null,
+      toString: () => 'symbol=MSFT&interval=week'
+    });
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue({
+      selectedTicker: 'MSFT',
+      setSelectedTicker: jest.fn(),
+      quoteProvider: 'default'
+    });
+
+    render(<ChartPageClient />);
+    fireEvent.click(screen.getByRole('button', { name: 'Switch Interval' }));
+
+    expect(replace).toHaveBeenCalledWith(
+      '/dashboard/charts?symbol=MSFT&interval=year'
+    );
   });
 });

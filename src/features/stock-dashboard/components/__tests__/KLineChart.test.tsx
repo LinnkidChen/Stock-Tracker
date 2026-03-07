@@ -6,6 +6,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { KLineChart } from '../KLineChart';
 import { useKlineSeries } from '../../hooks/useKlineSeries';
+import type { KLineInterval } from '@/lib/types/stock-api';
 
 jest.mock('../../hooks/useKlineSeries');
 jest.mock('../../lib/klinecharts', () => ({
@@ -20,6 +21,17 @@ const mockUseKlineSeries = useKlineSeries as jest.MockedFunction<
 >;
 
 describe('KLineChart', () => {
+  const buildSeries = (interval: KLineInterval = 'day') => ({
+    symbol: 'AAPL',
+    range: {
+      startDate: '2023-01-01T00:00:00.000Z',
+      endDate: '2024-01-01T00:00:00.000Z',
+      interval
+    },
+    candles: [],
+    lastUpdated: '2024-01-01T00:00:00.000Z'
+  });
+
   beforeEach(() => {
     mockUseKlineSeries.mockReset();
   });
@@ -43,7 +55,7 @@ describe('KLineChart', () => {
 
   it('updates ticker label when ticker changes', () => {
     mockUseKlineSeries.mockReturnValue({
-      data: null,
+      data: buildSeries(),
       isLoading: false,
       isError: false,
       error: null,
@@ -60,16 +72,7 @@ describe('KLineChart', () => {
 
   it('renders no-data state with retry action', () => {
     mockUseKlineSeries.mockReturnValue({
-      data: {
-        symbol: 'AAPL',
-        range: {
-          startDate: '2023-01-01T00:00:00.000Z',
-          endDate: '2024-01-01T00:00:00.000Z',
-          interval: '1d'
-        },
-        candles: [],
-        lastUpdated: '2024-01-01T00:00:00.000Z'
-      },
+      data: buildSeries(),
       isLoading: false,
       isError: false,
       error: null,
@@ -83,6 +86,37 @@ describe('KLineChart', () => {
       screen.getByText('No K line data available for AAPL.')
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('renders the interval selector and active interval metadata', async () => {
+    mockUseKlineSeries.mockReturnValue({
+      data: buildSeries('month'),
+      isLoading: false,
+      isError: false,
+      error: null,
+      noData: false,
+      refetch: jest.fn()
+    } as any);
+
+    const onIntervalChange = jest.fn();
+
+    render(
+      <KLineChart
+        ticker='AAPL'
+        interval='month'
+        onIntervalChange={onIntervalChange}
+      />
+    );
+
+    expect(screen.getByText('Monthly candles')).toBeInTheDocument();
+    expect(screen.getByText(/1M/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('radio', { name: 'Month interval' })
+    ).toHaveAttribute('data-state', 'on');
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Week interval' }));
+
+    expect(onIntervalChange).toHaveBeenCalledWith('week');
   });
 
   it('renders error state and calls retry', async () => {

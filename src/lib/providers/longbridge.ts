@@ -1,6 +1,8 @@
 import {
   StockQuote,
   APIError,
+  DEFAULT_KLINE_INTERVAL,
+  type KLineInterval,
   KLineSeries,
   KLineCandle,
   TimeRange
@@ -15,6 +17,16 @@ import {
   AdjustType,
   TradeSessions
 } from 'longport';
+
+const LONG_BRIDGE_KLINE_COUNT = 1000;
+
+// Longbridge exposes const-enum Period values where 17 is Quarter and 18 is Year.
+const LONG_BRIDGE_PERIOD_MAP: Record<KLineInterval, number> = {
+  day: 14,
+  week: 15,
+  month: 16,
+  year: 18
+};
 
 export class LongbridgeProvider implements StockDataProvider {
   name = 'Longbridge';
@@ -92,7 +104,10 @@ export class LongbridgeProvider implements StockDataProvider {
     }
   }
 
-  async getKLines(symbol: string): Promise<KLineSeries> {
+  async getKLines(
+    symbol: string,
+    interval: KLineInterval = DEFAULT_KLINE_INTERVAL
+  ): Promise<KLineSeries> {
     if (
       !process.env.LONGPORT_APP_KEY ||
       !process.env.LONGPORT_APP_SECRET ||
@@ -110,19 +125,19 @@ export class LongbridgeProvider implements StockDataProvider {
 
       const longbridgeSymbol = this.normalizeSymbol(symbol);
 
-      // Fetch daily candles using numeric values to avoid isolatedModules const enum issues
-      // Period.Day = 14
+      // Fetch candles using numeric values to avoid isolatedModules const enum issues.
+      const period = LONG_BRIDGE_PERIOD_MAP[interval];
       // AdjustType.ForwardAdjust = 1
       // TradeSessions.All = 1
       const candlesData = await context.candlesticks(
         longbridgeSymbol,
-        14 as unknown as Period,
-        1000,
+        period as unknown as Period,
+        LONG_BRIDGE_KLINE_COUNT,
         1 as unknown as AdjustType,
         1 as unknown as TradeSessions
       );
 
-      return this.transformCandlesticksToSeries(candlesData, symbol);
+      return this.transformCandlesticksToSeries(candlesData, symbol, interval);
     } catch (error) {
       logger.error('Longbridge KLine Error', { error });
 
@@ -145,7 +160,8 @@ export class LongbridgeProvider implements StockDataProvider {
 
   private transformCandlesticksToSeries(
     candlesData: Candlestick[],
-    symbol: string
+    symbol: string,
+    interval: KLineInterval
   ): KLineSeries {
     // Longbridge Candlestick: { close, high, low, open, timestamp, volume, ... }
     // Timestamp is a Date; convert to milliseconds for JS Date usage.
@@ -172,7 +188,7 @@ export class LongbridgeProvider implements StockDataProvider {
     const range: TimeRange = {
       startDate,
       endDate,
-      interval: '1d'
+      interval
     };
 
     return {

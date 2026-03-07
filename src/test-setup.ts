@@ -32,7 +32,11 @@ process.env.NODE_ENV = 'test';
 
 Object.assign(global, {
   TextEncoder,
-  TextDecoder
+  TextDecoder,
+  Request: globalThis.Request,
+  Response: globalThis.Response,
+  Headers: globalThis.Headers,
+  fetch: globalThis.fetch
 });
 
 // Global test utilities and mocks can be added here
