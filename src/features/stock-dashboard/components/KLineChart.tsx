@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import { validateTicker } from '@/lib/validation/ticker';
 import type { TimeRange } from '@/lib/types/stock-api';
 import { useKlineSeries } from '../hooks/useKlineSeries';
@@ -34,7 +35,7 @@ function formatRangeLabel(range?: TimeRange) {
 export function KLineChart({
   ticker,
   className,
-  provider = 'default'
+  provider = CANONICAL_QUOTE_PROVIDER
 }: KLineChartProps) {
   const validation = useMemo(() => validateTicker(ticker), [ticker]);
   const querySymbol = validation.isValid ? ticker : undefined;

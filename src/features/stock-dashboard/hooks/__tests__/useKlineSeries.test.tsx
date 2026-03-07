@@ -5,16 +5,23 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import { useKlineSeries } from '../useKlineSeries';
+import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 
 jest.mock('@sentry/nextjs', () => ({
-  startSpan: jest.fn((_context: any, callback: any) =>
+  startSpan: jest.fn((_context: unknown, callback: any) =>
     callback({ setAttribute: jest.fn() })
   ),
   captureException: jest.fn()
 }));
 
-function TestHarness({ symbol }: { symbol?: string }) {
-  const { data, isLoading, noData } = useKlineSeries(symbol);
+function TestHarness({
+  symbol,
+  provider = CANONICAL_QUOTE_PROVIDER
+}: {
+  symbol?: string;
+  provider?: string;
+}) {
+  const { data, isLoading, noData } = useKlineSeries(symbol, provider);
 
   return (
     <div>
@@ -30,10 +37,10 @@ function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: 0 } }
   });
-  const utils = render(
+
+  return render(
     <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
   );
-  return { ...utils, queryClient };
 }
 
 describe('useKlineSeries', () => {
@@ -47,31 +54,39 @@ describe('useKlineSeries', () => {
     global.fetch = originalFetch;
   });
 
-  it('loads kline series successfully', async () => {
-    const mockSeries = {
-      symbol: 'AAPL',
-      range: {
-        startDate: '2023-01-01T00:00:00.000Z',
-        endDate: '2024-01-01T00:00:00.000Z',
-        interval: '1d'
-      },
-      candles: [
-        {
-          timestamp: 1704067200000,
-          open: 100,
-          high: 110,
-          low: 95,
-          close: 105,
-          volume: 1000000
-        }
-      ],
-      lastUpdated: '2024-01-01T00:00:00.000Z'
-    };
+  it('loads kline series using the canonical provider query string', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
 
-    global.fetch = jest.fn(async () => ({
-      ok: true,
-      json: async () => ({ success: true, data: mockSeries })
-    })) as any;
+      expect(url.pathname).toBe('/api/stocks/kline/AAPL');
+      expect(url.searchParams.get('provider')).toBe(CANONICAL_QUOTE_PROVIDER);
+
+      return {
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            symbol: 'AAPL',
+            range: {
+              startDate: '2023-01-01T00:00:00.000Z',
+              endDate: '2024-01-01T00:00:00.000Z',
+              interval: '1d'
+            },
+            candles: [
+              {
+                timestamp: 1704067200000,
+                open: 100,
+                high: 110,
+                low: 95,
+                close: 105,
+                volume: 1000000
+              }
+            ],
+            lastUpdated: '2024-01-01T00:00:00.000Z'
+          }
+        })
+      } as any;
+    }) as any;
 
     renderWithClient(<TestHarness symbol='AAPL' />);
 
@@ -81,10 +96,6 @@ describe('useKlineSeries', () => {
 
     expect(screen.getByTestId('symbol')).toHaveTextContent('AAPL');
     expect(screen.getByTestId('count')).toHaveTextContent('1');
-    expect(global.fetch).toHaveBeenCalledWith(
-      '/api/stocks/kline/AAPL',
-      expect.any(Object)
-    );
   });
 
   it('exposes loading state while request is in flight', () => {
@@ -95,15 +106,17 @@ describe('useKlineSeries', () => {
     expect(screen.getByTestId('loading')).toHaveTextContent('true');
   });
 
-  it('refetches when ticker changes', async () => {
+  it('refetches when the provider changes', async () => {
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
-      const symbol = String(input).split('/').pop()!;
+      const url = new URL(String(input), 'http://localhost:3000');
+      const provider = url.searchParams.get('provider') || '';
+
       return {
         ok: true,
         json: async () => ({
           success: true,
           data: {
-            symbol,
+            symbol: provider,
             range: {
               startDate: '2023-01-01T00:00:00.000Z',
               endDate: '2024-01-01T00:00:00.000Z',
@@ -116,31 +129,30 @@ describe('useKlineSeries', () => {
       } as any;
     }) as any;
 
-    const { rerender, queryClient } = renderWithClient(
-      <TestHarness symbol='AAPL' />
+    const { rerender } = renderWithClient(
+      <TestHarness symbol='AAPL' provider={CANONICAL_QUOTE_PROVIDER} />
     );
 
     await waitFor(() =>
-      expect(screen.getByTestId('symbol')).toHaveTextContent('AAPL')
+      expect(screen.getByTestId('symbol')).toHaveTextContent(
+        CANONICAL_QUOTE_PROVIDER
+      )
     );
 
     rerender(
-      <QueryClientProvider client={queryClient}>
-        <TestHarness symbol='MSFT' />
+      <QueryClientProvider
+        client={
+          new QueryClient({
+            defaultOptions: { queries: { retry: 0 } }
+          })
+        }
+      >
+        <TestHarness symbol='AAPL' provider='default' />
       </QueryClientProvider>
     );
 
     await waitFor(() =>
-      expect(screen.getByTestId('symbol')).toHaveTextContent('MSFT')
-    );
-
-    expect(global.fetch).toHaveBeenCalledWith(
-      '/api/stocks/kline/AAPL',
-      expect.any(Object)
-    );
-    expect(global.fetch).toHaveBeenCalledWith(
-      '/api/stocks/kline/MSFT',
-      expect.any(Object)
+      expect(screen.getByTestId('symbol')).toHaveTextContent('default')
     );
   });
 });

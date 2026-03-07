@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
+import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { APIResponse, StockQuote, APIError } from '@/lib/types/stock-api';
@@ -47,7 +48,9 @@ export async function GET(
 
         // Get the stock quote
         const url = new URL(request.url);
-        const provider = url.searchParams.get('provider') || 'default';
+        const provider =
+          url.searchParams.get('provider') || CANONICAL_QUOTE_PROVIDER;
+        span?.setAttribute('provider', provider);
         const stockService = getStockService();
         const quote = await stockService.getQuote(symbol, provider);
 
@@ -128,6 +131,7 @@ function isAPIError(error: unknown): error is APIError {
 function getStatusCodeForError(code: string): number {
   switch (code) {
     case 'INVALID_SYMBOL':
+    case 'INVALID_PROVIDER':
       return 400;
     case 'API_LIMIT_EXCEEDED':
       return 429;
