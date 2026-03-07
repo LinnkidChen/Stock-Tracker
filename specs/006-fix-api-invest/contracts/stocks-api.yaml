@@ -21,6 +21,7 @@ paths:
           schema:
             type: string
             default: default
+          description: Supported values are `longbridge` and legacy alias `default`
       responses:
         '200':
           description: Quote response
@@ -73,6 +74,7 @@ paths:
           schema:
             type: string
             default: default
+          description: Supported values are `longbridge` and legacy alias `default`
       responses:
         '200':
           description: K-line response

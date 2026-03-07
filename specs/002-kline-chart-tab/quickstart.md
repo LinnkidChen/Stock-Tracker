@@ -3,12 +3,12 @@
 ## 前置条件
 
 - 已安装 Node.js 与 pnpm
-- 可选：设置 `ALPHA_VANTAGE_API_KEY` 以拉取真实数据
+- 已配置 Longbridge 凭据：`LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET`、`LONGPORT_ACCESS_TOKEN`
 
 ## 本地运行
 
 1. 复制环境模板: `cp /Users/tongchen/Projects/Stock-Tracker-1/env.example.txt /Users/tongchen/Projects/Stock-Tracker-1/.env`
-2. 在 `/Users/tongchen/Projects/Stock-Tracker-1/.env` 中填写 `ALPHA_VANTAGE_API_KEY`
+2. 在 `/Users/tongchen/Projects/Stock-Tracker-1/.env` 中填写 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET`、`LONGPORT_ACCESS_TOKEN`
 3. 启动开发服务: `pnpm dev`
 4. 打开 `http://localhost:3000`
 
@@ -22,5 +22,5 @@
 
 ## 常见问题
 
-- **429/限流**: 等待 1 分钟后重试，减少频繁切换 ticker
+- **401/凭据错误**: 检查 Longbridge 凭据是否已正确写入 `.env`
 - **无数据**: 使用支持的 ticker 或稍后重试

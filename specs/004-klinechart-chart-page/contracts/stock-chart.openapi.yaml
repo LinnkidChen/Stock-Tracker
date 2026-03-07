@@ -16,6 +16,13 @@ paths:
           schema:
             type: string
           description: Stock ticker symbol
+        - name: provider
+          in: query
+          required: false
+          schema:
+            type: string
+            default: default
+          description: Quote provider identifier. Supported values: `longbridge`, `default`
       responses:
         "200":
           description: K line series response
@@ -24,7 +31,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/KLineSeriesResponse"
         "400":
-          description: Invalid symbol
+          description: Invalid symbol or provider
           content:
             application/json:
               schema:
@@ -72,7 +79,8 @@ paths:
           required: false
           schema:
             type: string
-          description: Quote provider identifier
+            default: default
+          description: Quote provider identifier. Supported values: `longbridge`, `default`
       responses:
         "200":
           description: Stock quote response
@@ -81,7 +89,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/StockQuoteResponse"
         "400":
-          description: Invalid symbol
+          description: Invalid symbol or provider
           content:
             application/json:
               schema:
@@ -116,6 +124,7 @@ components:
       type: string
       enum:
         - INVALID_SYMBOL
+        - INVALID_PROVIDER
         - API_LIMIT_EXCEEDED
         - NETWORK_ERROR
         - INVALID_API_KEY

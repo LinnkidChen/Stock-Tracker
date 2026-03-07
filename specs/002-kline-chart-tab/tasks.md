@@ -25,7 +25,7 @@ description: "Task list for feature implementation"
 **Goal**: Server-side data pipeline and shared types used by all stories.
 
 - [X] T002 [P] Extend KLine entity types (KLineCandle, TimeRange, KLineSeries) in /Users/tongchen/Projects/Stock-Tracker-1/src/lib/types/stock-api.ts
-- [X] T003 [P] Add Alpha Vantage daily series fetcher with error handling in /Users/tongchen/Projects/Stock-Tracker-1/src/lib/services/alpha-vantage-client.ts
+- [X] T003 [P] Add Longbridge-backed daily series fetcher with error handling in /Users/tongchen/Projects/Stock-Tracker-1/src/lib/providers/longbridge.ts
 - [X] T004 Add KLineSeries transformation (1y daily, ascending timestamps) and getKLineSeries in /Users/tongchen/Projects/Stock-Tracker-1/src/lib/services/stock-service.ts
 - [X] T005 Create KLine API route with validation, error mapping, and cache headers in /Users/tongchen/Projects/Stock-Tracker-1/src/app/api/stocks/kline/[symbol]/route.ts
 

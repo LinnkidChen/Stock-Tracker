@@ -2,8 +2,8 @@
 
 ## 决策 1: K 线数据来源
 
-- **Decision**: 通过 Alpha Vantage 的日线时间序列接口获取数据，在服务端裁剪为最近 1 年日 K。  
-- **Rationale**: 仓库已有 Alpha Vantage 集成与错误处理模式，可复用鉴权与限流逻辑，满足 1 年日 K 的需求。  
+- **Decision**: 通过 Longbridge 的日线蜡烛图接口获取数据，并在服务端标准化为最近 1 年日 K。  
+- **Rationale**: 仓库现已统一使用 Longbridge 作为唯一行情数据源，可复用 provider 抽象、鉴权与错误处理逻辑。  
 - **Alternatives considered**: 使用本地 mock 数据；引入新数据源（Polygon/Finnhub）；仅展示现有报价数据。
 
 ## 决策 2: 图表渲染方式
@@ -15,7 +15,7 @@
 ## 决策 3: 数据获取与缓存策略
 
 - **Decision**: 新增 `GET /api/stocks/kline/{symbol}`，客户端用 React Query `useQuery` 拉取数据并设置较长的 `staleTime`（例如 1 天）。  
-- **Rationale**: 与现有 `useStockQuote` 一致，减少重复调用并规避 API 限流。  
+- **Rationale**: 与现有 `useStockQuote` 一致，减少重复调用并保持图表数据查询稳定。  
 - **Alternatives considered**: 客户端直连第三方 API；服务端渲染或 server actions。
 
 ## 决策 4: 监控与错误处理

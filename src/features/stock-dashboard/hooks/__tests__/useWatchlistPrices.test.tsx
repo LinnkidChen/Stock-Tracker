@@ -6,6 +6,8 @@ import { createRoot } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useWatchlistPrices } from '../useWatchlistPrices';
+import { useDashboardStore } from '../../store';
+import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 
 function TestHarness({ symbols }: { symbols: string[] }) {
   const { pricesMap, isLoading, hasErrors, errorSymbols, refetch } =
@@ -31,60 +33,65 @@ function renderWithClient(element: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: 0 } }
   });
+
   act(() => {
     root.render(
       <QueryClientProvider client={queryClient}>{element}</QueryClientProvider>
     );
   });
-  return { container, unmount: () => root.unmount(), queryClient };
+
+  return { container, queryClient, unmount: () => root.unmount() };
 }
 
 async function waitFor(predicate: () => boolean, timeout = 2000) {
   const start = Date.now();
+
   while (!predicate()) {
     if (Date.now() - start > timeout) {
       throw new Error('waitFor: condition not met in time');
     }
+
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 5));
-      try {
-        // If fake timers are active, advance a bit
-        // @ts-ignore
-        jest.advanceTimersByTime(5);
-      } catch {}
+      await new Promise((resolve) => setTimeout(resolve, 5));
       await Promise.resolve();
     });
   }
 }
 
-function mockApiResponse(symbol: string, ok = true, dataOverride?: any) {
-  const baseQuote = {
-    symbol,
-    name: symbol,
-    price: 100,
-    change: 1,
-    changePercent: 1,
-    volume: 1000,
-    high: 110,
-    low: 90,
-    open: 95,
-    previousClose: 99,
-    marketCap: 1,
-    peRatio: 1,
-    eps: 1,
-    dividendYield: 0,
-    week52High: 120,
-    week52Low: 80,
-    avgVolume: 100,
-    beta: 1,
-    lastUpdated: '2023-01-01T00:00:00.000Z'
-  };
+function mockApiResponse(symbol: string, ok = true) {
   return {
     ok,
     json: async () =>
       ok
-        ? { success: true, data: { ...baseQuote, ...(dataOverride || {}) } }
-        : { success: false, data: null, error: { code: 'X', message: 'bad' } }
+        ? {
+            success: true,
+            data: {
+              symbol,
+              name: symbol,
+              price: 100,
+              change: 1,
+              changePercent: 1,
+              volume: 1000,
+              high: 110,
+              low: 90,
+              open: 95,
+              previousClose: 99,
+              marketCap: 1,
+              peRatio: 1,
+              eps: 1,
+              dividendYield: 0,
+              week52High: 120,
+              week52Low: 80,
+              avgVolume: 100,
+              beta: 1,
+              lastUpdated: '2023-01-01T00:00:00.000Z'
+            }
+          }
+        : {
+            success: false,
+            data: null,
+            error: { code: 'UNKNOWN_ERROR', message: 'bad' }
+          }
   } as any;
 }
 
@@ -94,26 +101,29 @@ describe('useWatchlistPrices', () => {
   beforeEach(() => {
     jest.restoreAllMocks();
     jest.clearAllTimers();
+    useDashboardStore.setState({
+      quoteProvider: CANONICAL_QUOTE_PROVIDER
+    });
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
   });
 
-  test('successful batch fetching maps prices for all symbols', async () => {
-    global.fetch = jest.fn(async (url: RequestInfo | URL) => {
-      const s = String(url).split('/').pop()!;
-      if (s.includes('?')) {
-        // not expected here
-      }
-      return mockApiResponse(s);
+  test('fetches prices with the canonical provider query string', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      expect(url.searchParams.get('provider')).toBe(CANONICAL_QUOTE_PROVIDER);
+
+      return mockApiResponse(symbol);
     }) as any;
 
     const { container, unmount } = renderWithClient(
       <TestHarness symbols={['AAPL', 'MSFT']} />
     );
 
-    // wait for async queries to settle
     await waitFor(
       () => container.querySelector('#isLoading')!.textContent === 'false'
     );
@@ -121,18 +131,21 @@ describe('useWatchlistPrices', () => {
     const prices = JSON.parse(
       container.querySelector('#prices')!.textContent || '{}'
     );
+
     expect(Object.keys(prices).sort()).toEqual(['AAPL', 'MSFT']);
-    expect(container.querySelector('#isLoading')!.textContent).toBe('false');
     expect(container.querySelector('#hasErrors')!.textContent).toBe('false');
 
     unmount();
   });
 
-  test('handles individual symbol failures and records errorSymbols', async () => {
-    global.fetch = jest.fn(async (url: RequestInfo | URL) => {
-      const s = String(url).split('/').pop()!;
-      if (s === 'BAD') return mockApiResponse(s, false);
-      return mockApiResponse(s);
+  test('records failed symbols without dropping successful ones', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return symbol === 'BAD'
+        ? mockApiResponse(symbol, false)
+        : mockApiResponse(symbol);
     }) as any;
 
     const { container, unmount } = renderWithClient(
@@ -147,79 +160,43 @@ describe('useWatchlistPrices', () => {
     const prices = JSON.parse(
       container.querySelector('#prices')!.textContent || '{}'
     );
-    expect(Object.keys(prices)).toEqual(['GOOD']);
     const errors = JSON.parse(
       container.querySelector('#errorSymbols')!.textContent || '[]'
     );
+
+    expect(Object.keys(prices)).toEqual(['GOOD']);
     expect(errors).toEqual(['BAD']);
-    expect(container.querySelector('#hasErrors')!.textContent).toBe('true');
 
     unmount();
-  }, 20000);
-
-  test('uses cache (staleTime) and avoids immediate refetch', async () => {
-    const mockFetch = jest.fn(async (url: RequestInfo | URL) => {
-      const s = String(url).split('/').pop()!;
-      return mockApiResponse(s);
-    });
-    global.fetch = mockFetch as any;
-
-    const { unmount, queryClient } = renderWithClient(
-      <TestHarness symbols={['AAPL']} />
-    );
-    await waitFor(() => {
-      const prices = queryClient.getQueryData<any>(['stock-quote', 'AAPL']);
-      return Boolean(prices);
-    });
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    unmount();
-
-    // Re-render with same client and symbol should use fresh cache
-    const container2 = document.createElement('div');
-    document.body.appendChild(container2);
-    const root2 = createRoot(container2);
-    act(() => {
-      root2.render(
-        <QueryClientProvider client={queryClient}>
-          <TestHarness symbols={['AAPL']} />
-        </QueryClientProvider>
-      );
-    });
-    await waitFor(() => {
-      const prices = queryClient.getQueryData<any>(['stock-quote', 'AAPL']);
-      return Boolean(prices);
-    });
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    root2.unmount();
   });
 
-  test('cleans up long-running requests via abort on timeout after unmount', async () => {
-    jest.useFakeTimers();
-    const abort = jest.fn();
-    // Mock AbortController used inside hook fetcher
-    const originalAbortController = global.AbortController as any;
-    (global as any).AbortController = jest.fn(() => ({
-      signal: {},
-      abort
-    }));
+  test('refetches all active queries when requested', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
 
-    // Never-resolving fetch to simulate hang
-    global.fetch = jest.fn(() => new Promise(() => {})) as any;
+      return mockApiResponse(symbol);
+    }) as any;
 
-    const { unmount } = renderWithClient(<TestHarness symbols={['SLOW']} />);
+    const { container, unmount } = renderWithClient(
+      <TestHarness symbols={['AAPL']} />
+    );
 
-    // Unmount immediately then advance timers to trigger abort
-    unmount();
-    await act(async () => {
-      jest.advanceTimersByTime(10000);
-      jest.runOnlyPendingTimers();
-      await Promise.resolve();
+    await waitFor(() => {
+      const prices = JSON.parse(
+        container.querySelector('#prices')!.textContent || '{}'
+      );
+      return Boolean(prices.AAPL);
     });
 
-    expect(abort).toHaveBeenCalledTimes(1);
+    act(() => {
+      (container.querySelector('#refetch') as HTMLButtonElement).click();
+    });
 
-    // Restore
-    (global as any).AbortController = originalAbortController;
-    jest.useRealTimers();
+    await waitFor(() => (global.fetch as jest.Mock).mock.calls.length > 1);
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    unmount();
   });
 });

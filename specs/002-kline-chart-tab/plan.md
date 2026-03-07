@@ -12,13 +12,13 @@
 ## 技术背景
 
 **语言/版本**: TypeScript 5.7，React 19，Next.js 16（App Router）  
-**核心依赖**: Next.js、React、Tailwind CSS、Radix UI Tabs、Zustand、@tanstack/react-query、@sentry/nextjs、klinecharts（新增）、Alpha Vantage（现有服务）  
+**核心依赖**: Next.js、React、Tailwind CSS、Radix UI Tabs、Zustand、@tanstack/react-query、@sentry/nextjs、klinecharts（新增）、Longbridge（现有服务）  
 **存储**: 无持久化数据库；客户端状态 + sessionStorage  
 **测试**: Jest + React Testing Library（`pnpm test`）  
 **目标平台**: Web（现代浏览器）  
 **项目类型**: Web 应用（Next.js App Router）  
 **性能目标**: 95% 的图表在 2 秒内可见；ticker 切换 3 秒内完成刷新；交互保持 60fps 体验  
-**约束**: 必须使用 klinecharts；遵循 ticker 校验规则；遵循 Alpha Vantage 限流（5 次/分钟）与 10s 超时；使用 Sentry spans/logs/异常捕获；不支持多 ticker 对比与指标叠加  
+**约束**: 必须使用 klinecharts；遵循 ticker 校验规则；遵循 10s 超时与统一 API 错误映射；使用 Sentry spans/logs/异常捕获；不支持多 ticker 对比与指标叠加  
 **规模/范围**: 单 ticker、默认 1 年日 K、单页面新增 Tab
 
 ## 宪章检查
@@ -56,7 +56,7 @@
 /Users/tongchen/Projects/Stock-Tracker-1/src/features/stock-dashboard/components/KLineChart.tsx
 /Users/tongchen/Projects/Stock-Tracker-1/src/features/stock-dashboard/hooks/useKlineSeries.ts
 /Users/tongchen/Projects/Stock-Tracker-1/src/features/stock-dashboard/lib/klinecharts.ts
-/Users/tongchen/Projects/Stock-Tracker-1/src/lib/services/alpha-vantage-client.ts
+/Users/tongchen/Projects/Stock-Tracker-1/src/lib/providers/longbridge.ts
 /Users/tongchen/Projects/Stock-Tracker-1/src/lib/services/stock-service.ts
 /Users/tongchen/Projects/Stock-Tracker-1/src/lib/types/stock-api.ts
 /Users/tongchen/Projects/Stock-Tracker-1/src/lib/validation/ticker.ts

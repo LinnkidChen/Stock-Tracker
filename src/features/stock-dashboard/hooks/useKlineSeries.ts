@@ -3,10 +3,11 @@
 import { useQuery } from '@tanstack/react-query';
 import * as Sentry from '@sentry/nextjs';
 import { APIResponse, KLineSeries } from '@/lib/types/stock-api';
+import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 
 async function fetchKlineSeries(
   symbol: string,
-  provider: string = 'default'
+  provider: string = CANONICAL_QUOTE_PROVIDER
 ): Promise<KLineSeries> {
   return Sentry.startSpan(
     { op: 'http.client', name: `GET /api/stocks/kline/${symbol}` },
@@ -15,8 +16,9 @@ async function fetchKlineSeries(
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       try {
+        const searchParams = new URLSearchParams({ provider });
         const response = await fetch(
-          `/api/stocks/kline/${symbol}?provider=${provider}`,
+          `/api/stocks/kline/${symbol}?${searchParams.toString()}`,
           {
             signal: controller.signal
           }
@@ -51,7 +53,10 @@ async function fetchKlineSeries(
   );
 }
 
-export function useKlineSeries(symbol?: string, provider: string = 'default') {
+export function useKlineSeries(
+  symbol?: string,
+  provider: string = CANONICAL_QUOTE_PROVIDER
+) {
   const query = useQuery({
     queryKey: ['kline-series', symbol, provider],
     queryFn: () => fetchKlineSeries(symbol!, provider),
