@@ -36,7 +36,7 @@ jest.mock('next/server', () => ({
       };
     })
   },
-  NextRequest: jest.requireActual('next/server').NextRequest
+  NextRequest: class NextRequestMock {}
 }));
 
 jest.mock('@sentry/nextjs', () => ({
@@ -68,7 +68,7 @@ const mockSeries: KLineSeries = {
   range: {
     startDate: '2023-01-01T00:00:00.000Z',
     endDate: '2024-01-01T00:00:00.000Z',
-    interval: '1d'
+    interval: 'day'
   },
   candles: [
     {
@@ -115,6 +115,7 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
     expect(responseData.data).toEqual(mockSeries);
     expect(mockStockServiceInstance.getKLineSeries).toHaveBeenCalledWith(
       'AAPL',
+      'day',
       CANONICAL_QUOTE_PROVIDER
     );
     expect(response.headers.get('Cache-Control')).toBe(
@@ -136,16 +137,20 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
 
     expect(mockStockServiceInstance.getKLineSeries).toHaveBeenCalledWith(
       'AAPL',
+      'day',
       CANONICAL_QUOTE_PROVIDER
     );
   });
 
-  it('passes the legacy default alias through to the service layer', async () => {
+  it('passes the requested interval and legacy default alias through to the service layer', async () => {
     mockStockServiceInstance.getKLineSeries.mockResolvedValue(mockSeries);
 
     await GET(
       createMockRequest('http://localhost:3000/api/stocks/kline/AAPL', {
-        query: { provider: LEGACY_DEFAULT_QUOTE_PROVIDER }
+        query: {
+          provider: LEGACY_DEFAULT_QUOTE_PROVIDER,
+          interval: 'week'
+        }
       }),
       {
         params: createMockParams('AAPL').params
@@ -154,6 +159,7 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
 
     expect(mockStockServiceInstance.getKLineSeries).toHaveBeenCalledWith(
       'AAPL',
+      'week',
       LEGACY_DEFAULT_QUOTE_PROVIDER
     );
   });
@@ -177,6 +183,25 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
       code: 'INVALID_SYMBOL',
       message: 'Ticker symbol is required'
     });
+  });
+
+  it('returns 400 for invalid kline intervals', async () => {
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/kline/AAPL', {
+        query: { interval: 'quarter' }
+      }),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
+    const responseData: APIResponse<null> = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(responseData.error).toEqual({
+      code: 'INVALID_INTERVAL',
+      message: 'Unsupported kline interval: quarter'
+    });
+    expect(mockStockServiceInstance.getKLineSeries).not.toHaveBeenCalled();
   });
 
   it('returns 400 for the removed provider alias', async () => {

@@ -1,12 +1,40 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { QuoteProviderToggle } from './QuoteProviderToggle';
 import { useDashboardStore } from '../store';
 import { KLineChart } from './KLineChart';
 import { TickerInput } from './TickerInput';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  DEFAULT_KLINE_INTERVAL,
+  isKLineInterval,
+  type KLineInterval
+} from '@/lib/types/stock-api';
+
+function buildChartsHref(
+  searchParams: URLSearchParams,
+  symbol?: string | null,
+  interval?: KLineInterval
+) {
+  const nextSearchParams = new URLSearchParams(searchParams.toString());
+
+  if (symbol) {
+    nextSearchParams.set('symbol', symbol);
+  } else {
+    nextSearchParams.delete('symbol');
+  }
+
+  if (interval) {
+    nextSearchParams.set('interval', interval);
+  } else {
+    nextSearchParams.delete('interval');
+  }
+
+  const query = nextSearchParams.toString();
+  return query ? `/dashboard/charts?${query}` : '/dashboard/charts';
+}
 
 export function ChartPageClient() {
   const searchParams = useSearchParams();
@@ -15,22 +43,55 @@ export function ChartPageClient() {
     useDashboardStore();
 
   const symbol = searchParams.get('symbol');
+  const rawInterval = searchParams.get('interval')?.toLowerCase();
+  const interval = isKLineInterval(rawInterval)
+    ? rawInterval
+    : DEFAULT_KLINE_INTERVAL;
+  const intervalRef = useRef(interval);
 
-  // Sync URL symbol to store
+  intervalRef.current = interval;
+
   useEffect(() => {
-    if (symbol && symbol !== selectedTicker) {
-      setSelectedTicker(symbol);
-    } else if (!symbol && selectedTicker) {
-      // If no symbol in URL but there is one in store, update URL
-      router.replace(`/dashboard/charts?symbol=${selectedTicker}`);
+    if (!symbol || symbol === selectedTicker) {
+      return;
     }
-  }, [symbol, selectedTicker, setSelectedTicker, router]);
+
+    setSelectedTicker(symbol);
+  }, [selectedTicker, setSelectedTicker, symbol]);
+
+  useEffect(() => {
+    if (symbol || !selectedTicker) {
+      return;
+    }
+
+    router.replace(
+      buildChartsHref(
+        new URLSearchParams(),
+        selectedTicker,
+        intervalRef.current
+      )
+    );
+  }, [router, selectedTicker, symbol]);
 
   const activeTicker = symbol || selectedTicker;
   const handleTickerSubmit = (ticker: string) => {
-    const nextSearchParams = new URLSearchParams(searchParams.toString());
-    nextSearchParams.set('symbol', ticker);
-    router.replace(`/dashboard/charts?${nextSearchParams.toString()}`);
+    router.replace(
+      buildChartsHref(
+        new URLSearchParams(searchParams.toString()),
+        ticker,
+        interval
+      )
+    );
+  };
+
+  const handleIntervalChange = (nextInterval: KLineInterval) => {
+    router.replace(
+      buildChartsHref(
+        new URLSearchParams(searchParams.toString()),
+        activeTicker,
+        nextInterval
+      )
+    );
   };
 
   return (
@@ -50,6 +111,8 @@ export function ChartPageClient() {
           <KLineChart
             ticker={activeTicker}
             provider={quoteProvider}
+            interval={interval}
+            onIntervalChange={handleIntervalChange}
             className='h-full'
           />
         ) : (

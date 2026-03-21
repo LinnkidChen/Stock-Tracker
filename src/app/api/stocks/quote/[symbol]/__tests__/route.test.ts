@@ -36,7 +36,8 @@ jest.mock('next/server', () => ({
       };
     })
   },
-  NextRequest: jest.requireActual('next/server').NextRequest
+  // The route uses createMockRequest for request shape; this only satisfies the import.
+  NextRequest: class NextRequestMock {}
 }));
 
 jest.mock('@sentry/nextjs', () => ({

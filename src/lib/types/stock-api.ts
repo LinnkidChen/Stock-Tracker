@@ -34,10 +34,22 @@ export interface KLineCandle {
   volume: number;
 }
 
+export const KLINE_INTERVALS = ['day', 'week', 'month', 'year'] as const;
+
+export type KLineInterval = (typeof KLINE_INTERVALS)[number];
+
+export const DEFAULT_KLINE_INTERVAL: KLineInterval = 'day';
+
+export function isKLineInterval(
+  value: string | null | undefined
+): value is KLineInterval {
+  return KLINE_INTERVALS.includes(value as KLineInterval);
+}
+
 export interface TimeRange {
   startDate: string;
   endDate: string;
-  interval: '1d';
+  interval: KLineInterval;
 }
 
 export interface KLineSeries {
@@ -73,6 +85,7 @@ export interface StockNewsItem {
 
 export type APIErrorCode =
   | 'INVALID_SYMBOL'
+  | 'INVALID_INTERVAL'
   | 'INVALID_PROVIDER'
   | 'API_LIMIT_EXCEEDED'
   | 'NETWORK_ERROR'

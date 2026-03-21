@@ -1,12 +1,14 @@
 import type { Chart, KLineData } from 'klinecharts';
+import type { KLineInterval } from '@/lib/types/stock-api';
 
 export interface KLineChartHandle {
-  update: (symbol: string, data: KLineData[]) => void;
+  update: (symbol: string, data: KLineData[], interval: KLineInterval) => void;
   destroy: () => void;
 }
 
 export interface CreateKLineChartOptions {
   symbol: string;
+  interval: KLineInterval;
   data?: KLineData[];
 }
 
@@ -19,13 +21,18 @@ async function getKLineModule() {
   return klineModule;
 }
 
-function applyData(chart: Chart, symbol: string, data: KLineData[]) {
+function applyData(
+  chart: Chart,
+  symbol: string,
+  data: KLineData[],
+  interval: KLineInterval
+) {
   chart.setSymbol({
     ticker: symbol,
     pricePrecision: 2,
     volumePrecision: 0
   });
-  chart.setPeriod({ type: 'day', span: 1 });
+  chart.setPeriod({ type: interval, span: 1 });
   chart.setDataLoader({
     getBars: ({ callback }) => {
       callback(data, false);
@@ -45,7 +52,7 @@ export async function createKLineChart(
     throw new Error('Failed to initialize kline chart');
   }
 
-  applyData(chart, options.symbol, options.data ?? []);
+  applyData(chart, options.symbol, options.data ?? [], options.interval);
 
   const resizeObserver = new ResizeObserver(() => {
     chart.resize();
@@ -54,7 +61,8 @@ export async function createKLineChart(
   resizeObserver.observe(container);
 
   return {
-    update: (symbol, data) => applyData(chart, symbol, data),
+    update: (symbol, data, interval) =>
+      applyData(chart, symbol, data, interval),
     destroy: () => {
       resizeObserver.disconnect();
       dispose(chart);
