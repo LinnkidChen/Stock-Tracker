@@ -35,9 +35,9 @@ describe('provider config', () => {
   });
 
   it('migrates stored provider values to the canonical Longbridge value', () => {
-    expect(
-      migrateStoredQuoteProvider(LEGACY_DEFAULT_QUOTE_PROVIDER)
-    ).toBe(CANONICAL_QUOTE_PROVIDER);
+    expect(migrateStoredQuoteProvider(LEGACY_DEFAULT_QUOTE_PROVIDER)).toBe(
+      CANONICAL_QUOTE_PROVIDER
+    );
     expect(migrateStoredQuoteProvider('legacy-provider')).toBe(
       CANONICAL_QUOTE_PROVIDER
     );

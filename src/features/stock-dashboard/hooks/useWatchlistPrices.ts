@@ -14,9 +14,12 @@ async function fetchStockQuote(
 
   try {
     const searchParams = new URLSearchParams({ provider });
-    const response = await fetch(`/api/stocks/quote/${symbol}?${searchParams}`, {
-      signal: controller.signal
-    });
+    const response = await fetch(
+      `/api/stocks/quote/${symbol}?${searchParams}`,
+      {
+        signal: controller.signal
+      }
+    );
     clearTimeout(timeoutId);
 
     if (!response.ok) {

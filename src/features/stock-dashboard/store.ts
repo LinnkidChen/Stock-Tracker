@@ -67,10 +67,7 @@ export const useDashboardStore = create<DashboardState & DashboardActions>()(
       set({ lastTickers: updated });
 
       if (typeof window !== 'undefined') {
-        localStorage.setItem(
-          LAST_TICKERS_STORAGE_KEY,
-          JSON.stringify(updated)
-        );
+        localStorage.setItem(LAST_TICKERS_STORAGE_KEY, JSON.stringify(updated));
       }
     },
 
@@ -87,7 +84,9 @@ export const useDashboardStore = create<DashboardState & DashboardActions>()(
     hydrateFromStorage: () => {
       if (typeof window === 'undefined') return;
 
-      const selectedTicker = sessionStorage.getItem(SELECTED_TICKER_STORAGE_KEY);
+      const selectedTicker = sessionStorage.getItem(
+        SELECTED_TICKER_STORAGE_KEY
+      );
       const lastTickers = localStorage.getItem(LAST_TICKERS_STORAGE_KEY);
       const quoteProvider = localStorage.getItem(QUOTE_PROVIDER_STORAGE_KEY);
 
