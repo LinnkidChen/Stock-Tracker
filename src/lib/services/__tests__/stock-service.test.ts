@@ -68,9 +68,9 @@ describe('StockService', () => {
       getKLines: jest.fn()
     };
 
+    jest.clearAllMocks();
     mockGetProvider.mockReturnValue(provider as any);
     stockService = new StockService();
-    jest.clearAllMocks();
   });
 
   describe('getQuote', () => {
@@ -94,6 +94,8 @@ describe('StockService', () => {
       await expect(
         stockService.getQuote('AAPL', 'legacy-provider')
       ).rejects.toBe(apiError);
+
+      expect(mockGetProvider).toHaveBeenCalledWith('legacy-provider');
     });
 
     it('wraps unknown provider failures', async () => {

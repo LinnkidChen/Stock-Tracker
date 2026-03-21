@@ -81,12 +81,11 @@ Stock Tracker 是一个全面的股票投资组合分析与指标平台，旨在
 | 功能               | 描述                                                                                         |
 | :----------------- | :------------------------------------------------------------------------------------------- |
 | **股票仪表盘**     | 使用 TradingView Lightweight Charts 的实时价格图表，支持蜡烛图形态、成交量指标与技术分析工具 |
-| **K 线图 Tab**     | 使用 klinecharts 展示 1 年日 K 线；仅支持单一 ticker，受 Alpha Vantage 限流影响              |
+| **K 线图 Tab**     | 使用 klinecharts 展示 1 年日 K 线；仅支持单一 ticker，由 Longbridge 数据源提供                |
 | **投资组合追踪**   | 监控多个组合的实时盈亏、资产配置可视化与绩效指标                                             |
 | **技术指标**       | RSI、MACD、移动平均、布林带等综合指标套件                                                    |
 | **关注列表与提醒** | 创建关注列表并设置价格提醒与指标提醒                                                         |
 | **市场概览**       | 通过交互式可视化跟踪板块表现、市场指数与热门股票                                             |
-
 
 ### 核心仪表盘页面
 
@@ -170,8 +169,7 @@ cp env.example.txt .env.local
 
    - Clerk 认证密钥（初始化可选）
    - Sentry DSN（可选）。设置 `NEXT_PUBLIC_SENTRY_DISABLED=true` 可禁用。
-   - Alpha Vantage API Key（准备接入真实数据时）。注意：免费额度 5 次/分钟。
-   - Longbridge API Config（如需使用 Longbridge 数据源）：`LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`, `LONGPORT_ACCESS_TOKEN`.
+   - Longbridge API Config（行情接口必需）：`LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`, `LONGPORT_ACCESS_TOKEN`。
    - Supabase Config (用于关注列表持久化): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`.
    - 关注列表认证集成：Clerk 中必须存在名为 `supabase` 的 JWT template，且 Supabase 必须配置为验证 Clerk 签发的 JWT。
 
@@ -204,12 +202,3 @@ pnpm lint:fix     # 修复 lint 问题
 pnpm format       # 使用 Prettier 格式化代码
 pnpm format:check # 校验格式
 ```
-
-## 规范驱动开发
-
-本项目使用结构化规范流程进行功能开发，规范位于 `.spec-workflow/` 目录。
-
-### 当前规范
-
-- **stock-dashboard-page**: 股票分析仪表盘实现（25 个任务已完成）
-- **stocks-only-cleanup**: 股票相关功能清理（7 个任务已完成）

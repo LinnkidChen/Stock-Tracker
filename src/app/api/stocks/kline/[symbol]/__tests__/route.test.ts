@@ -36,7 +36,6 @@ jest.mock('next/server', () => ({
       };
     })
   },
-  // The route uses createMockRequest for request shape; this only satisfies the import.
   NextRequest: class NextRequestMock {}
 }));
 
