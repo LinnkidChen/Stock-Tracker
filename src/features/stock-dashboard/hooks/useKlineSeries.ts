@@ -2,11 +2,18 @@
 
 import { useQuery } from '@tanstack/react-query';
 import * as Sentry from '@sentry/nextjs';
-import { APIResponse, KLineSeries } from '@/lib/types/stock-api';
+import {
+  APIResponse,
+  DEFAULT_KLINE_INTERVAL,
+  type KLineInterval,
+  KLineSeries
+} from '@/lib/types/stock-api';
+import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 
 async function fetchKlineSeries(
   symbol: string,
-  provider: string = 'default'
+  interval: KLineInterval = DEFAULT_KLINE_INTERVAL,
+  provider: string = CANONICAL_QUOTE_PROVIDER
 ): Promise<KLineSeries> {
   return Sentry.startSpan(
     { op: 'http.client', name: `GET /api/stocks/kline/${symbol}` },
@@ -15,8 +22,9 @@ async function fetchKlineSeries(
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       try {
+        const searchParams = new URLSearchParams({ provider, interval });
         const response = await fetch(
-          `/api/stocks/kline/${symbol}?provider=${provider}`,
+          `/api/stocks/kline/${symbol}?${searchParams.toString()}`,
           {
             signal: controller.signal
           }
@@ -51,10 +59,14 @@ async function fetchKlineSeries(
   );
 }
 
-export function useKlineSeries(symbol?: string, provider: string = 'default') {
+export function useKlineSeries(
+  symbol?: string,
+  interval: KLineInterval = DEFAULT_KLINE_INTERVAL,
+  provider: string = CANONICAL_QUOTE_PROVIDER
+) {
   const query = useQuery({
-    queryKey: ['kline-series', symbol, provider],
-    queryFn: () => fetchKlineSeries(symbol!, provider),
+    queryKey: ['kline-series', symbol, provider, interval],
+    queryFn: () => fetchKlineSeries(symbol!, interval, provider),
     enabled: !!symbol,
     staleTime: 24 * 60 * 60 * 1000,
     refetchInterval: false as const,

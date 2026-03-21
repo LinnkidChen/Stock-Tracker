@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
+import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
-import { APIResponse, KLineSeries, APIError } from '@/lib/types/stock-api';
+import {
+  APIResponse,
+  APIError,
+  DEFAULT_KLINE_INTERVAL,
+  isKLineInterval,
+  KLineSeries
+} from '@/lib/types/stock-api';
 import { logger } from '@/lib/logger';
 
 const CACHE_HEADER = 'public, s-maxage=86400, stale-while-revalidate=604800';
@@ -47,9 +54,46 @@ export async function GET(
         }
 
         const url = new URL(request.url);
-        const provider = url.searchParams.get('provider') || 'default';
+        const provider =
+          url.searchParams.get('provider') || CANONICAL_QUOTE_PROVIDER;
+        const rawInterval = url.searchParams.get('interval');
+        const normalizedInterval = rawInterval?.toLowerCase();
+
+        if (rawInterval && !isKLineInterval(normalizedInterval)) {
+          const error: APIError = {
+            code: 'INVALID_INTERVAL',
+            message: `Unsupported kline interval: ${rawInterval}`
+          };
+
+          logger.warn(`API Error: ${error.message}`, {
+            symbol,
+            code: error.code,
+            path: requestPath,
+            interval: rawInterval
+          });
+
+          const response: APIResponse<null> = {
+            success: false,
+            data: null,
+            error,
+            timestamp: new Date().toISOString()
+          };
+
+          return NextResponse.json(response, { status: 400 });
+        }
+
+        const interval = isKLineInterval(normalizedInterval)
+          ? normalizedInterval
+          : DEFAULT_KLINE_INTERVAL;
+
+        span?.setAttribute('provider', provider);
+        span?.setAttribute('interval', interval);
         const stockService = getStockService();
-        const series = await stockService.getKLineSeries(symbol, provider);
+        const series = await stockService.getKLineSeries(
+          symbol,
+          interval,
+          provider
+        );
 
         span?.setAttribute('kline.candles', series.candles.length);
 
@@ -134,6 +178,8 @@ function isAPIError(error: unknown): error is APIError {
 function getStatusCodeForError(code: string): number {
   switch (code) {
     case 'INVALID_SYMBOL':
+    case 'INVALID_INTERVAL':
+    case 'INVALID_PROVIDER':
       return 400;
     case 'API_LIMIT_EXCEEDED':
       return 429;

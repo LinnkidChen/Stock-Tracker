@@ -17,39 +17,6 @@ export interface StockQuote extends Stock {
   lastUpdated: string;
 }
 
-export interface AlphaVantageGlobalQuote {
-  '01. symbol': string;
-  '02. open': string;
-  '03. high': string;
-  '04. low': string;
-  '05. price': string;
-  '06. volume': string;
-  '07. latest trading day': string;
-  '08. previous close': string;
-  '09. change': string;
-  '10. change percent': string;
-}
-
-export interface AlphaVantageResponse {
-  'Global Quote': AlphaVantageGlobalQuote;
-}
-
-export interface AlphaVantageDailySeriesEntry {
-  '1. open': string;
-  '2. high': string;
-  '3. low': string;
-  '4. close': string;
-  '5. volume': string;
-}
-
-export interface AlphaVantageDailySeriesResponse {
-  'Meta Data'?: Record<string, string>;
-  'Time Series (Daily)'?: Record<string, AlphaVantageDailySeriesEntry>;
-  'Error Message'?: string;
-  Note?: string;
-  Information?: string;
-}
-
 export interface APIResponse<T = unknown> {
   success: boolean;
   data: T | null;
@@ -67,10 +34,22 @@ export interface KLineCandle {
   volume: number;
 }
 
+export const KLINE_INTERVALS = ['day', 'week', 'month', 'year'] as const;
+
+export type KLineInterval = (typeof KLINE_INTERVALS)[number];
+
+export const DEFAULT_KLINE_INTERVAL: KLineInterval = 'day';
+
+export function isKLineInterval(
+  value: string | null | undefined
+): value is KLineInterval {
+  return KLINE_INTERVALS.includes(value as KLineInterval);
+}
+
 export interface TimeRange {
   startDate: string;
   endDate: string;
-  interval: '1d';
+  interval: KLineInterval;
 }
 
 export interface KLineSeries {
@@ -78,17 +57,6 @@ export interface KLineSeries {
   range: TimeRange;
   candles: KLineCandle[];
   lastUpdated: string;
-}
-
-export interface StockSearchResult {
-  symbol: string;
-  name: string;
-  type: string;
-  region: string;
-  marketOpen: string;
-  marketClose: string;
-  timezone: string;
-  currency: string;
 }
 
 export interface StockNewsItem {
@@ -117,6 +85,8 @@ export interface StockNewsItem {
 
 export type APIErrorCode =
   | 'INVALID_SYMBOL'
+  | 'INVALID_INTERVAL'
+  | 'INVALID_PROVIDER'
   | 'API_LIMIT_EXCEEDED'
   | 'NETWORK_ERROR'
   | 'INVALID_API_KEY'

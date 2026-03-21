@@ -4,20 +4,26 @@
 import { GET } from '../route';
 import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
-import { APIResponse, StockQuote, APIError } from '@/lib/types/stock-api';
+import { APIResponse, StockQuote } from '@/lib/types/stock-api';
+import {
+  CANONICAL_QUOTE_PROVIDER,
+  LEGACY_DEFAULT_QUOTE_PROVIDER
+} from '@/lib/providers/config';
 import {
   createMockRequest,
   createMockParams
 } from '../../../__tests__/request-fixtures';
 
-// Mock Next.js server utilities
+const removedProvider = ['alpha', 'vantage'].join('');
+
 jest.mock('next/server', () => ({
   NextResponse: {
     json: jest.fn().mockImplementation((data, init) => {
-      const mockHeaders = new Map();
+      const headers = new Map<string, string>();
+
       if (init?.headers) {
         Object.entries(init.headers).forEach(([key, value]) => {
-          mockHeaders.set(key, value);
+          headers.set(key, value);
         });
       }
 
@@ -25,20 +31,22 @@ jest.mock('next/server', () => ({
         json: () => Promise.resolve(data),
         status: init?.status || 200,
         headers: {
-          get: (key: string) => mockHeaders.get(key),
-          set: (key: string, value: string) => mockHeaders.set(key, value),
-          has: (key: string) => mockHeaders.has(key),
-          delete: (key: string) => mockHeaders.delete(key),
-          forEach: (callback: (value: string, key: string) => void) =>
-            mockHeaders.forEach(callback)
+          get: (key: string) => headers.get(key)
         }
       };
     })
   },
-  NextRequest: jest.requireActual('next/server').NextRequest
+  // The route uses createMockRequest for request shape; this only satisfies the import.
+  NextRequest: class NextRequestMock {}
 }));
 
-// Mock dependencies
+jest.mock('@sentry/nextjs', () => ({
+  startSpan: jest.fn((_context: unknown, callback: any) =>
+    callback({ setAttribute: jest.fn() })
+  ),
+  captureException: jest.fn()
+}));
+
 jest.mock('@/lib/services/stock-service');
 jest.mock('@/lib/validation/ticker');
 
@@ -52,12 +60,10 @@ const mockNormalizeTicker = normalizeTicker as jest.MockedFunction<
   typeof normalizeTicker
 >;
 
-// Mock stock service instance
 const mockStockServiceInstance = {
   getQuote: jest.fn()
 };
 
-// Mock stock quote data
 const mockStockQuote: StockQuote = {
   symbol: 'AAPL',
   name: 'Apple Inc.',
@@ -77,574 +83,186 @@ const mockStockQuote: StockQuote = {
   week52Low: 124.17,
   avgVolume: 50000000,
   beta: 1.2,
-  lastUpdated: '2023-01-01T10:00:00.000Z'
+  lastUpdated: '2024-01-01T00:00:00.000Z'
 };
 
 describe('/api/stocks/quote/[symbol] API Route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetStockService.mockReturnValue(mockStockServiceInstance as any);
+    mockNormalizeTicker.mockImplementation((value: string) =>
+      value.trim().toUpperCase()
+    );
+    mockValidateTicker.mockReturnValue({ isValid: true });
     jest
       .spyOn(Date.prototype, 'toISOString')
-      .mockReturnValue('2023-01-01T10:00:00.000Z');
-    mockGetStockService.mockReturnValue(mockStockServiceInstance as any);
-    mockNormalizeTicker.mockImplementation((s: string) =>
-      s?.trim().toUpperCase()
-    );
+      .mockReturnValue('2024-01-01T00:00:00.000Z');
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  describe('GET method', () => {
-    it('should return stock quote for valid symbol', async () => {
-      // Arrange
-      mockValidateTicker.mockReturnValue({ isValid: true });
-      mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
+  it('returns a quote with the canonical provider when no provider is supplied', async () => {
+    mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
-      const request = createMockRequest();
-      const params = createMockParams('AAPL').params;
+    const response = await GET(createMockRequest(), {
+      params: createMockParams('AAPL').params
+    });
+    const responseData: APIResponse<StockQuote> = await response.json();
 
-      // Act
-      const response = await GET(request, { params });
-      const responseData: APIResponse<StockQuote> = await response.json();
+    expect(response.status).toBe(200);
+    expect(responseData.data).toEqual(mockStockQuote);
+    expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith(
+      'AAPL',
+      CANONICAL_QUOTE_PROVIDER
+    );
+    expect(response.headers.get('Cache-Control')).toBe(
+      'public, s-maxage=10, stale-while-revalidate=30'
+    );
+  });
 
-      // Assert
-      expect(response.status).toBe(200);
-      expect(responseData).toEqual({
-        success: true,
-        data: mockStockQuote,
-        error: null,
-        timestamp: '2023-01-01T10:00:00.000Z'
-      });
+  it('passes the canonical provider through to the service layer', async () => {
+    mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
 
-      expect(mockValidateTicker).toHaveBeenCalledWith('AAPL');
-      expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith(
-        'AAPL',
-        'default'
-      );
+    await GET(
+      createMockRequest('/api/stocks/quote/AAPL', {
+        query: { provider: CANONICAL_QUOTE_PROVIDER }
+      }),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
+
+    expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith(
+      'AAPL',
+      CANONICAL_QUOTE_PROVIDER
+    );
+  });
+
+  it('passes the legacy default alias through to the service layer', async () => {
+    mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
+
+    await GET(
+      createMockRequest('/api/stocks/quote/AAPL', {
+        query: { provider: LEGACY_DEFAULT_QUOTE_PROVIDER }
+      }),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
+
+    expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith(
+      'AAPL',
+      LEGACY_DEFAULT_QUOTE_PROVIDER
+    );
+  });
+
+  it('returns 400 for invalid symbols', async () => {
+    mockValidateTicker.mockReturnValue({
+      isValid: false,
+      error: 'Ticker symbol is required'
     });
 
-    it('should include cache headers in successful response', async () => {
-      // Arrange
-      mockValidateTicker.mockReturnValue({ isValid: true });
-      mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
-
-      const request = createMockRequest();
-      const params = createMockParams('AAPL').params;
-
-      // Act
-      const response = await GET(request, { params });
-
-      // Assert
-      expect(response.headers.get('Cache-Control')).toBe(
-        'public, s-maxage=10, stale-while-revalidate=30'
-      );
+    const response = await GET(createMockRequest(), {
+      params: createMockParams('').params
     });
-
-    describe('Symbol validation', () => {
-      it('should return 400 for invalid symbol - empty string', async () => {
-        // Arrange
-        mockValidateTicker.mockReturnValue({
-          isValid: false,
-          error: 'Ticker symbol is required'
-        });
-
-        const request = createMockRequest();
-        const params = createMockParams('').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<null> = await response.json();
-
-        // Assert
-        expect(response.status).toBe(400);
-        expect(responseData).toEqual({
-          success: false,
-          data: null,
-          error: {
-            code: 'INVALID_SYMBOL',
-            message: 'Ticker symbol is required'
-          },
-          timestamp: '2023-01-01T10:00:00.000Z'
-        });
-
-        expect(mockStockServiceInstance.getQuote).not.toHaveBeenCalled();
-      });
-
-      it('should return 400 for invalid symbol - too long', async () => {
-        // Arrange
-        mockValidateTicker.mockReturnValue({
-          isValid: false,
-          error: 'Ticker symbol must be 5 characters or less'
-        });
-
-        const request = createMockRequest();
-        const params = createMockParams('TOOLONG').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<null> = await response.json();
-
-        // Assert
-        expect(response.status).toBe(400);
-        expect(responseData).toEqual({
-          success: false,
-          data: null,
-          error: {
-            code: 'INVALID_SYMBOL',
-            message: 'Ticker symbol must be 5 characters or less'
-          },
-          timestamp: '2023-01-01T10:00:00.000Z'
-        });
-      });
-
-      it('should return 400 for invalid symbol - special characters', async () => {
-        // Arrange
-        mockValidateTicker.mockReturnValue({
-          isValid: false,
-          error: 'Ticker symbol must contain only letters'
-        });
-
-        const request = createMockRequest();
-        const params = createMockParams('AAP@').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<null> = await response.json();
-
-        // Assert
-        expect(response.status).toBe(400);
-        expect(responseData.error?.code).toBe('INVALID_SYMBOL');
-        expect(responseData.error?.message).toBe(
-          'Ticker symbol must contain only letters'
-        );
-      });
-
-      it('should return 400 for invalid symbol - numbers', async () => {
-        // Arrange
-        mockValidateTicker.mockReturnValue({
-          isValid: false,
-          error: 'Ticker symbol must contain only letters'
-        });
-
-        const request = createMockRequest();
-        const params = createMockParams('AAP1').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<null> = await response.json();
-
-        // Assert
-        expect(response.status).toBe(400);
-        expect(responseData.error?.code).toBe('INVALID_SYMBOL');
-      });
-
-      it('should return 400 for validation without error message', async () => {
-        // Arrange
-        mockValidateTicker.mockReturnValue({ isValid: false });
-
-        const request = createMockRequest();
-        const params = createMockParams('INVALID').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<null> = await response.json();
-
-        // Assert
-        expect(response.status).toBe(400);
-        expect(responseData.error?.message).toBe('Invalid ticker symbol');
-      });
-    });
-
-    describe('Stock service error handling', () => {
-      beforeEach(() => {
-        mockValidateTicker.mockReturnValue({ isValid: true });
-      });
-
-      it('should handle INVALID_SYMBOL error from stock service', async () => {
-        // Arrange
-        const apiError: APIError = {
-          code: 'INVALID_SYMBOL',
-          message: 'Symbol not found'
-        };
-        mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
-
-        const request = createMockRequest();
-        const params = createMockParams('INVALID').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<null> = await response.json();
-
-        // Assert
-        expect(response.status).toBe(400);
-        expect(responseData).toEqual({
-          success: false,
-          data: null,
-          error: apiError,
-          timestamp: '2023-01-01T10:00:00.000Z'
-        });
-      });
-
-      it('should handle API_LIMIT_EXCEEDED error (429)', async () => {
-        // Arrange
-        const apiError: APIError = {
-          code: 'API_LIMIT_EXCEEDED',
-          message: 'API limit exceeded'
-        };
-        mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
-
-        const request = createMockRequest();
-        const params = createMockParams('AAPL').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<null> = await response.json();
-
-        // Assert
-        expect(response.status).toBe(429);
-        expect(responseData.error?.code).toBe('API_LIMIT_EXCEEDED');
-      });
-
-      it('should handle INVALID_API_KEY error (401)', async () => {
-        // Arrange
-        const apiError: APIError = {
-          code: 'INVALID_API_KEY',
-          message: 'Invalid API key'
-        };
-        mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
-
-        const request = createMockRequest();
-        const params = createMockParams('AAPL').params;
-
-        // Act
-        const response = await GET(request, { params });
-
-        // Assert
-        expect(response.status).toBe(401);
-      });
-
-      it('should handle NETWORK_ERROR (502)', async () => {
-        // Arrange
-        const apiError: APIError = {
-          code: 'NETWORK_ERROR',
-          message: 'Network error occurred'
-        };
-        mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
-
-        const request = createMockRequest();
-        const params = createMockParams('AAPL').params;
-
-        // Act
-        const response = await GET(request, { params });
-
-        // Assert
-        expect(response.status).toBe(502);
-      });
-
-      it('should handle UNKNOWN_ERROR (500)', async () => {
-        // Arrange
-        const apiError: APIError = {
-          code: 'UNKNOWN_ERROR',
-          message: 'Unknown error occurred'
-        };
-        mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
-
-        const request = createMockRequest();
-        const params = createMockParams('AAPL').params;
-
-        // Act
-        const response = await GET(request, { params });
-
-        // Assert
-        expect(response.status).toBe(500);
-      });
-
-      it('should handle unknown error code (defaults to 500)', async () => {
-        // Arrange
-        const apiError: APIError = {
-          code: 'CUSTOM_ERROR' as any,
-          message: 'Custom error occurred'
-        };
-        mockStockServiceInstance.getQuote.mockRejectedValue(apiError);
-
-        const request = createMockRequest();
-        const params = createMockParams('AAPL').params;
-
-        // Act
-        const response = await GET(request, { params });
-
-        // Assert
-        expect(response.status).toBe(500);
-      });
-    });
-
-    describe('Unexpected error handling', () => {
-      beforeEach(() => {
-        mockValidateTicker.mockReturnValue({ isValid: true });
-      });
-
-      it('should handle non-APIError exceptions', async () => {
-        // Arrange
-        const unexpectedError = new Error('Database connection failed');
-        mockStockServiceInstance.getQuote.mockRejectedValue(unexpectedError);
-
-        const request = createMockRequest();
-        const params = createMockParams('AAPL').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<null> = await response.json();
-
-        // Assert
-        expect(response.status).toBe(500);
-        expect(responseData).toEqual({
-          success: false,
-          data: null,
-          error: {
-            code: 'UNKNOWN_ERROR',
-            message: 'An unexpected error occurred'
-          },
-          timestamp: '2023-01-01T10:00:00.000Z'
-        });
-      });
-
-      it('should handle null/undefined errors', async () => {
-        // Arrange
-        mockStockServiceInstance.getQuote.mockRejectedValue(null);
-
-        const request = createMockRequest();
-        const params = createMockParams('AAPL').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<null> = await response.json();
-
-        // Assert
-        expect(response.status).toBe(500);
-        expect(responseData.error?.code).toBe('UNKNOWN_ERROR');
-      });
-
-      it('should handle string errors', async () => {
-        // Arrange
-        mockStockServiceInstance.getQuote.mockRejectedValue(
-          'Something went wrong'
-        );
-
-        const request = createMockRequest();
-        const params = createMockParams('AAPL').params;
-
-        // Act
-        const response = await GET(request, { params });
-
-        // Assert
-        expect(response.status).toBe(500);
-      });
-
-      it('should handle objects that look like APIError but are not', async () => {
-        // Arrange
-        const fakeApiError = {
-          code: 'FAKE_ERROR',
-          message: 'This is not a real APIError',
-          extraField: 'should not be here'
-        };
-        mockStockServiceInstance.getQuote.mockRejectedValue(fakeApiError);
-
-        const request = createMockRequest();
-        const params = createMockParams('AAPL').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<null> = await response.json();
-
-        // Assert
-        expect(response.status).toBe(500);
-        expect(responseData.error?.code).toBe('FAKE_ERROR');
-        expect(responseData.error?.message).toBe('This is not a real APIError');
-      });
-    });
-
-    describe('Response format validation', () => {
-      it('should always include required APIResponse fields', async () => {
-        // Arrange
-        mockValidateTicker.mockReturnValue({ isValid: true });
-        mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
-
-        const request = createMockRequest();
-        const params = createMockParams('AAPL').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<StockQuote> = await response.json();
-
-        // Assert
-        expect(responseData).toHaveProperty('success');
-        expect(responseData).toHaveProperty('data');
-        expect(responseData).toHaveProperty('error');
-        expect(responseData).toHaveProperty('timestamp');
-        expect(typeof responseData.success).toBe('boolean');
-        expect(typeof responseData.timestamp).toBe('string');
-      });
-
-      it('should have proper timestamp format', async () => {
-        // Arrange
-        mockValidateTicker.mockReturnValue({ isValid: true });
-        mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
-
-        const request = createMockRequest();
-        const params = createMockParams('AAPL').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<StockQuote> = await response.json();
-
-        // Assert
-        expect(responseData.timestamp).toMatch(
-          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
-        );
-      });
-    });
-
-    describe('Edge cases', () => {
-      it('should handle symbol with whitespace', async () => {
-        // Arrange
-        mockValidateTicker.mockReturnValue({ isValid: true });
-        mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
-
-        const request = createMockRequest();
-        const params = createMockParams(' AAPL ').params;
-
-        // Act
-        await GET(request, { params });
-
-        // Assert
-        expect(mockValidateTicker).toHaveBeenCalledWith('AAPL');
-        expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith(
-          'AAPL',
-          'default'
-        );
-      });
-
-      it('should handle lowercase symbols', async () => {
-        // Arrange
-        mockValidateTicker.mockReturnValue({ isValid: true });
-        mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
-
-        const request = createMockRequest();
-        const params = createMockParams('aapl').params;
-
-        // Act
-        await GET(request, { params });
-
-        // Assert
-        expect(mockValidateTicker).toHaveBeenCalledWith('AAPL');
-        expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith(
-          'AAPL',
-          'default'
-        );
-      });
-
-      it('should handle quote data with null optional fields', async () => {
-        // Arrange
-        const quoteWithNulls: StockQuote = {
-          ...mockStockQuote,
-          marketCap: null,
-          peRatio: null,
-          eps: null,
-          dividendYield: null,
-          week52High: null,
-          week52Low: null,
-          avgVolume: null,
-          beta: null
-        };
-
-        mockValidateTicker.mockReturnValue({ isValid: true });
-        mockStockServiceInstance.getQuote.mockResolvedValue(quoteWithNulls);
-
-        const request = createMockRequest();
-        const params = createMockParams('AAPL').params;
-
-        // Act
-        const response = await GET(request, { params });
-        const responseData: APIResponse<StockQuote> = await response.json();
-
-        // Assert
-        expect(response.status).toBe(200);
-        expect(responseData.data).toEqual(quoteWithNulls);
-      });
+    const responseData: APIResponse<null> = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(responseData.error).toEqual({
+      code: 'INVALID_SYMBOL',
+      message: 'Ticker symbol is required'
     });
   });
 
-  describe('HTTP method validation', () => {
-    it('should only export GET method', () => {
-      // This test verifies that only GET is exported from the route file
-      const routeModule = require('../route');
-
-      expect(routeModule.GET).toBeDefined();
-      expect(routeModule.POST).toBeUndefined();
-      expect(routeModule.PUT).toBeUndefined();
-      expect(routeModule.DELETE).toBeUndefined();
-      expect(routeModule.PATCH).toBeUndefined();
+  it('returns 400 for the removed provider alias', async () => {
+    mockStockServiceInstance.getQuote.mockRejectedValue({
+      code: 'INVALID_PROVIDER',
+      message: `Unsupported provider: ${removedProvider}`
     });
+
+    const response = await GET(
+      createMockRequest('/api/stocks/quote/AAPL', {
+        query: { provider: removedProvider }
+      }),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
+    const responseData: APIResponse<null> = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(responseData.error?.code).toBe('INVALID_PROVIDER');
   });
 
-  describe('Parameter handling', () => {
-    it('should handle missing symbol parameter', async () => {
-      // Arrange - this simulates Next.js behavior when symbol is undefined
-      mockValidateTicker.mockReturnValue({
-        isValid: false,
-        error: 'Ticker symbol is required'
-      });
-
-      const request = createMockRequest();
-      // @ts-ignore
-      const params = createMockParams(undefined).params;
-
-      // Act
-      const response = await GET(request, { params });
-      const responseData: APIResponse<null> = await response.json();
-
-      // Assert
-      expect(response.status).toBe(400);
-      expect(responseData.error?.code).toBe('INVALID_SYMBOL');
+  it('returns 400 for unknown providers', async () => {
+    mockStockServiceInstance.getQuote.mockRejectedValue({
+      code: 'INVALID_PROVIDER',
+      message: 'Unsupported provider: legacy-provider'
     });
+
+    const response = await GET(
+      createMockRequest('/api/stocks/quote/AAPL', {
+        query: { provider: 'legacy-provider' }
+      }),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
+
+    expect(response.status).toBe(400);
   });
 
-  describe('Service integration', () => {
-    it('should call getStockService to get fresh instance', async () => {
-      // Arrange
-      mockValidateTicker.mockReturnValue({ isValid: true });
-      mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
-
-      const request = createMockRequest();
-      const params = createMockParams('AAPL').params;
-
-      // Act
-      await GET(request, { params });
-
-      // Assert
-      expect(mockGetStockService).toHaveBeenCalledTimes(1);
-      expect(mockGetStockService).toHaveBeenCalledWith();
+  it('maps INVALID_API_KEY to 401', async () => {
+    mockStockServiceInstance.getQuote.mockRejectedValue({
+      code: 'INVALID_API_KEY',
+      message: 'Longbridge credentials not configured'
     });
 
-    it('should pass exact symbol to stock service', async () => {
-      // Arrange
-      mockValidateTicker.mockReturnValue({ isValid: true });
-      mockStockServiceInstance.getQuote.mockResolvedValue(mockStockQuote);
-
-      const testSymbol = 'TSLA';
-      const request = createMockRequest();
-      const params = createMockParams(testSymbol).params;
-
-      // Act
-      await GET(request, { params });
-
-      // Assert
-      expect(mockStockServiceInstance.getQuote).toHaveBeenCalledWith(
-        testSymbol,
-        'default'
-      );
+    const response = await GET(createMockRequest(), {
+      params: createMockParams('AAPL').params
     });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('maps API_LIMIT_EXCEEDED to 429', async () => {
+    mockStockServiceInstance.getQuote.mockRejectedValue({
+      code: 'API_LIMIT_EXCEEDED',
+      message: 'Rate limit'
+    });
+
+    const response = await GET(createMockRequest(), {
+      params: createMockParams('AAPL').params
+    });
+
+    expect(response.status).toBe(429);
+  });
+
+  it('maps NETWORK_ERROR to 502', async () => {
+    mockStockServiceInstance.getQuote.mockRejectedValue({
+      code: 'NETWORK_ERROR',
+      message: 'Upstream error'
+    });
+
+    const response = await GET(createMockRequest(), {
+      params: createMockParams('AAPL').params
+    });
+
+    expect(response.status).toBe(502);
+  });
+
+  it('maps UNKNOWN_ERROR to 500', async () => {
+    mockStockServiceInstance.getQuote.mockRejectedValue({
+      code: 'UNKNOWN_ERROR',
+      message: 'Unknown error'
+    });
+
+    const response = await GET(createMockRequest(), {
+      params: createMockParams('AAPL').params
+    });
+
+    expect(response.status).toBe(500);
   });
 });

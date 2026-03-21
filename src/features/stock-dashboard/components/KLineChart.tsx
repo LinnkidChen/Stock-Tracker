@@ -7,8 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import { validateTicker } from '@/lib/validation/ticker';
-import type { TimeRange } from '@/lib/types/stock-api';
+import {
+  DEFAULT_KLINE_INTERVAL,
+  isKLineInterval,
+  type KLineInterval,
+  type TimeRange
+} from '@/lib/types/stock-api';
 import { useKlineSeries } from '../hooks/useKlineSeries';
 import { createKLineChart, type KLineChartHandle } from '../lib/klinecharts';
 
@@ -16,30 +23,62 @@ interface KLineChartProps {
   ticker: string;
   className?: string;
   provider?: string;
+  interval?: KLineInterval;
+  onIntervalChange?: (interval: KLineInterval) => void;
 }
 
-function formatRangeLabel(range?: TimeRange) {
-  if (!range) return '1Y · Daily';
+const KLINE_INTERVAL_META: Record<
+  KLineInterval,
+  {
+    badge: string;
+    label: string;
+    subtitle: string;
+  }
+> = {
+  day: { label: 'Day', badge: '1D', subtitle: 'Daily candles' },
+  week: { label: 'Week', badge: '1W', subtitle: 'Weekly candles' },
+  month: { label: 'Month', badge: '1M', subtitle: 'Monthly candles' },
+  year: { label: 'Year', badge: '1Y', subtitle: 'Yearly candles' }
+};
+
+const KLINE_INTERVAL_OPTIONS: Array<{
+  label: string;
+  value: KLineInterval;
+}> = (['day', 'week', 'month', 'year'] as const).map((value) => ({
+  value,
+  label: KLINE_INTERVAL_META[value].label
+}));
+
+function getIntervalMeta(interval: KLineInterval) {
+  return KLINE_INTERVAL_META[interval];
+}
+
+function formatRangeLabel(range: TimeRange) {
   const start = new Date(range.startDate).toLocaleDateString('en', {
     month: 'short',
+    day: 'numeric',
     year: 'numeric'
   });
   const end = new Date(range.endDate).toLocaleDateString('en', {
     month: 'short',
+    day: 'numeric',
     year: 'numeric'
   });
-  return `${start} - ${end} · 1D`;
+  return `${start} - ${end} · ${getIntervalMeta(range.interval).badge}`;
 }
 
 export function KLineChart({
   ticker,
   className,
-  provider = 'default'
+  provider = CANONICAL_QUOTE_PROVIDER,
+  interval = DEFAULT_KLINE_INTERVAL,
+  onIntervalChange
 }: KLineChartProps) {
   const validation = useMemo(() => validateTicker(ticker), [ticker]);
   const querySymbol = validation.isValid ? ticker : undefined;
   const { data, isLoading, isError, error, noData, refetch } = useKlineSeries(
     querySymbol,
+    interval,
     provider
   );
 
@@ -68,9 +107,14 @@ export function KLineChart({
   );
 
   const rangeLabel = useMemo(
-    () => formatRangeLabel(data?.range),
-    [data?.range]
+    () =>
+      data?.range
+        ? formatRangeLabel(data.range)
+        : getIntervalMeta(interval).badge,
+    [data?.range, interval]
   );
+  const selectedInterval = data?.range.interval ?? interval;
+  const intervalMeta = getIntervalMeta(selectedInterval);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -89,6 +133,7 @@ export function KLineChart({
 
     createKLineChart(containerRef.current, {
       symbol: ticker,
+      interval,
       data: []
     })
       .then((handle) => {
@@ -122,8 +167,8 @@ export function KLineChart({
 
   useEffect(() => {
     if (!chartRef.current || !querySymbol) return;
-    chartRef.current.update(querySymbol, chartData);
-  }, [chartData, querySymbol]);
+    chartRef.current.update(querySymbol, chartData, interval);
+  }, [chartData, chartReady, interval, querySymbol]);
 
   const handleRetry = () => {
     if (chartError) {
@@ -170,17 +215,42 @@ export function KLineChart({
 
   return (
     <Card className={`overflow-hidden ${className}`}>
-      <CardHeader className='pb-3'>
-        <div className='flex items-start justify-between gap-3'>
+      <CardHeader className='space-y-3 pb-3'>
+        <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
           <div className='space-y-1'>
             <CardTitle className='text-xl font-semibold'>
               {ticker} K Line Chart
             </CardTitle>
             <div className='text-muted-foreground text-xs'>
-              1-year daily candles
+              {intervalMeta.subtitle}
             </div>
           </div>
-          <Badge variant='outline'>{rangeLabel}</Badge>
+          <div className='flex flex-col items-start gap-3 sm:flex-row sm:items-center lg:flex-col lg:items-end'>
+            <Badge variant='outline'>{rangeLabel}</Badge>
+            <ToggleGroup
+              type='single'
+              value={interval}
+              variant='outline'
+              size='sm'
+              aria-label='K line interval'
+              className='w-full flex-wrap sm:w-auto'
+              onValueChange={(value) => {
+                if (isKLineInterval(value) && value !== interval) {
+                  onIntervalChange?.(value);
+                }
+              }}
+            >
+              {KLINE_INTERVAL_OPTIONS.map((option) => (
+                <ToggleGroupItem
+                  key={option.value}
+                  value={option.value}
+                  aria-label={`${option.label} interval`}
+                >
+                  {option.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
         </div>
       </CardHeader>
       <CardContent className='p-0'>

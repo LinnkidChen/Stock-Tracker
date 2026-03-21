@@ -3,15 +3,23 @@
 import { useQueries } from '@tanstack/react-query';
 import { StockQuote, APIResponse } from '@/lib/types/stock-api';
 import { WatchlistPricesMap } from '@/types/stocks';
+import { useDashboardStore } from '../store';
 
-async function fetchStockQuote(symbol: string): Promise<StockQuote> {
+async function fetchStockQuote(
+  symbol: string,
+  provider: string
+): Promise<StockQuote> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
-    const response = await fetch(`/api/stocks/quote/${symbol}`, {
-      signal: controller.signal
-    });
+    const searchParams = new URLSearchParams({ provider });
+    const response = await fetch(
+      `/api/stocks/quote/${symbol}?${searchParams}`,
+      {
+        signal: controller.signal
+      }
+    );
     clearTimeout(timeoutId);
 
     if (!response.ok) {
@@ -44,12 +52,13 @@ export interface UseWatchlistPricesResult {
 export function useWatchlistPrices(
   symbols: string[]
 ): UseWatchlistPricesResult {
+  const quoteProvider = useDashboardStore((state) => state.quoteProvider);
   const uniqueSymbols = Array.from(new Set(symbols.filter(Boolean)));
 
   const results = useQueries({
     queries: uniqueSymbols.map((symbol) => ({
-      queryKey: ['stock-quote', symbol],
-      queryFn: () => fetchStockQuote(symbol),
+      queryKey: ['stock-quote', symbol, quoteProvider],
+      queryFn: () => fetchStockQuote(symbol, quoteProvider),
       staleTime: 5 * 60 * 1000, // 5 minutes
       refetchInterval: false as const,
       retry: 3,

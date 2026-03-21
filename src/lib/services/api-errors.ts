@@ -46,6 +46,8 @@ export function createSuccessResponse<T>(
 export function getStatusCodeForError(code: APIErrorCode): number {
   const statusMap: Record<APIErrorCode, number> = {
     INVALID_SYMBOL: 400,
+    INVALID_INTERVAL: 400,
+    INVALID_PROVIDER: 400,
     API_LIMIT_EXCEEDED: 429,
     INVALID_API_KEY: 401,
     NETWORK_ERROR: 502,
