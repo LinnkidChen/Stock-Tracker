@@ -23,6 +23,8 @@ alerts, reports, settings, and overview pages remain planned.
 - Watchlist API with Supabase persistence, symbol metadata, ordering, and tests.
 - Portfolio holdings API with Supabase persistence for current symbol quantity
   and average cost, plus tests.
+- Shared Supabase-backed API rate limiting for quote, k-line, streaming,
+  watchlist, and portfolio endpoints.
 - Clerk-protected dashboard routes, Sentry instrumentation, React Query, Zustand
   client state, Jest unit tests, and a small Playwright smoke test.
 
@@ -186,7 +188,10 @@ cp env.example.txt .env.local
 - Longbridge: `LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`,
   `LONGPORT_ACCESS_TOKEN`, `LONGPORT_REGION`
 - Supabase: `NEXT_PUBLIC_SUPABASE_URL`,
-  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY`
+- Rate limiting: apply `database_schema/api_rate_limits.sql`, then tune
+  `RATE_LIMIT_*` values if the defaults are not appropriate for the deployment.
 - Sentry: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`,
   `NEXT_PUBLIC_SENTRY_DISABLED`
 
@@ -208,10 +213,16 @@ Security and Clerk-issued Supabase JWTs. The expected setup is:
 - The JWT `sub` claim matches the Clerk user id.
 - `database_schema/watchlist.sql` and `database_schema/portfolio.sql` have been
   applied to the Supabase project.
+- `database_schema/api_rate_limits.sql` has been applied to support the shared
+  API limiter used by stock, watchlist, portfolio, and streaming routes.
 
 If this setup is missing, `/api/watchlist` returns
 `WATCHLIST_AUTH_MISCONFIGURED`, and `/api/portfolio/holdings` returns
 `PORTFOLIO_AUTH_MISCONFIGURED`.
+
+In production, the rate limiter fails closed if `SUPABASE_SERVICE_ROLE_KEY` or
+the rate limit RPC is missing. Set `RATE_LIMIT_DISABLED=true` only for local
+debugging.
 
 ## Portfolio Model
 

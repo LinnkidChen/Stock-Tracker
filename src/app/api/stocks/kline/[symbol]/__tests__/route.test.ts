@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import { GET } from '../route';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { APIResponse, KLineSeries } from '@/lib/types/stock-api';
@@ -46,9 +47,26 @@ jest.mock('@sentry/nextjs', () => ({
   captureException: jest.fn()
 }));
 
+jest.mock('@/lib/rate-limit', () => ({
+  checkRateLimit: jest.fn(),
+  createRateLimitHeaders: jest.fn((result) =>
+    result.retryAfter
+      ? {
+          'Retry-After': String(result.retryAfter),
+          'X-RateLimit-Limit': String(result.limit),
+          'X-RateLimit-Remaining': String(result.remaining),
+          'X-RateLimit-Reset': String(Math.ceil(result.resetAt / 1000))
+        }
+      : {}
+  )
+}));
+
 jest.mock('@/lib/services/stock-service');
 jest.mock('@/lib/validation/ticker');
 
+const mockCheckRateLimit = checkRateLimit as jest.MockedFunction<
+  typeof checkRateLimit
+>;
 const mockGetStockService = getStockService as jest.MockedFunction<
   typeof getStockService
 >;
@@ -86,6 +104,14 @@ const mockSeries: KLineSeries = {
 describe('/api/stocks/kline/[symbol] API Route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCheckRateLimit.mockResolvedValue({
+      allowed: true,
+      limit: 60,
+      windowSeconds: 60,
+      remaining: 59,
+      resetAt: Date.now() + 60_000,
+      source: 'supabase'
+    });
     mockGetStockService.mockReturnValue(mockStockServiceInstance as any);
     mockNormalizeTicker.mockImplementation((value: string) =>
       value.trim().toUpperCase()
@@ -121,6 +147,32 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
     expect(response.headers.get('Cache-Control')).toBe(
       'public, s-maxage=86400, stale-while-revalidate=604800'
     );
+    expect(mockCheckRateLimit).toHaveBeenCalledWith(expect.anything(), 'kline');
+  });
+
+  it('returns 429 when the shared limiter rejects the kline request', async () => {
+    mockCheckRateLimit.mockResolvedValue({
+      allowed: false,
+      limit: 60,
+      windowSeconds: 60,
+      remaining: 0,
+      resetAt: Date.now() + 9_000,
+      retryAfter: 9,
+      source: 'supabase'
+    });
+
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/kline/AAPL'),
+      {
+        params: createMockParams('AAPL').params
+      }
+    );
+    const responseData: APIResponse<null> = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(responseData.error?.code).toBe('API_LIMIT_EXCEEDED');
+    expect(response.headers.get('Retry-After')).toBe('9');
+    expect(mockStockServiceInstance.getKLineSeries).not.toHaveBeenCalled();
   });
 
   it('passes the canonical provider through to the service layer', async () => {
