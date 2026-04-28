@@ -40,7 +40,10 @@ describe('WatchlistCard initial load', () => {
 
     renderWithProviders(<WatchlistCard />);
 
-    expect(global.fetch).toHaveBeenCalledWith('/api/watchlist');
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/watchlist',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
   });
 
   test('shows error message if load fails', async () => {
@@ -86,7 +89,10 @@ describe('WatchlistCard add error modal flows', () => {
 
     // Wait for initial load
     await waitFor(() =>
-      expect(global.fetch).toHaveBeenCalledWith('/api/watchlist')
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/watchlist',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      )
     );
     (global.fetch as jest.Mock).mockClear();
 

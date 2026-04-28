@@ -8,6 +8,13 @@
 
 Stock Tracker 是一个全面的股票投资组合分析与指标平台，旨在为投资者提供实时市场洞察与组合表现跟踪。它提供统一的仪表盘，用于监控股票、分析技术指标并支持数据驱动的投资决策。
 
+## Contributor and Agent Docs
+
+For repository architecture, local workflows, reliability expectations, quality
+gates, and agent guidance, start with [docs/INDEX.md](docs/INDEX.md) and
+[AGENTS.md](AGENTS.md). The README stays product-facing; `docs/` is the
+contributor and agent system of record.
+
 - 框架 - [Next.js 15](https://nextjs.org/13)
 - 语言 - [TypeScript](https://www.typescriptlang.org)
 - 认证 - [Clerk](https://go.clerk.com/ILdYhn7)

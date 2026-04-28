@@ -54,7 +54,10 @@ describe('WatchlistCard Persistence Integration', () => {
     renderWithProviders(<WatchlistCard />);
 
     // Should call GET /api/watchlist
-    expect(global.fetch).toHaveBeenCalledWith('/api/watchlist');
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/watchlist',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
 
     // Should display loaded symbols
     await waitFor(() => {

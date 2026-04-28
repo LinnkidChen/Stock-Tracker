@@ -145,7 +145,7 @@ Add a GitHub Actions workflow that runs on pull requests and pushes:
 1. Install dependencies with pnpm.
 2. Run `pnpm docs:check`.
 3. Run `pnpm lint:strict` if available, otherwise `pnpm lint`.
-4. Run `pnpm test -- --runInBand`.
+4. Run `pnpm test --runInBand`.
 5. Run `pnpm build`.
 
 The workflow should use the existing lockfile and package scripts. If build-time
@@ -159,7 +159,7 @@ The implementation is complete when:
 
 - `pnpm docs:check` passes.
 - `pnpm lint` or `pnpm lint:strict` passes.
-- `pnpm test -- --runInBand` passes.
+- `pnpm test --runInBand` passes.
 - `pnpm build` passes, or a build blocker is documented with exact remediation.
 
 The enforcement script may not need unit tests if it remains simple and is

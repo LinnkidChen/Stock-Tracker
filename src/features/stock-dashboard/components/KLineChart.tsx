@@ -147,8 +147,9 @@ export function KLineChart({
       })
       .catch((err) => {
         if (!cancelled) {
-          console.error('Chart initialization failed:', err);
-          Sentry.captureException(err);
+          Sentry.captureException(err, {
+            extra: { ticker, interval }
+          });
           setChartError('Failed to initialize chart');
           setChartReady(false);
         }
@@ -163,7 +164,7 @@ export function KLineChart({
         chartRef.current = null;
       }
     };
-  }, [ticker, retryTrigger]);
+  }, [interval, ticker, retryTrigger]);
 
   useEffect(() => {
     if (!chartRef.current || !querySymbol) return;
