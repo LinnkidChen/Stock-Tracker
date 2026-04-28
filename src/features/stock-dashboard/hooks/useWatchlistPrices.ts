@@ -5,6 +5,7 @@ import { useQueries } from '@tanstack/react-query';
 import { StockQuote } from '@/lib/types/stock-api';
 import { WatchlistPricesMap } from '@/types/stocks';
 import { useDashboardStore } from '../store';
+import { usePriceStream } from './usePriceStream';
 import {
   isLongbridgeCredentialError,
   readStockApiResponse
@@ -79,9 +80,16 @@ export function useWatchlistPrices(
   } = options;
   const [now, setNow] = useState(() => Date.now());
   const uniqueSymbols = useMemo(
-    () => Array.from(new Set(symbols.filter(Boolean))),
+    () =>
+      Array.from(
+        new Set(
+          symbols.map((symbol) => symbol.trim().toUpperCase()).filter(Boolean)
+        )
+      ),
     [symbols]
   );
+  const { pricesMap: streamPricesMap, errorSymbols: streamErrorSymbols } =
+    usePriceStream(uniqueSymbols, quoteProvider);
   const refetchInterval: number | false = autoRefresh
     ? refreshIntervalMs
     : false;
@@ -109,8 +117,8 @@ export function useWatchlistPrices(
     }))
   });
 
-  const pricesMap: WatchlistPricesMap = {};
-  const errorSymbols: string[] = [];
+  const httpPricesMap: WatchlistPricesMap = {};
+  const errorSymbols = new Set<string>(streamErrorSymbols);
   const staleSymbols: string[] = [];
   const symbolMeta: UseWatchlistPricesResult['symbolMeta'] = {};
   const updatedTimes: number[] = [];
@@ -119,12 +127,13 @@ export function useWatchlistPrices(
 
   results.forEach((result, index) => {
     const symbol = uniqueSymbols[index];
+    const streamPrice = streamPricesMap[symbol];
     const updatedAtMs = result.dataUpdatedAt || 0;
     const updatedAt = updatedAtMs ? new Date(updatedAtMs) : null;
     const isStale =
       Boolean(result.data) && updatedAtMs > 0 && now - updatedAtMs > staleAfterMs;
 
-    if (result.isLoading) {
+    if (result.isLoading && !streamPrice) {
       hasAnyLoading = true;
     }
 
@@ -138,7 +147,7 @@ export function useWatchlistPrices(
 
     symbolMeta[symbol] = {
       isFetching: result.isFetching,
-      isLoading: result.isLoading,
+      isLoading: result.isLoading && !streamPrice,
       isStale,
       updatedAt
     };
@@ -147,16 +156,25 @@ export function useWatchlistPrices(
       updatedTimes.push(updatedAtMs);
     }
 
-    if (result.error) {
-      errorSymbols.push(symbol);
+    if (result.error && !streamPrice) {
+      errorSymbols.add(symbol);
     } else if (result.data) {
-      pricesMap[symbol] = {
+      httpPricesMap[symbol] = {
         price: result.data.price,
         change: result.data.change,
         changePercent: result.data.changePercent,
         lastUpdated: new Date(result.data.lastUpdated)
       };
     }
+  });
+
+  const pricesMap: WatchlistPricesMap = {
+    ...httpPricesMap,
+    ...streamPricesMap
+  };
+
+  Object.keys(pricesMap).forEach((symbol) => {
+    errorSymbols.delete(symbol);
   });
 
   const refreshAll = async () => {
@@ -170,8 +188,8 @@ export function useWatchlistPrices(
     pricesMap,
     isLoading: hasAnyLoading,
     isRefreshing: hasAnyFetching && !hasAnyLoading,
-    hasErrors: errorSymbols.length > 0,
-    errorSymbols,
+    hasErrors: errorSymbols.size > 0,
+    errorSymbols: Array.from(errorSymbols),
     staleSymbols,
     lastRefreshedAt,
     symbolMeta,
