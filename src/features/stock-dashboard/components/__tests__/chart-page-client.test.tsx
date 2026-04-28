@@ -31,6 +31,7 @@ jest.mock('../KLineChart', () => ({
     ticker,
     interval,
     range,
+    preferences,
     onIntervalChange,
     onRangeChange,
     onPreferencesChange
@@ -56,6 +57,19 @@ jest.mock('../KLineChart', () => ({
         onClick={() => onPreferencesChange?.({ showGrid: false })}
       >
         Toggle Grid
+      </button>
+      <button
+        type='button'
+        onClick={() =>
+          onPreferencesChange?.({
+            indicators: {
+              ...preferences.indicators,
+              MA: true
+            }
+          })
+        }
+      >
+        Toggle MA
       </button>
     </div>
   )
@@ -279,6 +293,41 @@ describe('ChartPageClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Toggle Grid' }));
 
     expect(setChartPreferences).toHaveBeenCalledWith({ showGrid: false });
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  test('persists indicator preference changes without adding indicators to the URL', () => {
+    const replace = jest.fn();
+    const setChartPreferences = jest.fn();
+
+    (useRouter as jest.Mock).mockReturnValue({ replace });
+    (useSearchParams as jest.Mock).mockReturnValue(
+      createSearchParams({
+        symbol: 'MSFT',
+        interval: 'week',
+        range: '3m'
+      })
+    );
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
+      selectedTicker: 'MSFT',
+      setChartPreferences,
+      chartWorkspace: {
+        ...DEFAULT_CHART_WORKSPACE,
+        symbol: 'MSFT',
+        interval: 'week',
+        range: '3m'
+      }
+    }));
+
+    render(<ChartPageClient />);
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle MA' }));
+
+    expect(setChartPreferences).toHaveBeenCalledWith({
+      indicators: {
+        ...DEFAULT_CHART_WORKSPACE.preferences.indicators,
+        MA: true
+      }
+    });
     expect(replace).not.toHaveBeenCalled();
   });
 });

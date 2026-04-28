@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { KLineChart } from '../KLineChart';
 import { useKlineSeries } from '../../hooks/useKlineSeries';
 import { createKLineChart } from '../../lib/klinecharts';
+import { DEFAULT_CHART_INDICATORS } from '../../lib/chart-workspace';
 import type { KLineCandle, KLineInterval } from '@/lib/types/stock-api';
 
 jest.mock('../../hooks/useKlineSeries');
@@ -157,7 +158,8 @@ describe('KLineChart', () => {
         preferences={{
           showVolume: false,
           showGrid: true,
-          candleType: 'area'
+          candleType: 'area',
+          indicators: DEFAULT_CHART_INDICATORS
         }}
         onPreferencesChange={onPreferencesChange}
       />
@@ -182,6 +184,48 @@ describe('KLineChart', () => {
     expect(onRangeChange).toHaveBeenCalledWith('6m');
     expect(onPreferencesChange).toHaveBeenCalledWith({ showGrid: false });
     expect(onPreferencesChange).toHaveBeenCalledWith({ candleType: 'ohlc' });
+  });
+
+  it('renders indicator toggles with all defaults off and persists changes', async () => {
+    mockUseKlineSeries.mockReturnValue({
+      data: buildSeries('day'),
+      isLoading: false,
+      isError: false,
+      error: null,
+      noData: false,
+      refetch: jest.fn()
+    } as any);
+
+    const onPreferencesChange = jest.fn();
+
+    render(
+      <KLineChart
+        ticker='AAPL'
+        onPreferencesChange={onPreferencesChange}
+      />
+    );
+
+    ['MA', 'EMA', 'VWAP', 'BOLL', 'RSI', 'MACD'].forEach((indicator) => {
+      expect(
+        screen.getByRole('button', { name: `${indicator} indicator` })
+      ).toHaveAttribute('data-state', 'off');
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'MA indicator' }));
+    await userEvent.click(screen.getByRole('button', { name: 'RSI indicator' }));
+
+    expect(onPreferencesChange).toHaveBeenCalledWith({
+      indicators: {
+        ...DEFAULT_CHART_INDICATORS,
+        MA: true
+      }
+    });
+    expect(onPreferencesChange).toHaveBeenCalledWith({
+      indicators: {
+        ...DEFAULT_CHART_INDICATORS,
+        RSI: true
+      }
+    });
   });
 
   it('filters candles by range before updating the chart', async () => {
@@ -245,7 +289,12 @@ describe('KLineChart', () => {
     const preferences = {
       showVolume: false,
       showGrid: false,
-      candleType: 'ohlc' as const
+      candleType: 'ohlc' as const,
+      indicators: {
+        ...DEFAULT_CHART_INDICATORS,
+        MA: true,
+        MACD: true
+      }
     };
 
     render(<KLineChart ticker='AAPL' preferences={preferences} />);

@@ -22,11 +22,14 @@ import {
 import { useKlineSeries } from '../hooks/useKlineSeries';
 import { createKLineChart, type KLineChartHandle } from '../lib/klinecharts';
 import {
+  CHART_INDICATORS,
   DEFAULT_CHART_WORKSPACE,
   filterCandlesByRange,
   isChartCandleType,
+  isChartIndicatorName,
   isChartRange,
   type ChartCandleType,
+  type ChartIndicatorName,
   type ChartPreferences,
   type ChartRange
 } from '../lib/chart-workspace';
@@ -83,6 +86,24 @@ const CANDLE_TYPE_OPTIONS: Array<{
   { label: 'Candle', value: 'candle_solid' },
   { label: 'OHLC', value: 'ohlc' },
   { label: 'Area', value: 'area' }
+];
+
+const PRICE_INDICATOR_OPTIONS: Array<{
+  label: string;
+  value: ChartIndicatorName;
+}> = [
+  { label: 'MA', value: 'MA' },
+  { label: 'EMA', value: 'EMA' },
+  { label: 'VWAP', value: 'VWAP' },
+  { label: 'BOLL', value: 'BOLL' }
+];
+
+const LOWER_INDICATOR_OPTIONS: Array<{
+  label: string;
+  value: ChartIndicatorName;
+}> = [
+  { label: 'RSI', value: 'RSI' },
+  { label: 'MACD', value: 'MACD' }
 ];
 
 function getIntervalMeta(interval: KLineInterval) {
@@ -152,9 +173,21 @@ export function KLineChart({
     () => ({
       showVolume: preferences.showVolume,
       showGrid: preferences.showGrid,
-      candleType: preferences.candleType
+      candleType: preferences.candleType,
+      indicators: preferences.indicators
     }),
-    [preferences.candleType, preferences.showGrid, preferences.showVolume]
+    [
+      preferences.candleType,
+      preferences.indicators,
+      preferences.showGrid,
+      preferences.showVolume
+    ]
+  );
+
+  const activeIndicatorValues = useMemo(
+    () =>
+      CHART_INDICATORS.filter((indicator) => preferences.indicators[indicator]),
+    [preferences.indicators]
   );
 
   const filteredCandles = useMemo(
@@ -251,6 +284,22 @@ export function KLineChart({
       setRetryTrigger((prev) => prev + 1);
     }
     refetch();
+  };
+
+  const handleIndicatorGroupChange = (
+    options: ChartIndicatorName[],
+    values: string[]
+  ) => {
+    const selected = new Set(values.filter(isChartIndicatorName));
+    const indicators = options.reduce(
+      (nextIndicators, indicator) => ({
+        ...nextIndicators,
+        [indicator]: selected.has(indicator)
+      }),
+      { ...preferences.indicators }
+    );
+
+    onPreferencesChange?.({ indicators });
   };
 
   const busy = isLoading || !chartReady;
@@ -397,6 +446,56 @@ export function KLineChart({
                     key={option.value}
                     value={option.value}
                     aria-label={`${option.label} candle type`}
+                  >
+                    {option.label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </div>
+            <div className='flex flex-wrap items-center justify-start gap-2 lg:justify-end'>
+              <span className='text-muted-foreground text-xs font-medium'>
+                Overlays
+              </span>
+              <ToggleGroup
+                type='multiple'
+                value={activeIndicatorValues}
+                variant='outline'
+                size='sm'
+                aria-label='Price overlays'
+                className='w-full flex-wrap sm:w-auto'
+                onValueChange={(values) =>
+                  handleIndicatorGroupChange(PRICE_INDICATOR_OPTIONS.map((option) => option.value), values)
+                }
+              >
+                {PRICE_INDICATOR_OPTIONS.map((option) => (
+                  <ToggleGroupItem
+                    key={option.value}
+                    value={option.value}
+                    aria-label={`${option.label} indicator`}
+                  >
+                    {option.label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              <span className='text-muted-foreground text-xs font-medium'>
+                Lower
+              </span>
+              <ToggleGroup
+                type='multiple'
+                value={activeIndicatorValues}
+                variant='outline'
+                size='sm'
+                aria-label='Lower indicators'
+                className='w-full flex-wrap sm:w-auto'
+                onValueChange={(values) =>
+                  handleIndicatorGroupChange(LOWER_INDICATOR_OPTIONS.map((option) => option.value), values)
+                }
+              >
+                {LOWER_INDICATOR_OPTIONS.map((option) => (
+                  <ToggleGroupItem
+                    key={option.value}
+                    value={option.value}
+                    aria-label={`${option.label} indicator`}
                   >
                     {option.label}
                   </ToggleGroupItem>

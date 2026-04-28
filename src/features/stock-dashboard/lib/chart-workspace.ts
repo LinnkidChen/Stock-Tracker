@@ -17,10 +17,31 @@ export const CHART_CANDLE_TYPES = [
 ] as const;
 export type ChartCandleType = (typeof CHART_CANDLE_TYPES)[number];
 
+export const CHART_INDICATORS = [
+  'MA',
+  'EMA',
+  'VWAP',
+  'RSI',
+  'MACD',
+  'BOLL'
+] as const;
+export type ChartIndicatorName = (typeof CHART_INDICATORS)[number];
+export type ChartIndicators = Record<ChartIndicatorName, boolean>;
+
+export const DEFAULT_CHART_INDICATORS: ChartIndicators = {
+  MA: false,
+  EMA: false,
+  VWAP: false,
+  RSI: false,
+  MACD: false,
+  BOLL: false
+};
+
 export interface ChartPreferences {
   showVolume: boolean;
   showGrid: boolean;
   candleType: ChartCandleType;
+  indicators: ChartIndicators;
 }
 
 export interface ChartWorkspace {
@@ -41,7 +62,8 @@ export const DEFAULT_CHART_WORKSPACE: ChartWorkspace = {
   preferences: {
     showVolume: true,
     showGrid: true,
-    candleType: 'candle_solid'
+    candleType: 'candle_solid',
+    indicators: DEFAULT_CHART_INDICATORS
   }
 };
 
@@ -55,6 +77,31 @@ export function isChartCandleType(
   value: string | null | undefined
 ): value is ChartCandleType {
   return CHART_CANDLE_TYPES.includes(value as ChartCandleType);
+}
+
+export function isChartIndicatorName(
+  value: string | null | undefined
+): value is ChartIndicatorName {
+  return CHART_INDICATORS.includes(value as ChartIndicatorName);
+}
+
+function parseChartIndicators(value: unknown): ChartIndicators {
+  if (!value || typeof value !== 'object') {
+    return DEFAULT_CHART_INDICATORS;
+  }
+
+  const indicators = value as Partial<Record<ChartIndicatorName, unknown>>;
+
+  return CHART_INDICATORS.reduce<ChartIndicators>(
+    (result, indicator) => ({
+      ...result,
+      [indicator]:
+        typeof indicators[indicator] === 'boolean'
+          ? indicators[indicator]
+          : DEFAULT_CHART_INDICATORS[indicator]
+    }),
+    { ...DEFAULT_CHART_INDICATORS }
+  );
 }
 
 export function parseChartWorkspace(raw: string | null): ChartWorkspace {
@@ -93,7 +140,8 @@ export function parseChartWorkspace(raw: string | null): ChartWorkspace {
             : DEFAULT_CHART_WORKSPACE.preferences.showGrid,
         candleType: isChartCandleType(preferences?.candleType)
           ? preferences.candleType
-          : DEFAULT_CHART_WORKSPACE.preferences.candleType
+          : DEFAULT_CHART_WORKSPACE.preferences.candleType,
+        indicators: parseChartIndicators(preferences?.indicators)
       }
     };
   } catch {

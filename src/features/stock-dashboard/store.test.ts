@@ -6,6 +6,7 @@ import { useDashboardStore } from './store';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import {
   CHART_WORKSPACE_STORAGE_KEY,
+  DEFAULT_CHART_INDICATORS,
   DEFAULT_CHART_WORKSPACE
 } from './lib/chart-workspace';
 
@@ -68,7 +69,7 @@ describe('dashboard provider state', () => {
     );
   });
 
-  it('hydrates a valid persisted chart workspace', () => {
+  it('hydrates a legacy persisted chart workspace without indicators', () => {
     localStorage.setItem(
       CHART_WORKSPACE_STORAGE_KEY,
       JSON.stringify({
@@ -94,8 +95,44 @@ describe('dashboard provider state', () => {
       preferences: {
         showVolume: false,
         showGrid: true,
-        candleType: 'area'
+        candleType: 'area',
+        indicators: DEFAULT_CHART_INDICATORS
       }
+    });
+  });
+
+  it('hydrates valid persisted chart indicators', () => {
+    localStorage.setItem(
+      CHART_WORKSPACE_STORAGE_KEY,
+      JSON.stringify({
+        symbol: 'AAPL',
+        interval: 'day',
+        range: '1y',
+        preferences: {
+          showVolume: true,
+          showGrid: true,
+          candleType: 'candle_solid',
+          indicators: {
+            MA: true,
+            EMA: false,
+            VWAP: true,
+            RSI: false,
+            MACD: true,
+            BOLL: false
+          }
+        }
+      })
+    );
+
+    act(() => {
+      useDashboardStore.getState().hydrateFromStorage();
+    });
+
+    expect(useDashboardStore.getState().chartWorkspace.preferences.indicators).toEqual({
+      ...DEFAULT_CHART_INDICATORS,
+      MA: true,
+      VWAP: true,
+      MACD: true
     });
   });
 
@@ -121,7 +158,12 @@ describe('dashboard provider state', () => {
         preferences: {
           showVolume: 'yes',
           showGrid: false,
-          candleType: 'renko'
+          candleType: 'renko',
+          indicators: {
+            MA: 'yes',
+            EMA: true,
+            UNKNOWN: true
+          }
         }
       })
     );
@@ -134,7 +176,11 @@ describe('dashboard provider state', () => {
       ...DEFAULT_CHART_WORKSPACE,
       preferences: {
         ...DEFAULT_CHART_WORKSPACE.preferences,
-        showGrid: false
+        showGrid: false,
+        indicators: {
+          ...DEFAULT_CHART_INDICATORS,
+          EMA: true
+        }
       }
     });
   });
@@ -148,7 +194,12 @@ describe('dashboard provider state', () => {
       });
       useDashboardStore.getState().setChartPreferences({
         showVolume: false,
-        candleType: 'ohlc'
+        candleType: 'ohlc',
+        indicators: {
+          ...DEFAULT_CHART_INDICATORS,
+          MA: true,
+          RSI: true
+        }
       });
     });
 
@@ -159,7 +210,12 @@ describe('dashboard provider state', () => {
       preferences: {
         showVolume: false,
         showGrid: true,
-        candleType: 'ohlc'
+        candleType: 'ohlc',
+        indicators: {
+          ...DEFAULT_CHART_INDICATORS,
+          MA: true,
+          RSI: true
+        }
       }
     });
   });
