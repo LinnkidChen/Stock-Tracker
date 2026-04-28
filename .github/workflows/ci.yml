@@ -22,6 +22,7 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       NEXT_PUBLIC_SENTRY_DISABLED: 'true'
+      E2E_AUTH_BYPASS: 'true'
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZHVtbXkuY2xlcmsuYWNjb3VudHMuZGV2JA
       CLERK_SECRET_KEY: sk_test_ci_dummy
       NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
