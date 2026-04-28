@@ -1,9 +1,11 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { StockQuote } from '@/lib/types/stock-api';
 import { WatchlistPricesMap } from '@/types/stocks';
 import { useDashboardStore } from '../store';
+import { usePriceStream } from './usePriceStream';
 import {
   isLongbridgeCredentialError,
   readStockApiResponse
@@ -48,7 +50,17 @@ export function useWatchlistPrices(
   symbols: string[]
 ): UseWatchlistPricesResult {
   const quoteProvider = useDashboardStore((state) => state.quoteProvider);
-  const uniqueSymbols = Array.from(new Set(symbols.filter(Boolean)));
+  const uniqueSymbols = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          symbols.map((symbol) => symbol.trim().toUpperCase()).filter(Boolean)
+        )
+      ),
+    [symbols]
+  );
+  const { pricesMap: streamPricesMap, errorSymbols: streamErrorSymbols } =
+    usePriceStream(uniqueSymbols, quoteProvider);
 
   const results = useQueries({
     queries: uniqueSymbols.map((symbol) => ({
@@ -63,25 +75,35 @@ export function useWatchlistPrices(
     }))
   });
 
-  const pricesMap: WatchlistPricesMap = {};
-  const errorSymbols: string[] = [];
+  const httpPricesMap: WatchlistPricesMap = {};
+  const errorSymbols = new Set<string>(streamErrorSymbols);
   let hasAnyLoading = false;
 
   results.forEach((result, index) => {
     const symbol = uniqueSymbols[index];
+    const streamPrice = streamPricesMap[symbol];
 
-    if (result.isLoading) {
+    if (result.isLoading && !streamPrice) {
       hasAnyLoading = true;
-    } else if (result.error) {
-      errorSymbols.push(symbol);
+    } else if (result.error && !streamPrice) {
+      errorSymbols.add(symbol);
     } else if (result.data) {
-      pricesMap[symbol] = {
+      httpPricesMap[symbol] = {
         price: result.data.price,
         change: result.data.change,
         changePercent: result.data.changePercent,
         lastUpdated: new Date(result.data.lastUpdated)
       };
     }
+  });
+
+  const pricesMap: WatchlistPricesMap = {
+    ...httpPricesMap,
+    ...streamPricesMap
+  };
+
+  Object.keys(pricesMap).forEach((symbol) => {
+    errorSymbols.delete(symbol);
   });
 
   const refetch = () => {
@@ -91,8 +113,8 @@ export function useWatchlistPrices(
   return {
     pricesMap,
     isLoading: hasAnyLoading,
-    hasErrors: errorSymbols.length > 0,
-    errorSymbols,
+    hasErrors: errorSymbols.size > 0,
+    errorSymbols: Array.from(errorSymbols),
     refetch
   };
 }
