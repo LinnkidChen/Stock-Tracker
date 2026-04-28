@@ -8,18 +8,38 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useWatchlistPrices } from '../useWatchlistPrices';
 import { useDashboardStore } from '../../store';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
+import type { UseWatchlistPricesOptions } from '../useWatchlistPrices';
 
-function TestHarness({ symbols }: { symbols: string[] }) {
-  const { pricesMap, isLoading, hasErrors, errorSymbols, refetch } =
-    useWatchlistPrices(symbols);
+function TestHarness({
+  symbols,
+  options
+}: {
+  symbols: string[];
+  options?: UseWatchlistPricesOptions;
+}) {
+  const {
+    pricesMap,
+    isLoading,
+    isRefreshing,
+    hasErrors,
+    errorSymbols,
+    staleSymbols,
+    lastRefreshedAt,
+    symbolMeta,
+    refreshAll
+  } = useWatchlistPrices(symbols, options);
 
   return (
     <div>
       <pre id='prices'>{JSON.stringify(pricesMap)}</pre>
       <div id='isLoading'>{String(isLoading)}</div>
+      <div id='isRefreshing'>{String(isRefreshing)}</div>
       <div id='hasErrors'>{String(hasErrors)}</div>
       <pre id='errorSymbols'>{JSON.stringify(errorSymbols)}</pre>
-      <button id='refetch' onClick={() => refetch()}>
+      <pre id='staleSymbols'>{JSON.stringify(staleSymbols)}</pre>
+      <pre id='symbolMeta'>{JSON.stringify(symbolMeta)}</pre>
+      <div id='lastRefreshedAt'>{lastRefreshedAt?.toISOString() ?? ''}</div>
+      <button id='refetch' onClick={() => void refreshAll()}>
         refetch
       </button>
     </div>
@@ -66,6 +86,25 @@ async function waitFor(predicate: () => boolean, timeout = 2000) {
 
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 5));
+      await Promise.resolve();
+    });
+  }
+}
+
+async function waitForWithFakeTimers(
+  predicate: () => boolean,
+  timeout = 2000
+) {
+  const start = Date.now();
+
+  while (!predicate()) {
+    if (Date.now() - start > timeout) {
+      throw new Error('waitForWithFakeTimers: condition not met in time');
+    }
+
+    await act(async () => {
+      jest.advanceTimersByTime(10);
+      await Promise.resolve();
       await Promise.resolve();
     });
   }
@@ -168,6 +207,7 @@ describe('useWatchlistPrices', () => {
   afterEach(() => {
     global.fetch = originalFetch;
     global.WebSocket = originalWebSocket;
+    jest.useRealTimers();
   });
 
   test('fetches prices with the canonical provider query string', async () => {
@@ -256,6 +296,110 @@ describe('useWatchlistPrices', () => {
     await waitFor(() => (global.fetch as jest.Mock).mock.calls.length > 1);
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    unmount();
+  });
+
+  test('does not poll when auto refresh is disabled', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return mockApiResponse(symbol);
+    }) as any;
+
+    const { container, unmount } = renderWithClient(
+      <TestHarness
+        symbols={['AAPL']}
+        options={{ autoRefresh: false, refreshIntervalMs: 60_000 }}
+      />
+    );
+
+    await waitForWithFakeTimers(
+      () => container.querySelector('#isLoading')!.textContent === 'false'
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(120_000);
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    unmount();
+  });
+
+  test('polls every 60 seconds when auto refresh is enabled', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return mockApiResponse(symbol);
+    }) as any;
+
+    const { container, unmount } = renderWithClient(
+      <TestHarness symbols={['AAPL']} options={{ autoRefresh: true }} />
+    );
+
+    await waitForWithFakeTimers(
+      () => container.querySelector('#isLoading')!.textContent === 'false'
+    );
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(60_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    unmount();
+  });
+
+  test('marks symbols stale from React Query dataUpdatedAt age', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return mockApiResponse(symbol);
+    }) as any;
+
+    const { container, unmount } = renderWithClient(
+      <TestHarness symbols={['AAPL']} options={{ staleAfterMs: 60_000 }} />
+    );
+
+    await waitForWithFakeTimers(
+      () => container.querySelector('#isLoading')!.textContent === 'false'
+    );
+
+    expect(container.querySelector('#staleSymbols')!.textContent).toBe('[]');
+    expect(container.querySelector('#lastRefreshedAt')!.textContent).toContain(
+      '2026-01-01T00:00:'
+    );
+
+    jest.setSystemTime(new Date('2026-01-01T00:01:01.000Z'));
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+
+    const staleSymbols = JSON.parse(
+      container.querySelector('#staleSymbols')!.textContent || '[]'
+    );
+    const symbolMeta = JSON.parse(
+      container.querySelector('#symbolMeta')!.textContent || '{}'
+    );
+
+    expect(staleSymbols).toEqual(['AAPL']);
+    expect(symbolMeta.AAPL.isStale).toBe(true);
 
     unmount();
   });

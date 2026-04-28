@@ -6,6 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
 import {
   Dialog,
   DialogClose,
@@ -28,6 +34,7 @@ import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import Link from 'next/link';
 import type { WatchlistItem as ApiWatchlistItem } from '@/types/watchlist';
+import { Loader2, RefreshCw } from 'lucide-react';
 
 const WATCHLIST_AUTH_MISCONFIGURED_CODE = 'WATCHLIST_AUTH_MISCONFIGURED';
 const SUGGESTED_WATCHLIST_SYMBOLS = ['AAPL', 'MSFT', 'NVDA'] as const;
@@ -52,6 +59,8 @@ type WatchlistMutationResponse =
 
 const NOTE_MAX_LENGTH = 500;
 const UNGROUPED_LABEL = 'Ungrouped';
+const WATCHLIST_REFRESH_INTERVAL_MS = 60_000;
+const WATCHLIST_STALE_AFTER_MS = 60_000;
 
 async function runWithSpan<T>(
   context: Parameters<typeof Sentry.startSpan>[0],
@@ -189,6 +198,22 @@ function toPricedItem(
   };
 }
 
+function formatRefreshStatus(
+  lastRefreshedAt: Date | null,
+  hasStaleQuotes: boolean,
+  isRefreshing: boolean
+): string {
+  if (isRefreshing) return 'Refreshing...';
+  if (hasStaleQuotes) return 'Some quotes stale';
+  if (!lastRefreshedAt) return 'Not refreshed yet';
+
+  const elapsedMs = Date.now() - lastRefreshedAt.getTime();
+  if (elapsedMs < 60_000) return 'Updated just now';
+
+  const elapsedMinutes = Math.max(1, Math.floor(elapsedMs / 60_000));
+  return `Updated ${elapsedMinutes}m ago`;
+}
+
 export function WatchlistCard() {
   const [items, setItems] = useState<ApiWatchlistItem[]>([]);
   const [symbol, setSymbol] = useState('');
@@ -203,6 +228,7 @@ export function WatchlistCard() {
   const [editExchange, setEditExchange] = useState('');
   const [editNote, setEditNote] = useState('');
   const [retryCount, setRetryCount] = useState(0);
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
   const symbols = useMemo(() => items.map((item) => item.symbol), [items]);
   const sortedItems = useMemo(
@@ -222,7 +248,25 @@ export function WatchlistCard() {
     );
   }, [sortedItems]);
 
-  const { pricesMap, isLoading, errorSymbols } = useWatchlistPrices(symbols);
+  const {
+    pricesMap,
+    isLoading,
+    isRefreshing,
+    errorSymbols,
+    staleSymbols,
+    lastRefreshedAt,
+    refreshAll
+  } = useWatchlistPrices(symbols, {
+    autoRefresh,
+    refreshIntervalMs: WATCHLIST_REFRESH_INTERVAL_MS,
+    staleAfterMs: WATCHLIST_STALE_AFTER_MS
+  });
+  const staleSymbolSet = useMemo(() => new Set(staleSymbols), [staleSymbols]);
+  const refreshStatus = formatRefreshStatus(
+    lastRefreshedAt,
+    staleSymbols.length > 0,
+    isRefreshing
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -577,7 +621,48 @@ export function WatchlistCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Watchlist</CardTitle>
+        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+          <CardTitle>Watchlist</CardTitle>
+          <div className='flex flex-wrap items-center gap-3'>
+            <span className='text-muted-foreground text-xs'>
+              {refreshStatus}
+            </span>
+            <div className='flex items-center gap-2'>
+              <Switch
+                id='watchlist-auto-refresh'
+                checked={autoRefresh}
+                onCheckedChange={setAutoRefresh}
+                aria-label='Auto refresh watchlist'
+              />
+              <Label
+                htmlFor='watchlist-auto-refresh'
+                className='text-muted-foreground text-xs font-normal'
+              >
+                Auto refresh
+              </Label>
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='icon'
+                  onClick={() => refreshAll()}
+                  disabled={symbols.length === 0 || isRefreshing}
+                  aria-label='Refresh watchlist prices'
+                  className='size-8'
+                >
+                  {isRefreshing ? (
+                    <Loader2 className='h-4 w-4 animate-spin' />
+                  ) : (
+                    <RefreshCw className='h-4 w-4' />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Refresh prices</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <form onSubmit={onAdd} className='mb-4 grid gap-2 sm:grid-cols-4'>
@@ -692,6 +777,7 @@ export function WatchlistCard() {
                         isLoading={isItemLoading}
                         isRemoving={busy}
                         isReordering={reorderingSymbol === symbol}
+                        isStale={staleSymbolSet.has(symbol)}
                         canMoveUp={index > 0}
                         canMoveDown={index < groupItems.length - 1}
                         error={hasError ? 'Failed to load price' : null}

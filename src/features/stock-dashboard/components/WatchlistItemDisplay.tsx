@@ -29,6 +29,7 @@ interface WatchlistItemDisplayProps {
   isLoading?: boolean;
   isRemoving?: boolean;
   isReordering?: boolean;
+  isStale?: boolean;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   error?: string | null;
@@ -45,6 +46,7 @@ export function WatchlistItemDisplay({
   isLoading = false,
   isRemoving = false,
   isReordering = false,
+  isStale = false,
   canMoveUp = false,
   canMoveDown = false,
   error,
@@ -88,6 +90,7 @@ export function WatchlistItemDisplay({
         <div className='flex min-w-0 flex-wrap items-center gap-2'>
           <div className='text-base font-medium'>{item.symbol}</div>
           {item.exchange ? <Badge variant='outline'>{item.exchange}</Badge> : null}
+          {isStale ? <Badge variant='secondary'>Stale</Badge> : null}
           {item.note ? (
             <div className='text-muted-foreground max-w-full truncate text-xs'>
               {item.note}
