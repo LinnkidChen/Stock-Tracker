@@ -201,4 +201,9 @@ pnpm lint         # 运行 ESLint
 pnpm lint:fix     # 修复 lint 问题
 pnpm format       # 使用 Prettier 格式化代码
 pnpm format:check # 校验格式
+pnpm test         # 运行 Jest 单元测试
+pnpm test:e2e     # 运行 Playwright 端到端测试
+pnpm test:e2e:ui  # 打开 Playwright UI 模式
 ```
+
+首次运行或 Playwright 升级后，执行 `pnpm exec playwright install chromium` 安装浏览器。Playwright 默认会在 `localhost:3100` 启动本地 Next.js 服务。若要复用已启动的服务，可设置 `PLAYWRIGHT_BASE_URL`。

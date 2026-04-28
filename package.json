@@ -15,6 +15,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "jest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "prepare": "husky"
@@ -72,6 +74,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "dev": "^0.1.3",
     "eslint": "8.48.0",
     "eslint-config-next": "15.1.0",
     "input-otp": "^1.4.2",
@@ -108,6 +111,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^9.3.0",
+    "@playwright/test": "^1.59.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
