@@ -28,6 +28,14 @@ export const navItems: NavItem[] = [
     isActive: false,
     shortcut: ['c', 'c'],
     items: []
+  },
+  {
+    title: 'Operations',
+    url: '/dashboard/operations',
+    icon: 'settings',
+    isActive: false,
+    shortcut: ['o', 'o'],
+    items: []
   }
 ];
 

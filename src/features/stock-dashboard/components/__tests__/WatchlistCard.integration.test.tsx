@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WatchlistCard } from '../WatchlistCard';
+import type { WatchlistItem } from '@/types/watchlist';
 
 // Mock fetch
 const originalFetch = global.fetch;
@@ -25,17 +26,44 @@ function renderWithProviders(ui: React.ReactElement) {
   );
 }
 
+function expectWatchlistLoadFetch() {
+  expect(global.fetch).toHaveBeenCalledWith(
+    '/api/watchlist',
+    expect.objectContaining({ signal: expect.any(Object) })
+  );
+}
+
+function createItem(symbol: string): WatchlistItem {
+  return {
+    id: `item-${symbol}`,
+    symbol,
+    exchange: null,
+    note: null,
+    sort_order: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z'
+  };
+}
+
+function watchlistResponse(symbols: string[]) {
+  const items = symbols.map(createItem);
+
+  return {
+    success: true,
+    data: {
+      watchlist: symbols,
+      items
+    }
+  };
+}
+
 describe('WatchlistCard Persistence Integration', () => {
   test('loads watchlist from API on mount', async () => {
     (global.fetch as jest.Mock).mockImplementation((url) => {
       if (typeof url === 'string' && url.endsWith('/api/watchlist')) {
         return Promise.resolve({
           ok: true,
-          json: () =>
-            Promise.resolve({
-              success: true,
-              data: { watchlist: ['MSFT', 'GOOGL'] }
-            })
+          json: () => Promise.resolve(watchlistResponse(['MSFT', 'GOOGL']))
         });
       }
       if (typeof url === 'string' && url.includes('/api/stocks/quote/')) {
@@ -54,7 +82,7 @@ describe('WatchlistCard Persistence Integration', () => {
     renderWithProviders(<WatchlistCard />);
 
     // Should call GET /api/watchlist
-    expect(global.fetch).toHaveBeenCalledWith('/api/watchlist');
+    await waitFor(() => expectWatchlistLoadFetch());
 
     // Should display loaded symbols
     await waitFor(() => {
@@ -69,8 +97,7 @@ describe('WatchlistCard Persistence Integration', () => {
         if (!init || !init.method || init.method === 'GET') {
           return Promise.resolve({
             ok: true,
-            json: () =>
-              Promise.resolve({ success: true, data: { watchlist: ['MSFT'] } })
+            json: () => Promise.resolve(watchlistResponse(['MSFT']))
           });
         }
         if (init.method === 'POST') {
@@ -78,8 +105,7 @@ describe('WatchlistCard Persistence Integration', () => {
           if (body.action === 'remove' && body.symbol === 'MSFT') {
             return Promise.resolve({
               ok: true,
-              json: () =>
-                Promise.resolve({ success: true, data: { watchlist: [] } })
+              json: () => Promise.resolve(watchlistResponse([]))
             });
           }
         }

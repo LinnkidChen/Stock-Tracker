@@ -23,9 +23,10 @@ describe('ChartNavigation', () => {
 
     render(<ChartNavigation />);
 
+    expect(screen.getByText('Technical Analysis')).toBeInTheDocument();
     expect(screen.getByText('Go to Charts')).toBeInTheDocument();
     expect(
-      screen.getByText('Explore technical indicators and historical data')
+      screen.getByText('Advanced K-Line charts and market data')
     ).toBeInTheDocument();
     expect(screen.getByRole('link')).toHaveAttribute(
       'href',
@@ -40,9 +41,10 @@ describe('ChartNavigation', () => {
 
     render(<ChartNavigation />);
 
-    expect(screen.getByText('Analyze AAPL')).toBeInTheDocument();
+    expect(screen.getByText('Technical Analysis')).toBeInTheDocument();
+    expect(screen.getByText('Open Chart')).toBeInTheDocument();
     expect(
-      screen.getByText('View advanced K-Line chart for AAPL')
+      screen.getByText('Analyze price action and indicators for AAPL')
     ).toBeInTheDocument();
     expect(screen.getByRole('link')).toHaveAttribute(
       'href',
