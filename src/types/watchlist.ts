@@ -1,10 +1,9 @@
 export interface WatchlistItem {
   id: string;
-  clerk_user_id: string;
   symbol: string;
-  exchange?: string;
-  note?: string;
-  sort_order?: number;
+  exchange: string | null;
+  note: string | null;
+  sort_order: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -13,6 +12,7 @@ export interface WatchlistOperationResult {
   success: boolean;
   data?: {
     watchlist: string[];
+    items: WatchlistItem[];
   };
   error?: {
     message: string;
