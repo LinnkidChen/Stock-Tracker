@@ -40,7 +40,20 @@ function renderWithClient(element: React.ReactElement) {
     );
   });
 
-  return { container, queryClient, unmount: () => root.unmount() };
+  return {
+    container,
+    queryClient,
+    rerender: (nextElement: React.ReactElement) => {
+      act(() => {
+        root.render(
+          <QueryClientProvider client={queryClient}>
+            {nextElement}
+          </QueryClientProvider>
+        );
+      });
+    },
+    unmount: () => root.unmount()
+  };
 }
 
 async function waitFor(predicate: () => boolean, timeout = 2000) {
@@ -95,19 +108,66 @@ function mockApiResponse(symbol: string, ok = true) {
   } as any;
 }
 
+class MockBrowserWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSED = 3;
+  static instances: MockBrowserWebSocket[] = [];
+
+  url: string;
+  readyState = MockBrowserWebSocket.CONNECTING;
+  sent: string[] = [];
+  onopen: (() => void) | null = null;
+  onmessage: ((event: { data: string }) => void) | null = null;
+  onclose: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  constructor(url: string) {
+    this.url = url;
+    MockBrowserWebSocket.instances.push(this);
+  }
+
+  open() {
+    this.readyState = MockBrowserWebSocket.OPEN;
+    this.onopen?.();
+  }
+
+  send(message: string) {
+    this.sent.push(message);
+  }
+
+  emit(data: unknown) {
+    this.onmessage?.({ data: JSON.stringify(data) });
+  }
+
+  close() {
+    this.readyState = MockBrowserWebSocket.CLOSED;
+    this.onclose?.();
+  }
+
+  sentMessages() {
+    return this.sent.map((message) => JSON.parse(message));
+  }
+}
+
 describe('useWatchlistPrices', () => {
   const originalFetch = global.fetch as any;
+  const originalWebSocket = global.WebSocket;
 
   beforeEach(() => {
     jest.restoreAllMocks();
     jest.clearAllTimers();
+    MockBrowserWebSocket.instances = [];
+    (global as any).WebSocket = undefined;
     useDashboardStore.setState({
-      quoteProvider: CANONICAL_QUOTE_PROVIDER
+      quoteProvider: CANONICAL_QUOTE_PROVIDER,
+      wsConnected: false
     });
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
+    global.WebSocket = originalWebSocket;
   });
 
   test('fetches prices with the canonical provider query string', async () => {
@@ -196,6 +256,140 @@ describe('useWatchlistPrices', () => {
     await waitFor(() => (global.fetch as jest.Mock).mock.calls.length > 1);
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    unmount();
+  });
+
+  test('connects to the price stream and live updates override HTTP fallback data', async () => {
+    global.WebSocket = MockBrowserWebSocket as any;
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return mockApiResponse(symbol);
+    }) as any;
+
+    const { container, unmount } = renderWithClient(
+      <TestHarness symbols={['AAPL']} />
+    );
+
+    await waitFor(() => MockBrowserWebSocket.instances.length === 1);
+    const socket = MockBrowserWebSocket.instances[0];
+
+    expect(socket.url).toBe('ws://localhost/api/ws/prices?provider=longbridge');
+
+    act(() => {
+      socket.open();
+    });
+
+    await waitFor(() =>
+      socket
+        .sentMessages()
+        .some(
+          (message) => message.type === 'subscribe' && message.symbol === 'AAPL'
+        )
+    );
+
+    act(() => {
+      socket.emit({
+        type: 'price_update',
+        symbol: 'AAPL',
+        price: 125,
+        change: 2,
+        changePercent: 1.6,
+        volume: 1500,
+        ts: Date.parse('2024-01-02T00:00:00.000Z'),
+        lastUpdated: '2024-01-02T00:00:00.000Z'
+      });
+    });
+
+    await waitFor(() => {
+      const prices = JSON.parse(
+        container.querySelector('#prices')!.textContent || '{}'
+      );
+      return prices.AAPL?.price === 125;
+    });
+
+    expect(useDashboardStore.getState().wsConnected).toBe(true);
+
+    unmount();
+  });
+
+  test('subscribes and unsubscribes when the symbol list changes', async () => {
+    global.WebSocket = MockBrowserWebSocket as any;
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return mockApiResponse(symbol);
+    }) as any;
+
+    const { rerender, unmount } = renderWithClient(
+      <TestHarness symbols={['AAPL']} />
+    );
+
+    await waitFor(() => MockBrowserWebSocket.instances.length === 1);
+    const socket = MockBrowserWebSocket.instances[0];
+
+    act(() => {
+      socket.open();
+    });
+
+    await waitFor(() =>
+      socket
+        .sentMessages()
+        .some(
+          (message) => message.type === 'subscribe' && message.symbol === 'AAPL'
+        )
+    );
+
+    rerender(<TestHarness symbols={['MSFT']} />);
+
+    await waitFor(() => {
+      const messages = socket.sentMessages();
+      return (
+        messages.some(
+          (message) =>
+            message.type === 'unsubscribe' && message.symbol === 'AAPL'
+        ) &&
+        messages.some(
+          (message) => message.type === 'subscribe' && message.symbol === 'MSFT'
+        )
+      );
+    });
+
+    unmount();
+  });
+
+  test('keeps HTTP fallback prices when the stream closes without updates', async () => {
+    global.WebSocket = MockBrowserWebSocket as any;
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return mockApiResponse(symbol);
+    }) as any;
+
+    const { container, unmount } = renderWithClient(
+      <TestHarness symbols={['AAPL']} />
+    );
+
+    await waitFor(() => MockBrowserWebSocket.instances.length === 1);
+    const socket = MockBrowserWebSocket.instances[0];
+
+    act(() => {
+      socket.open();
+      socket.close();
+    });
+
+    await waitFor(() => {
+      const prices = JSON.parse(
+        container.querySelector('#prices')!.textContent || '{}'
+      );
+      return prices.AAPL?.price === 100;
+    });
+
+    expect(useDashboardStore.getState().wsConnected).toBe(false);
 
     unmount();
   });
