@@ -1,15 +1,10 @@
 import { NextResponse } from 'next/server';
 import { APIResponse, APIError, APIErrorCode } from '../types/stock-api';
-
-const API_ERROR_CODES = new Set<string>([
-  'INVALID_SYMBOL',
-  'INVALID_INTERVAL',
-  'INVALID_PROVIDER',
-  'API_LIMIT_EXCEEDED',
-  'NETWORK_ERROR',
-  'INVALID_API_KEY',
-  'UNKNOWN_ERROR'
-]);
+import {
+  getErrorStatusCode,
+  isObservedErrorCode,
+  toDashboardError
+} from '@/lib/observability/error-taxonomy';
 
 /**
  * Create a standardized error response
@@ -18,10 +13,11 @@ export function createErrorResponse<T = null>(
   error: APIError,
   statusCode?: number
 ): NextResponse<APIResponse<T>> {
+  const responseError = toDashboardError(error);
   const response: APIResponse<T> = {
     success: false,
     data: null as T,
-    error,
+    error: responseError,
     timestamp: new Date().toISOString()
   };
 
@@ -58,17 +54,7 @@ export function createSuccessResponse<T>(
  * Map error codes to HTTP status codes
  */
 export function getStatusCodeForError(code: APIErrorCode): number {
-  const statusMap: Record<APIErrorCode, number> = {
-    INVALID_SYMBOL: 400,
-    INVALID_INTERVAL: 400,
-    INVALID_PROVIDER: 400,
-    API_LIMIT_EXCEEDED: 429,
-    INVALID_API_KEY: 401,
-    NETWORK_ERROR: 502,
-    UNKNOWN_ERROR: 500
-  };
-
-  return statusMap[code] || 500;
+  return getErrorStatusCode(code);
 }
 
 /**
@@ -96,7 +82,7 @@ export function isAPIError(error: unknown): error is APIError {
     'code' in error &&
     'message' in error &&
     typeof (error as Record<string, unknown>).code === 'string' &&
-    API_ERROR_CODES.has((error as Record<string, unknown>).code as string) &&
+    isObservedErrorCode((error as Record<string, unknown>).code) &&
     typeof (error as Record<string, unknown>).message === 'string'
   );
 }
@@ -144,22 +130,7 @@ export function createRateLimitResponse(
     validRetryAfter ? { retryAfter: validRetryAfter } : undefined
   );
 
-  const headers: HeadersInit = validRetryAfter
-    ? { 'Retry-After': String(validRetryAfter) }
-    : {};
-
-  return NextResponse.json(
-    {
-      success: false,
-      data: null,
-      error,
-      timestamp: new Date().toISOString()
-    },
-    {
-      status: 429,
-      headers
-    }
-  );
+  return createErrorResponse(error, 429);
 }
 
 export function getRetryAfterFromError(error: APIError): number | undefined {

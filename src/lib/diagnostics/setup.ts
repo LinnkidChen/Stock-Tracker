@@ -2,10 +2,19 @@ import 'server-only';
 
 import { auth } from '@clerk/nextjs/server';
 import { SUPABASE_JWT_TEMPLATE } from '@/lib/supabase/server';
+import {
+  ERROR_TAXONOMY,
+  formatAlertThreshold
+} from '@/lib/observability/error-taxonomy';
+import type { APIErrorCode } from '@/lib/types/stock-api';
 
 export type DiagnosticStatus = 'ready' | 'warning' | 'blocked';
 
-export type DiagnosticCheckId = 'clerk' | 'supabase' | 'longbridge';
+export type DiagnosticCheckId =
+  | 'clerk'
+  | 'supabase'
+  | 'longbridge'
+  | 'observability';
 
 export interface SetupDiagnosticCheck {
   id: DiagnosticCheckId;
@@ -39,6 +48,15 @@ const LONGBRIDGE_ENV_KEYS = [
   'LONGPORT_APP_SECRET',
   'LONGPORT_ACCESS_TOKEN'
 ] as const;
+
+const OBSERVABILITY_ALERT_CODES: APIErrorCode[] = [
+  'NETWORK_ERROR',
+  'INVALID_API_KEY',
+  'API_LIMIT_EXCEEDED',
+  'RLS_AUTH_MISCONFIGURED',
+  'RLS_ACCESS_DENIED',
+  'INVALID_SYMBOL'
+];
 
 function hasEnvValue(key: string): boolean {
   return Boolean(process.env[key]?.trim());
@@ -140,7 +158,9 @@ async function createSupabaseCheck(
   const hasLegacyAnonKey = hasEnvValue('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
   if (!hasEnvValue('NEXT_PUBLIC_SUPABASE_URL')) {
-    blockedReasons.push('Missing environment variable: NEXT_PUBLIC_SUPABASE_URL.');
+    blockedReasons.push(
+      'Missing environment variable: NEXT_PUBLIC_SUPABASE_URL.'
+    );
   } else if (!isValidUrl(supabaseUrl)) {
     blockedReasons.push(
       'NEXT_PUBLIC_SUPABASE_URL must be a valid absolute URL.'
@@ -169,7 +189,9 @@ async function createSupabaseCheck(
     );
   } else {
     try {
-      const token = await authState.getToken({ template: SUPABASE_JWT_TEMPLATE });
+      const token = await authState.getToken({
+        template: SUPABASE_JWT_TEMPLATE
+      });
 
       if (token?.trim()) {
         details.push(
@@ -212,7 +234,8 @@ async function createSupabaseCheck(
       id: 'supabase',
       title: 'Supabase',
       status: 'warning',
-      summary: 'Supabase config is present, but token verification is incomplete.',
+      summary:
+        'Supabase config is present, but token verification is incomplete.',
       details,
       remediation:
         'Retry while signed in. If the warning persists, confirm Clerk can issue the Supabase JWT template.'
@@ -254,6 +277,21 @@ function createLongbridgeCheck(): SetupDiagnosticCheck {
     status: 'ready',
     summary: 'Market data credentials are configured.',
     details,
+    remediation: null
+  };
+}
+
+function createObservabilityCheck(): SetupDiagnosticCheck {
+  return {
+    id: 'observability',
+    title: 'Observability',
+    status: 'ready',
+    summary:
+      'Error taxonomy, dashboard messages, and alert thresholds are defined.',
+    details: OBSERVABILITY_ALERT_CODES.map((code) => {
+      const entry = ERROR_TAXONOMY[code];
+      return `${entry.code}: ${entry.dashboardMessage} Alert: ${formatAlertThreshold(entry.alertThreshold)}.`;
+    }),
     remediation: null
   };
 }
@@ -303,7 +341,8 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
   const checks = [
     createClerkCheck(authState),
     await createSupabaseCheck(authState),
-    createLongbridgeCheck()
+    createLongbridgeCheck(),
+    createObservabilityCheck()
   ];
   const status = getOverallStatus(checks);
 

@@ -3,14 +3,18 @@ import * as Sentry from '@sentry/nextjs';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import { getStockService } from '@/lib/services/stock-service';
 import {
-  createAPIError,
   createErrorResponse,
   createSuccessResponse,
   getStatusCodeForError,
   isAPIError
 } from '@/lib/services/api-errors';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
-import { logger } from '@/lib/logger';
+import { createObservedError } from '@/lib/observability/error-taxonomy';
+import {
+  createObservedErrorResponse,
+  reportApiError,
+  reportObservedError
+} from '@/lib/observability/route-errors';
 
 export async function GET(
   request: NextRequest,
@@ -20,10 +24,12 @@ export async function GET(
     { op: 'http.server', name: 'GET /api/stocks/quote/[symbol]' },
     async (span) => {
       const requestPath = getRequestPath(request);
+      let provider: string = CANONICAL_QUOTE_PROVIDER;
+      let symbol = 'unknown';
 
       try {
         const { symbol: rawSymbol } = await params;
-        const symbol = normalizeTicker(rawSymbol);
+        symbol = normalizeTicker(rawSymbol);
 
         span?.setAttribute('symbol', symbol);
         span?.setAttribute('path', requestPath);
@@ -31,15 +37,21 @@ export async function GET(
         // Validate the ticker symbol
         const validation = validateTicker(symbol);
         if (!validation.isValid) {
-          const error = createAPIError(
-            'INVALID_SYMBOL',
-            validation.error || 'Invalid ticker symbol'
-          );
+          const error = createObservedError('INVALID_SYMBOL', {
+            message: validation.error || 'Invalid ticker symbol'
+          });
 
-          logger.warn(`API Error: ${error.message}`, {
-            symbol: rawSymbol,
+          reportObservedError({
             code: error.code,
-            path: requestPath
+            message: `API Validation Error: ${error.message}`,
+            span,
+            context: {
+              symbol: rawSymbol,
+              normalizedSymbol: symbol,
+              path: requestPath,
+              operation: 'stock.quote',
+              errorDomain: 'stock-data'
+            }
           });
 
           return createErrorResponse(error, 400);
@@ -47,8 +59,7 @@ export async function GET(
 
         // Get the stock quote
         const url = new URL(request.url);
-        const provider =
-          url.searchParams.get('provider') || CANONICAL_QUOTE_PROVIDER;
+        provider = url.searchParams.get('provider') || CANONICAL_QUOTE_PROVIDER;
         span?.setAttribute('provider', provider);
         const stockService = getStockService();
         const quote = await stockService.getQuote(symbol, provider);
@@ -57,40 +68,44 @@ export async function GET(
           'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30'
         });
       } catch (error) {
-        Sentry.captureException(error);
-
         // Handle APIError
         if (isAPIError(error)) {
           // Log based on severity (client error vs server error)
           const statusCode = getStatusCodeForError(error.code);
-          const logContext = {
-            code: error.code,
-            path: requestPath,
-            originalError: error
-          };
-
-          if (statusCode >= 500) {
-            logger.error(`API Error: ${error.message}`, logContext);
-          } else {
-            logger.warn(`API Warning: ${error.message}`, logContext);
-          }
+          reportApiError(
+            error,
+            statusCode >= 500
+              ? `API Error: ${error.message}`
+              : `API Warning: ${error.message}`,
+            span,
+            {
+              path: requestPath,
+              provider,
+              symbol,
+              operation: 'stock.quote',
+              errorDomain: 'stock-data'
+            }
+          );
 
           return createErrorResponse(error);
         }
 
         // Handle unexpected errors
-        logger.error('API Unexpected Error', {
-          path: requestPath,
-          error
+        reportObservedError({
+          code: 'UNKNOWN_ERROR',
+          message: 'API Unexpected Error',
+          error,
+          span,
+          context: {
+            path: requestPath,
+            provider,
+            symbol,
+            operation: 'stock.quote',
+            errorDomain: 'stock-data'
+          }
         });
 
-        return createErrorResponse(
-          {
-            code: 'UNKNOWN_ERROR',
-            message: 'An unexpected error occurred'
-          },
-          500
-        );
+        return createObservedErrorResponse({ code: 'UNKNOWN_ERROR' });
       }
     }
   );

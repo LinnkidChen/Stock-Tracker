@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { validateEnv } from './env';
 import { auth } from '@clerk/nextjs/server';
 import { logger } from '@/lib/logger';
+import { createErrorLogContext } from '@/lib/observability/error-taxonomy';
 
 export const SUPABASE_JWT_TEMPLATE = 'supabase';
 
@@ -57,7 +58,14 @@ export async function createClient() {
   try {
     ({ userId, getToken } = await auth());
   } catch (error) {
-    logger.error('Auth check failed', { error });
+    logger.error(
+      'Auth check failed',
+      createErrorLogContext('UNKNOWN_ERROR', {
+        error,
+        operation: 'supabase.auth_check',
+        errorDomain: 'auth'
+      })
+    );
     throw error;
   }
 
@@ -74,22 +82,32 @@ export async function createClient() {
       supabaseToken = await getToken({ template: SUPABASE_JWT_TEMPLATE });
     } catch (error) {
       if (isClerkTemplateMissingError(error)) {
-        logger.error('Clerk Supabase JWT template is not configured', {
-          error,
-          template: SUPABASE_JWT_TEMPLATE,
-          remediation:
-            'Create a Clerk JWT template named "supabase" and configure Supabase to trust Clerk-issued JWTs.'
-        });
+        logger.error(
+          'Clerk Supabase JWT template is not configured',
+          createErrorLogContext('RLS_AUTH_MISCONFIGURED', {
+            error,
+            template: SUPABASE_JWT_TEMPLATE,
+            operation: 'supabase.jwt_template',
+            errorDomain: 'system',
+            remediation:
+              'Create a Clerk JWT template named "supabase" and configure Supabase to trust Clerk-issued JWTs.'
+          })
+        );
         throw new SupabaseAuthConfigError(
           'Clerk Supabase JWT template is not configured',
           { template: SUPABASE_JWT_TEMPLATE }
         );
       }
 
-      logger.error('Failed to get Clerk Supabase JWT', {
-        error,
-        template: SUPABASE_JWT_TEMPLATE
-      });
+      logger.error(
+        'Failed to get Clerk Supabase JWT',
+        createErrorLogContext('UNKNOWN_ERROR', {
+          error,
+          template: SUPABASE_JWT_TEMPLATE,
+          operation: 'supabase.jwt_template',
+          errorDomain: 'auth'
+        })
+      );
       // Only the missing-template case is treated as a configuration error.
       // Other Clerk failures should propagate to the generic 500 path instead
       // of being mislabeled as a persistent watchlist auth misconfiguration.
@@ -97,12 +115,17 @@ export async function createClient() {
     }
 
     if (!supabaseToken) {
-      logger.error('Clerk Supabase JWT template returned no token', {
-        userId,
-        template: SUPABASE_JWT_TEMPLATE,
-        remediation:
-          'Ensure the Clerk JWT template named "supabase" returns a signed token that Supabase is configured to verify.'
-      });
+      logger.error(
+        'Clerk Supabase JWT template returned no token',
+        createErrorLogContext('RLS_AUTH_MISCONFIGURED', {
+          userId,
+          template: SUPABASE_JWT_TEMPLATE,
+          operation: 'supabase.jwt_template',
+          errorDomain: 'system',
+          remediation:
+            'Ensure the Clerk JWT template named "supabase" returns a signed token that Supabase is configured to verify.'
+        })
+      );
       throw new SupabaseAuthConfigError(
         'Clerk Supabase JWT template returned no token',
         { template: SUPABASE_JWT_TEMPLATE, userId }

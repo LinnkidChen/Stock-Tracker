@@ -36,7 +36,7 @@ import Link from 'next/link';
 import type { WatchlistItem as ApiWatchlistItem } from '@/types/watchlist';
 import { Loader2, RefreshCw } from 'lucide-react';
 
-const WATCHLIST_AUTH_MISCONFIGURED_CODE = 'WATCHLIST_AUTH_MISCONFIGURED';
+const WATCHLIST_AUTH_MISCONFIGURED_CODE = 'RLS_AUTH_MISCONFIGURED';
 const SUGGESTED_WATCHLIST_SYMBOLS = ['AAPL', 'MSFT', 'NVDA'] as const;
 
 type WatchlistLoadIssue = 'auth-config' | 'generic' | null;
@@ -181,7 +181,9 @@ function createOptimisticItem(
 
 function toPricedItem(
   item: ApiWatchlistItem,
-  priceData: ReturnType<typeof useWatchlistPrices>['pricesMap'][string] | undefined
+  priceData:
+    | ReturnType<typeof useWatchlistPrices>['pricesMap'][string]
+    | undefined
 ): WatchlistItemWithPrice {
   return {
     id: item.id,
@@ -446,7 +448,9 @@ export function WatchlistCard() {
     if (!currentItem) return;
 
     const groupKey = getGroupKey(currentItem);
-    const groupItems = sortedItems.filter((item) => getGroupKey(item) === groupKey);
+    const groupItems = sortedItems.filter(
+      (item) => getGroupKey(item) === groupKey
+    );
     const currentIndex = groupItems.findIndex(
       (item) => item.symbol === symbolToMove
     );
@@ -610,7 +614,9 @@ export function WatchlistCard() {
   };
 
   function openEditDialog(item: WatchlistItemWithPrice) {
-    const sourceItem = items.find((candidate) => candidate.symbol === item.symbol);
+    const sourceItem = items.find(
+      (candidate) => candidate.symbol === item.symbol
+    );
     if (!sourceItem) return;
 
     setEditingItem(sourceItem);

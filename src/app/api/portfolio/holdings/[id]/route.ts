@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { auth } from '@clerk/nextjs/server';
-import { logger } from '@/lib/logger';
 import { isSupabaseAuthConfigError } from '@/lib/supabase/server';
 import {
   deletePortfolioHolding,
@@ -13,35 +12,91 @@ import {
   PortfolioHoldingRequestBody,
   validatePortfolioHoldingBody
 } from '@/lib/portfolio/validation';
+import { PORTFOLIO_AUTH_MISCONFIGURED_REMEDIATION } from '@/lib/portfolio/api-errors';
 import {
-  PORTFOLIO_AUTH_MISCONFIGURED_CODE,
-  PORTFOLIO_AUTH_MISCONFIGURED_MESSAGE,
-  PORTFOLIO_AUTH_MISCONFIGURED_REMEDIATION
-} from '@/lib/portfolio/api-errors';
+  reportAndCreateObservedErrorResponse,
+  toPersistenceErrorCode
+} from '@/lib/observability/route-errors';
+import type { TelemetrySpan } from '@/lib/observability/error-taxonomy';
+import type { APIErrorCode } from '@/lib/types/stock-api';
 
-function createErrorResponse(message: string, status: number, code?: string) {
-  return NextResponse.json(
-    {
-      success: false,
-      error: {
-        ...(code ? { code } : {}),
-        message
-      }
-    },
-    { status }
+function createPortfolioError(
+  code: APIErrorCode,
+  message: string,
+  span: TelemetrySpan | null | undefined,
+  context: Record<string, unknown> = {},
+  error?: unknown
+) {
+  return reportAndCreateObservedErrorResponse({
+    code,
+    message,
+    error,
+    span,
+    context: {
+      errorDomain: 'portfolio',
+      ...context
+    }
+  });
+}
+
+function createUnauthenticatedError(
+  span: TelemetrySpan | null | undefined,
+  context: Record<string, unknown>
+) {
+  return reportAndCreateObservedErrorResponse({
+    code: 'AUTH_UNAUTHENTICATED',
+    message: 'Unauthorized',
+    span,
+    context: {
+      errorDomain: 'auth',
+      ...context
+    }
+  });
+}
+
+function createPortfolioValidationError(
+  message: string,
+  span: TelemetrySpan | null | undefined,
+  context: Record<string, unknown>
+) {
+  return createPortfolioError(
+    getValidationCode(message),
+    message,
+    span,
+    context
   );
 }
 
-function handlePortfolioAuthMisconfiguration(message: string, error: unknown) {
-  logger.error(message, {
-    error,
-    remediation: PORTFOLIO_AUTH_MISCONFIGURED_REMEDIATION
-  });
+function handlePortfolioAuthMisconfiguration(
+  message: string,
+  error: unknown,
+  span: TelemetrySpan | null | undefined,
+  context: Record<string, unknown>
+) {
+  return createPortfolioError(
+    'RLS_AUTH_MISCONFIGURED',
+    message,
+    span,
+    {
+      remediation: PORTFOLIO_AUTH_MISCONFIGURED_REMEDIATION,
+      ...context
+    },
+    error
+  );
+}
 
-  return createErrorResponse(
-    PORTFOLIO_AUTH_MISCONFIGURED_MESSAGE,
-    503,
-    PORTFOLIO_AUTH_MISCONFIGURED_CODE
+function handlePortfolioPersistenceError(
+  message: string,
+  error: unknown,
+  span: TelemetrySpan | null | undefined,
+  context: Record<string, unknown>
+) {
+  return createPortfolioError(
+    toPersistenceErrorCode(error),
+    message,
+    span,
+    context,
+    error
   );
 }
 
@@ -54,22 +109,34 @@ export async function PATCH(
     async (span) => {
       const { userId } = await auth();
       if (!userId) {
-        return createErrorResponse('Unauthorized', 401);
+        return createUnauthenticatedError(span, {
+          path: '/api/portfolio/holdings/[id]',
+          operation: 'portfolio.update'
+        });
       }
 
       const { id } = await params;
       span?.setAttribute?.('portfolio.holding_id', id);
+      span?.setAttribute?.('path', '/api/portfolio/holdings/[id]');
 
       let body: PortfolioHoldingRequestBody;
       try {
         body = await req.json();
       } catch {
-        return createErrorResponse('Invalid JSON body', 400);
+        return createPortfolioValidationError('Invalid JSON body', span, {
+          path: '/api/portfolio/holdings/[id]',
+          operation: 'portfolio.update',
+          holdingId: id
+        });
       }
 
       const validation = validatePortfolioHoldingBody(body, { partial: true });
       if (!validation.ok) {
-        return createErrorResponse(validation.message, 400);
+        return createPortfolioValidationError(validation.message, span, {
+          path: '/api/portfolio/holdings/[id]',
+          operation: 'portfolio.update',
+          holdingId: id
+        });
       }
 
       try {
@@ -85,24 +152,57 @@ export async function PATCH(
         });
       } catch (error) {
         if (error instanceof DuplicatePortfolioHoldingError) {
-          return createErrorResponse(
+          return createPortfolioError(
+            'RESOURCE_DUPLICATE',
             'Portfolio holding already exists for this symbol',
-            409,
-            'PORTFOLIO_HOLDING_DUPLICATE'
+            span,
+            {
+              path: '/api/portfolio/holdings/[id]',
+              operation: 'portfolio.update',
+              holdingId: id,
+              symbol: validation.input.symbol
+            },
+            error
           );
         }
         if (error instanceof PortfolioHoldingNotFoundError) {
-          return createErrorResponse('Portfolio holding not found', 404);
+          return createPortfolioError(
+            'RESOURCE_NOT_FOUND',
+            'Portfolio holding not found',
+            span,
+            {
+              path: '/api/portfolio/holdings/[id]',
+              operation: 'portfolio.update',
+              holdingId: id
+            },
+            error
+          );
         }
         if (isSupabaseAuthConfigError(error)) {
           return handlePortfolioAuthMisconfiguration(
             'Portfolio update unavailable due to auth misconfiguration',
-            error
+            error,
+            span,
+            {
+              path: '/api/portfolio/holdings/[id]',
+              operation: 'portfolio.update',
+              holdingId: id,
+              symbol: validation.input.symbol
+            }
           );
         }
 
-        logger.error('Portfolio holding update error', { error });
-        return createErrorResponse('Failed to update portfolio holding', 500);
+        return handlePortfolioPersistenceError(
+          'Portfolio holding update error',
+          error,
+          span,
+          {
+            path: '/api/portfolio/holdings/[id]',
+            operation: 'portfolio.update',
+            holdingId: id,
+            symbol: validation.input.symbol
+          }
+        );
       }
     }
   );
@@ -117,11 +217,15 @@ export async function DELETE(
     async (span) => {
       const { userId } = await auth();
       if (!userId) {
-        return createErrorResponse('Unauthorized', 401);
+        return createUnauthenticatedError(span, {
+          path: '/api/portfolio/holdings/[id]',
+          operation: 'portfolio.delete'
+        });
       }
 
       const { id } = await params;
       span?.setAttribute?.('portfolio.holding_id', id);
+      span?.setAttribute?.('path', '/api/portfolio/holdings/[id]');
 
       try {
         await deletePortfolioHolding(userId, id);
@@ -132,18 +236,48 @@ export async function DELETE(
         });
       } catch (error) {
         if (error instanceof PortfolioHoldingNotFoundError) {
-          return createErrorResponse('Portfolio holding not found', 404);
+          return createPortfolioError(
+            'RESOURCE_NOT_FOUND',
+            'Portfolio holding not found',
+            span,
+            {
+              path: '/api/portfolio/holdings/[id]',
+              operation: 'portfolio.delete',
+              holdingId: id
+            },
+            error
+          );
         }
         if (isSupabaseAuthConfigError(error)) {
           return handlePortfolioAuthMisconfiguration(
             'Portfolio delete unavailable due to auth misconfiguration',
-            error
+            error,
+            span,
+            {
+              path: '/api/portfolio/holdings/[id]',
+              operation: 'portfolio.delete',
+              holdingId: id
+            }
           );
         }
 
-        logger.error('Portfolio holding delete error', { error });
-        return createErrorResponse('Failed to delete portfolio holding', 500);
+        return handlePortfolioPersistenceError(
+          'Portfolio holding delete error',
+          error,
+          span,
+          {
+            path: '/api/portfolio/holdings/[id]',
+            operation: 'portfolio.delete',
+            holdingId: id
+          }
+        );
       }
     }
   );
+}
+
+function getValidationCode(message: string): APIErrorCode {
+  return message.toLowerCase().includes('symbol')
+    ? 'INVALID_SYMBOL'
+    : 'VALIDATION_ERROR';
 }
