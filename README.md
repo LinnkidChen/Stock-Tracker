@@ -193,6 +193,7 @@ cp env.example.txt .env.local
 5. Start the development server:
 
 ```bash
+pnpm env:check
 pnpm dev
 ```
 
@@ -228,6 +229,7 @@ outside the current implementation.
 ## Development Commands
 
 ```bash
+pnpm env:check    # Validate required environment variables
 pnpm dev          # Start the development server
 pnpm build        # Build for production
 pnpm start        # Start the production server
