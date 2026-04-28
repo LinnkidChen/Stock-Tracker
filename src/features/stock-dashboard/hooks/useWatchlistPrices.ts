@@ -1,9 +1,13 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { StockQuote, APIResponse } from '@/lib/types/stock-api';
 import { WatchlistPricesMap } from '@/types/stocks';
 import { useDashboardStore } from '../store';
+
+const DEFAULT_REFRESH_INTERVAL_MS = 60_000;
+const DEFAULT_STALE_AFTER_MS = 60_000;
 
 async function fetchStockQuote(
   symbol: string,
@@ -44,23 +48,65 @@ async function fetchStockQuote(
 export interface UseWatchlistPricesResult {
   pricesMap: WatchlistPricesMap;
   isLoading: boolean;
+  isRefreshing: boolean;
   hasErrors: boolean;
   errorSymbols: string[];
-  refetch: () => void;
+  staleSymbols: string[];
+  lastRefreshedAt: Date | null;
+  symbolMeta: Record<
+    string,
+    {
+      isFetching: boolean;
+      isLoading: boolean;
+      isStale: boolean;
+      updatedAt: Date | null;
+    }
+  >;
+  refreshAll: () => Promise<void>;
+  refetch: () => Promise<void>;
+}
+
+export interface UseWatchlistPricesOptions {
+  autoRefresh?: boolean;
+  refreshIntervalMs?: number;
+  staleAfterMs?: number;
 }
 
 export function useWatchlistPrices(
-  symbols: string[]
+  symbols: string[],
+  options: UseWatchlistPricesOptions = {}
 ): UseWatchlistPricesResult {
   const quoteProvider = useDashboardStore((state) => state.quoteProvider);
-  const uniqueSymbols = Array.from(new Set(symbols.filter(Boolean)));
+  const {
+    autoRefresh = false,
+    refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS,
+    staleAfterMs = DEFAULT_STALE_AFTER_MS
+  } = options;
+  const [now, setNow] = useState(() => Date.now());
+  const uniqueSymbols = useMemo(
+    () => Array.from(new Set(symbols.filter(Boolean))),
+    [symbols]
+  );
+  const refetchInterval: number | false = autoRefresh
+    ? refreshIntervalMs
+    : false;
+
+  useEffect(() => {
+    if (uniqueSymbols.length === 0) return;
+
+    const tickMs = Math.min(Math.max(staleAfterMs, 1000), 60_000);
+    const intervalId = window.setInterval(() => setNow(Date.now()), tickMs);
+
+    return () => window.clearInterval(intervalId);
+  }, [staleAfterMs, uniqueSymbols.length]);
 
   const results = useQueries({
     queries: uniqueSymbols.map((symbol) => ({
       queryKey: ['stock-quote', symbol, quoteProvider],
       queryFn: () => fetchStockQuote(symbol, quoteProvider),
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      refetchInterval: false as const,
+      staleTime: staleAfterMs,
+      refetchInterval,
+      refetchIntervalInBackground: false,
       retry: 3,
       retryDelay: (attemptIndex: number) =>
         Math.min(1000 * 2 ** attemptIndex, 30000)
@@ -69,14 +115,43 @@ export function useWatchlistPrices(
 
   const pricesMap: WatchlistPricesMap = {};
   const errorSymbols: string[] = [];
+  const staleSymbols: string[] = [];
+  const symbolMeta: UseWatchlistPricesResult['symbolMeta'] = {};
+  const updatedTimes: number[] = [];
   let hasAnyLoading = false;
+  let hasAnyFetching = false;
 
   results.forEach((result, index) => {
     const symbol = uniqueSymbols[index];
+    const updatedAtMs = result.dataUpdatedAt || 0;
+    const updatedAt = updatedAtMs ? new Date(updatedAtMs) : null;
+    const isStale =
+      Boolean(result.data) && updatedAtMs > 0 && now - updatedAtMs > staleAfterMs;
 
     if (result.isLoading) {
       hasAnyLoading = true;
-    } else if (result.error) {
+    }
+
+    if (result.isFetching) {
+      hasAnyFetching = true;
+    }
+
+    if (isStale) {
+      staleSymbols.push(symbol);
+    }
+
+    symbolMeta[symbol] = {
+      isFetching: result.isFetching,
+      isLoading: result.isLoading,
+      isStale,
+      updatedAt
+    };
+
+    if (updatedAtMs > 0) {
+      updatedTimes.push(updatedAtMs);
+    }
+
+    if (result.error) {
       errorSymbols.push(symbol);
     } else if (result.data) {
       pricesMap[symbol] = {
@@ -88,15 +163,23 @@ export function useWatchlistPrices(
     }
   });
 
-  const refetch = () => {
-    results.forEach((result) => result.refetch());
+  const refreshAll = async () => {
+    await Promise.all(results.map((result) => result.refetch()));
   };
+
+  const lastRefreshedAt =
+    updatedTimes.length > 0 ? new Date(Math.max(...updatedTimes)) : null;
 
   return {
     pricesMap,
     isLoading: hasAnyLoading,
+    isRefreshing: hasAnyFetching && !hasAnyLoading,
     hasErrors: errorSymbols.length > 0,
     errorSymbols,
-    refetch
+    staleSymbols,
+    lastRefreshedAt,
+    symbolMeta,
+    refreshAll,
+    refetch: refreshAll
   };
 }

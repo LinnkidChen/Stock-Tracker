@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WatchlistCard } from '../WatchlistCard';
 import type { WatchlistItem } from '@/types/watchlist';
@@ -63,6 +63,7 @@ describe('WatchlistCard initial load', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    jest.useRealTimers();
   });
 
   test('fetches watchlist from API on mount', async () => {
@@ -105,6 +106,7 @@ describe('WatchlistCard add error modal flows', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    jest.useRealTimers();
   });
 
   test('shows validation modal and preserves input for invalid symbol', async () => {
@@ -286,6 +288,7 @@ describe('WatchlistCard groups and metadata', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    jest.useRealTimers();
   });
 
   test('renders exchange groups with notes and sorted rows', async () => {
@@ -528,5 +531,175 @@ describe('WatchlistCard groups and metadata', () => {
         ]
       })
     );
+  });
+
+  test('manual refresh button refetches watchlist prices', async () => {
+    const items = [createItem({ symbol: 'AAPL' })];
+    let quoteCalls = 0;
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/watchlist')) {
+        return {
+          ok: true,
+          json: async () => watchlistResponse(items)
+        } as any;
+      }
+      if (url.includes('/api/stocks/quote/')) {
+        quoteCalls += 1;
+        return {
+          ok: true,
+          json: async () => quoteResponse()
+        } as any;
+      }
+      throw new Error('Unexpected URL ' + url);
+    }) as any;
+
+    const user = userEvent.setup();
+    renderWithProviders(<WatchlistCard />);
+
+    await screen.findByText('AAPL');
+    await waitFor(() => expect(quoteCalls).toBe(1));
+
+    await user.click(
+      screen.getByRole('button', { name: /refresh watchlist prices/i })
+    );
+
+    await waitFor(() => expect(quoteCalls).toBe(2));
+  });
+
+  test('disables refresh button while price refresh is in progress', async () => {
+    const items = [createItem({ symbol: 'AAPL' })];
+    let quoteCalls = 0;
+    let resolveRefresh: (() => void) | null = null;
+
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/watchlist')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => watchlistResponse(items)
+        }) as any;
+      }
+      if (url.includes('/api/stocks/quote/')) {
+        quoteCalls += 1;
+        if (quoteCalls === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => quoteResponse()
+          }) as any;
+        }
+
+        return new Promise((resolve) => {
+          resolveRefresh = () =>
+            resolve({
+              ok: true,
+              json: async () => quoteResponse()
+            });
+        }) as any;
+      }
+      return Promise.reject(new Error('Unexpected URL ' + url));
+    }) as any;
+
+    const user = userEvent.setup();
+    renderWithProviders(<WatchlistCard />);
+
+    await screen.findByText('AAPL');
+    await waitFor(() => expect(quoteCalls).toBe(1));
+
+    const refreshButton = screen.getByRole('button', {
+      name: /refresh watchlist prices/i
+    });
+    await user.click(refreshButton);
+
+    await waitFor(() => expect(refreshButton).toBeDisabled());
+    expect(screen.getByText('Refreshing...')).toBeInTheDocument();
+
+    resolveRefresh?.();
+    await waitFor(() => expect(refreshButton).not.toBeDisabled());
+  });
+
+  test('auto refresh switch enables 60-second price polling', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    const items = [createItem({ symbol: 'AAPL' })];
+    let quoteCalls = 0;
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/watchlist')) {
+        return {
+          ok: true,
+          json: async () => watchlistResponse(items)
+        } as any;
+      }
+      if (url.includes('/api/stocks/quote/')) {
+        quoteCalls += 1;
+        return {
+          ok: true,
+          json: async () => quoteResponse()
+        } as any;
+      }
+      throw new Error('Unexpected URL ' + url);
+    }) as any;
+
+    const user = userEvent.setup({
+      advanceTimers: jest.advanceTimersByTime
+    });
+    renderWithProviders(<WatchlistCard />);
+
+    await screen.findByText('AAPL');
+    await waitFor(() => expect(quoteCalls).toBe(1));
+
+    await user.click(
+      screen.getByRole('switch', { name: /auto refresh watchlist/i })
+    );
+
+    await act(async () => {
+      jest.advanceTimersByTime(60_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(quoteCalls).toBe(2);
+  });
+
+  test('shows stale markers when quote data is older than 60 seconds', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    const items = [createItem({ symbol: 'AAPL' })];
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/watchlist')) {
+        return {
+          ok: true,
+          json: async () => watchlistResponse(items)
+        } as any;
+      }
+      if (url.includes('/api/stocks/quote/')) {
+        return {
+          ok: true,
+          json: async () => quoteResponse()
+        } as any;
+      }
+      throw new Error('Unexpected URL ' + url);
+    }) as any;
+
+    renderWithProviders(<WatchlistCard />);
+
+    await screen.findByText('AAPL');
+    expect(screen.queryByText('Stale')).not.toBeInTheDocument();
+
+    jest.setSystemTime(new Date('2026-01-01T00:01:01.000Z'));
+    await act(async () => {
+      jest.advanceTimersByTime(60_000);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Stale')).toBeInTheDocument();
+    expect(screen.getByText('Some quotes stale')).toBeInTheDocument();
   });
 });
