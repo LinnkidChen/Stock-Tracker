@@ -81,7 +81,7 @@ Stock Tracker 是一个全面的股票投资组合分析与指标平台，旨在
 | 功能               | 描述                                                                                         |
 | :----------------- | :------------------------------------------------------------------------------------------- |
 | **股票仪表盘**     | 使用 TradingView Lightweight Charts 的实时价格图表，支持蜡烛图形态、成交量指标与技术分析工具 |
-| **K 线图 Tab**     | 使用 klinecharts 展示 1 年日 K 线；仅支持单一 ticker，由 Longbridge 数据源提供                |
+| **K 线图 Tab**     | 使用 klinecharts 展示 1 年日 K 线；仅支持单一 ticker，由 Longbridge 数据源提供               |
 | **投资组合追踪**   | 监控多个组合的实时盈亏、资产配置可视化与绩效指标                                             |
 | **技术指标**       | RSI、MACD、移动平均、布林带等综合指标套件                                                    |
 | **关注列表与提醒** | 创建关注列表并设置价格提醒与指标提醒                                                         |
@@ -195,7 +195,9 @@ pnpm dev
 
 ### 组合持仓
 
-股票仪表盘的 Portfolio 卡片使用当前持仓模型：每个用户每个 symbol 一条持仓，包含 `quantity` 与 `avgCost`。卡片支持新增、编辑、删除，并用实时 quote 计算 Total Value、Day P&L 与 Total P&L。税务批次与交易流水不在当前版本范围内。
+组合持仓现在以交易流水为事实来源。`stock_portfolio_transactions` 支持 `opening_balance`、`buy`、`sell`、`dividend`、`deposit`、`withdrawal` 与 `fee`，所有 v1 汇总均以 USD 计算。`/api/portfolio/holdings` 返回从流水按平均成本法推导出的持仓与摘要；写入请使用 `/api/portfolio/transactions`。旧的 `stock_portfolio_holdings` 会通过 `opening_balance` 流水进行幂等迁移。
+
+`/dashboard/portfolio` 提供完整流水录入、编辑、删除、持仓与 P&L 视图；股票仪表盘中的 Portfolio 卡片仅展示摘要并链接到专页。税务批次、FIFO/特定批次与外汇换算仍不在当前版本范围内。
 
 ### 开发命令
 

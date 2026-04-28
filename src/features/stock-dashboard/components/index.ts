@@ -1,6 +1,8 @@
 export { DashboardClient } from './DashboardClient';
 export { WatchlistCard } from './WatchlistCard';
+export { WatchlistSummaryCard } from './WatchlistSummaryCard';
 export { PortfolioCard } from './PortfolioCard';
+export { PortfolioManager } from './PortfolioManager';
 export { MarketOverview } from './MarketOverview';
 
 export { TickerInput } from './TickerInput';

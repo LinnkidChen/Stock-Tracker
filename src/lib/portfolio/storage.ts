@@ -1,18 +1,41 @@
 import { createClient } from '../supabase/server';
-import type { PortfolioHolding, PortfolioHoldingInput } from '@/types/portfolio';
+import type {
+  PortfolioCurrency,
+  PortfolioTransaction,
+  PortfolioTransactionInput,
+  PortfolioTransactionType
+} from '@/types/portfolio';
 
-const HOLDING_COLUMNS =
-  'id, clerk_user_id, symbol, quantity, avg_cost, created_at, updated_at';
+const TRANSACTION_COLUMNS =
+  'id, clerk_user_id, type, symbol, quantity, price, amount, fee_amount, currency, transaction_date, note, created_at, updated_at';
 
-interface PortfolioHoldingRow {
+interface PortfolioTransactionRow {
   id: string;
   clerk_user_id: string;
-  symbol: string;
-  quantity: number | string;
-  avg_cost: number | string;
+  type: PortfolioTransactionType;
+  symbol: string | null;
+  quantity: number | string | null;
+  price: number | string | null;
+  amount: number | string | null;
+  fee_amount: number | string | null;
+  currency: PortfolioCurrency;
+  transaction_date: string;
+  note: string | null;
   created_at: string;
   updated_at: string;
 }
+
+type TransactionWrite = {
+  type?: PortfolioTransactionType;
+  symbol?: string | null;
+  quantity?: number | null;
+  price?: number | null;
+  amount?: number | null;
+  fee_amount?: number;
+  currency?: PortfolioCurrency;
+  transaction_date?: string;
+  note?: string | null;
+};
 
 export class PortfolioStorageError extends Error {
   constructor(
@@ -24,39 +47,35 @@ export class PortfolioStorageError extends Error {
   }
 }
 
-export class DuplicatePortfolioHoldingError extends PortfolioStorageError {
+export class PortfolioTransactionNotFoundError extends PortfolioStorageError {
   constructor(originalError?: any) {
-    super('Portfolio holding already exists', originalError);
-    this.name = 'DuplicatePortfolioHoldingError';
+    super('Portfolio transaction not found', originalError);
+    this.name = 'PortfolioTransactionNotFoundError';
   }
 }
 
-export class PortfolioHoldingNotFoundError extends PortfolioStorageError {
-  constructor(originalError?: any) {
-    super('Portfolio holding not found', originalError);
-    this.name = 'PortfolioHoldingNotFoundError';
-  }
+function toNumber(value: number | string | null): number | null {
+  if (value === null || value === undefined) return null;
+  return Number(value);
 }
 
-function mapHolding(row: PortfolioHoldingRow): PortfolioHolding {
+function mapTransaction(row: PortfolioTransactionRow): PortfolioTransaction {
   return {
     id: row.id,
     userId: row.clerk_user_id,
-    symbol: String(row.symbol).toUpperCase(),
-    quantity: Number(row.quantity),
-    avgCost: Number(row.avg_cost),
+    type: row.type,
+    symbol: row.symbol ? String(row.symbol).toUpperCase() : null,
+    quantity: toNumber(row.quantity),
+    price: toNumber(row.price),
+    amount: toNumber(row.amount),
+    feeAmount: Number(row.fee_amount ?? 0),
+    currency: row.currency,
+    transactionDate: row.transaction_date,
+    note: row.note,
+    realizedPnl: null,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
-}
-
-function isDuplicateError(error: any): boolean {
-  return (
-    error?.code === '23505' ||
-    String(error?.message || '')
-      .toLowerCase()
-      .includes('duplicate key')
-  );
 }
 
 function isNotFoundError(error: any): boolean {
@@ -68,100 +87,113 @@ function isNotFoundError(error: any): boolean {
   );
 }
 
-export async function getPortfolioHoldings(
-  userId: string
-): Promise<PortfolioHolding[]> {
-  const supabase = await createClient();
+function toWrite(input: Partial<PortfolioTransactionInput>): TransactionWrite {
+  const write: TransactionWrite = {};
 
-  const { data, error } = await supabase
-    .from('stock_portfolio_holdings')
-    .select(HOLDING_COLUMNS)
-    .eq('clerk_user_id', userId)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    throw new PortfolioStorageError('Failed to fetch portfolio holdings', error);
+  if (input.type !== undefined) write.type = input.type;
+  if (input.symbol !== undefined) {
+    write.symbol = input.symbol ? input.symbol.toUpperCase() : null;
   }
+  if (input.quantity !== undefined) write.quantity = input.quantity;
+  if (input.price !== undefined) write.price = input.price;
+  if (input.amount !== undefined) write.amount = input.amount;
+  if (input.feeAmount !== undefined) write.fee_amount = input.feeAmount;
+  if (input.currency !== undefined) write.currency = input.currency;
+  if (input.transactionDate !== undefined) {
+    write.transaction_date = input.transactionDate;
+  }
+  if (input.note !== undefined) write.note = input.note;
 
-  return (data || []).map((row: PortfolioHoldingRow) => mapHolding(row));
+  return write;
 }
 
-export async function createPortfolioHolding(
-  userId: string,
-  input: PortfolioHoldingInput
-): Promise<PortfolioHolding> {
+export async function getPortfolioTransactions(
+  userId: string
+): Promise<PortfolioTransaction[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from('stock_portfolio_holdings')
+    .from('stock_portfolio_transactions')
+    .select(TRANSACTION_COLUMNS)
+    .eq('clerk_user_id', userId)
+    .order('transaction_date', { ascending: true })
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
+
+  if (error) {
+    throw new PortfolioStorageError(
+      'Failed to fetch portfolio transactions',
+      error
+    );
+  }
+
+  return (data || []).map((row: PortfolioTransactionRow) =>
+    mapTransaction(row)
+  );
+}
+
+export async function createPortfolioTransaction(
+  userId: string,
+  input: PortfolioTransactionInput
+): Promise<PortfolioTransaction> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('stock_portfolio_transactions')
     .insert({
       clerk_user_id: userId,
-      symbol: input.symbol.toUpperCase(),
-      quantity: input.quantity,
-      avg_cost: input.avgCost
+      ...toWrite(input)
     })
-    .select(HOLDING_COLUMNS)
+    .select(TRANSACTION_COLUMNS)
     .single();
 
   if (error) {
-    if (isDuplicateError(error)) {
-      throw new DuplicatePortfolioHoldingError(error);
-    }
-
-    throw new PortfolioStorageError('Failed to create portfolio holding', error);
+    throw new PortfolioStorageError(
+      'Failed to create portfolio transaction',
+      error
+    );
   }
 
-  return mapHolding(data as PortfolioHoldingRow);
+  return mapTransaction(data as PortfolioTransactionRow);
 }
 
-export async function updatePortfolioHolding(
+export async function updatePortfolioTransaction(
   userId: string,
   id: string,
-  input: Partial<PortfolioHoldingInput>
-): Promise<PortfolioHolding> {
+  input: PortfolioTransactionInput
+): Promise<PortfolioTransaction> {
   const supabase = await createClient();
-  const updates: Record<string, string | number> = {};
-
-  if (input.symbol !== undefined) {
-    updates.symbol = input.symbol.toUpperCase();
-  }
-  if (input.quantity !== undefined) {
-    updates.quantity = input.quantity;
-  }
-  if (input.avgCost !== undefined) {
-    updates.avg_cost = input.avgCost;
-  }
 
   const { data, error } = await supabase
-    .from('stock_portfolio_holdings')
-    .update(updates)
+    .from('stock_portfolio_transactions')
+    .update(toWrite(input))
     .eq('clerk_user_id', userId)
     .eq('id', id)
-    .select(HOLDING_COLUMNS)
+    .select(TRANSACTION_COLUMNS)
     .single();
 
   if (error) {
-    if (isDuplicateError(error)) {
-      throw new DuplicatePortfolioHoldingError(error);
-    }
     if (isNotFoundError(error)) {
-      throw new PortfolioHoldingNotFoundError(error);
+      throw new PortfolioTransactionNotFoundError(error);
     }
 
-    throw new PortfolioStorageError('Failed to update portfolio holding', error);
+    throw new PortfolioStorageError(
+      'Failed to update portfolio transaction',
+      error
+    );
   }
 
-  return mapHolding(data as PortfolioHoldingRow);
+  return mapTransaction(data as PortfolioTransactionRow);
 }
 
-export async function deletePortfolioHolding(
+export async function deletePortfolioTransaction(
   userId: string,
   id: string
 ): Promise<void> {
   const supabase = await createClient();
 
   const { error } = await supabase
-    .from('stock_portfolio_holdings')
+    .from('stock_portfolio_transactions')
     .delete()
     .eq('clerk_user_id', userId)
     .eq('id', id)
@@ -170,9 +202,12 @@ export async function deletePortfolioHolding(
 
   if (error) {
     if (isNotFoundError(error)) {
-      throw new PortfolioHoldingNotFoundError(error);
+      throw new PortfolioTransactionNotFoundError(error);
     }
 
-    throw new PortfolioStorageError('Failed to delete portfolio holding', error);
+    throw new PortfolioStorageError(
+      'Failed to delete portfolio transaction',
+      error
+    );
   }
 }
