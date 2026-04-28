@@ -6,8 +6,12 @@
     "name": "Tong Chen"
   },
   "scripts": {
+    "env:check": "node scripts/preflight-env.js",
+    "predev": "node scripts/preflight-env.js --mode=development",
     "dev": "next dev --turbopack",
+    "prebuild": "node scripts/preflight-env.js --mode=production",
     "build": "next build",
+    "prestart": "node scripts/preflight-env.js --mode=production",
     "start": "next start",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix && pnpm format",
