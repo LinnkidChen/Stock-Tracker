@@ -4,8 +4,8 @@ Stock Tracker is a Next.js application for monitoring market quotes, charting
 selected symbols, maintaining a watchlist, and tracking current portfolio
 holdings. The current product is narrower than the long-term roadmap: it ships
 the stock dashboard, chart workspace, setup diagnostics, watchlist persistence,
-and portfolio holdings persistence, while dedicated portfolio, watchlist,
-alerts, reports, settings, and overview pages remain planned.
+watchlist price alerts, and portfolio holdings persistence, while dedicated
+portfolio, watchlist, reports, settings, and overview pages remain planned.
 
 ## Project Status
 
@@ -21,6 +21,8 @@ alerts, reports, settings, and overview pages remain planned.
   Longbridge configuration.
 - Longbridge-backed quote and k-line API routes.
 - Watchlist API with Supabase persistence, symbol metadata, ordering, and tests.
+- Watchlist price alerts for above/below price, percent move, gap up/down, and
+  volume spikes, with status and trigger history.
 - Portfolio holdings API with Supabase persistence for current symbol quantity
   and average cost, plus tests.
 - Clerk-protected dashboard routes, Sentry instrumentation, React Query, Zustand
@@ -43,7 +45,7 @@ alerts, reports, settings, and overview pages remain planned.
 ### Planned
 
 - Dedicated portfolio and watchlist pages.
-- Price and indicator alerts.
+- Indicator alerts.
 - Reports, exports, and tax-oriented workflows.
 - Settings page for user preferences and alert configuration.
 - Full dashboard overview page instead of redirecting `/dashboard` to stocks.
@@ -63,7 +65,7 @@ alerts, reports, settings, and overview pages remain planned.
 | Operations diagnostics    | Yes                          | N/A     | N/A                | Dashboard protected             | Yes     | Partial              |
 | Dedicated portfolio page  | Planned                      | Partial | Partial            | Planned                         | Partial | Planned              |
 | Dedicated watchlist page  | Planned                      | Partial | Partial            | Planned                         | Partial | Planned              |
-| Alerts                    | Planned                      | Planned | Planned            | Planned                         | Planned | Planned              |
+| Alerts                    | Partial: watchlist card only | Yes     | Supabase           | Yes                             | Yes     | Partial              |
 | Reports and exports       | Planned                      | Planned | Planned            | Planned                         | Planned | Planned              |
 | Settings                  | Planned                      | Planned | Planned            | Planned                         | Planned | Planned              |
 
@@ -90,6 +92,8 @@ alerts, reports, settings, and overview pages remain planned.
 | `/api/stocks/providers/health` | `GET`                            | Implemented | Checks provider readiness.                                     |
 | `/api/ws/prices`               | `GET` WebSocket upgrade          | Implemented | Poll-backed price updates for subscribed symbols.              |
 | `/api/watchlist`               | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist CRUD, metadata, and ordering.          |
+| `/api/watchlist/alerts`        | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist alert CRUD and trigger history reads.  |
+| `/api/watchlist/alerts/triggers` | `POST`                         | Implemented | Records authenticated watchlist alert trigger history.         |
 | `/api/portfolio/holdings`      | `GET`, `POST`                    | Implemented | Authenticated current holdings list and creation.              |
 | `/api/portfolio/holdings/[id]` | `PATCH`, `DELETE`                | Implemented | Authenticated holdings update and deletion.                    |
 | `/api/log`                     | `POST`                           | Implemented | Client log ingestion.                                          |
@@ -200,7 +204,7 @@ The app runs at http://localhost:3000 by default.
 
 ## Supabase Authentication
 
-Watchlist and portfolio holdings persistence depend on Supabase Row Level
+Watchlist, watchlist alert, and portfolio holdings persistence depend on Supabase Row Level
 Security and Clerk-issued Supabase JWTs. The expected setup is:
 
 - Clerk has a JWT template named `supabase`.

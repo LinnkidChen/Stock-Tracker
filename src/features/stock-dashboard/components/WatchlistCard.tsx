@@ -26,6 +26,7 @@ import * as Sentry from '@sentry/nextjs';
 import { AddTickerError, getAddTickerError } from '../lib/add-ticker-error';
 import { useWatchlistPrices } from '../hooks/useWatchlistPrices';
 import { WatchlistItemDisplay } from './WatchlistItemDisplay';
+import { WatchlistAlertsPanel } from './WatchlistAlertsPanel';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import { WatchlistItemWithPrice } from '@/types/stocks';
 import { TickerErrorModal } from './TickerErrorModal';
@@ -181,7 +182,9 @@ function createOptimisticItem(
 
 function toPricedItem(
   item: ApiWatchlistItem,
-  priceData: ReturnType<typeof useWatchlistPrices>['pricesMap'][string] | undefined
+  priceData:
+    | ReturnType<typeof useWatchlistPrices>['pricesMap'][string]
+    | undefined
 ): WatchlistItemWithPrice {
   return {
     id: item.id,
@@ -194,6 +197,10 @@ function toPricedItem(
     currentPrice: priceData?.price,
     change: priceData?.change,
     changePercent: priceData?.changePercent,
+    volume: priceData?.volume,
+    open: priceData?.open,
+    previousClose: priceData?.previousClose,
+    avgVolume: priceData?.avgVolume,
     lastUpdated: priceData?.lastUpdated
   };
 }
@@ -446,7 +453,9 @@ export function WatchlistCard() {
     if (!currentItem) return;
 
     const groupKey = getGroupKey(currentItem);
-    const groupItems = sortedItems.filter((item) => getGroupKey(item) === groupKey);
+    const groupItems = sortedItems.filter(
+      (item) => getGroupKey(item) === groupKey
+    );
     const currentIndex = groupItems.findIndex(
       (item) => item.symbol === symbolToMove
     );
@@ -610,7 +619,9 @@ export function WatchlistCard() {
   };
 
   function openEditDialog(item: WatchlistItemWithPrice) {
-    const sourceItem = items.find((candidate) => candidate.symbol === item.symbol);
+    const sourceItem = items.find(
+      (candidate) => candidate.symbol === item.symbol
+    );
     if (!sourceItem) return;
 
     setEditingItem(sourceItem);
@@ -787,6 +798,7 @@ export function WatchlistCard() {
                 </div>
               </section>
             ))}
+            <WatchlistAlertsPanel symbols={symbols} pricesMap={pricesMap} />
           </div>
         )}
         {addError ? (

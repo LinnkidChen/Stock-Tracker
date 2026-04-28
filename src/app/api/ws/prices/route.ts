@@ -12,6 +12,9 @@ type PriceUpdateMessage = {
   change: number;
   changePercent: number;
   volume: number;
+  open: number;
+  previousClose: number;
+  avgVolume: number | null;
   ts: number;
   lastUpdated: string;
   provider: string;
@@ -210,6 +213,9 @@ async function fetchPriceUpdate(
         change: Number(quote.change),
         changePercent: Number(quote.changePercent),
         volume: Number(quote.volume),
+        open: Number(quote.open),
+        previousClose: Number(quote.previousClose),
+        avgVolume: quote.avgVolume === null ? null : Number(quote.avgVolume),
         ts,
         lastUpdated: quote.lastUpdated || new Date(ts).toISOString(),
         provider
