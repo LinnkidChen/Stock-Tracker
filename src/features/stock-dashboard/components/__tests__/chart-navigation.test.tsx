@@ -23,6 +23,7 @@ describe('ChartNavigation', () => {
 
     render(<ChartNavigation />);
 
+    expect(screen.getByText('Technical Analysis')).toBeInTheDocument();
     expect(screen.getByText('Go to Charts')).toBeInTheDocument();
     expect(
       screen.getByText('Advanced K-Line charts and market data')
@@ -40,6 +41,8 @@ describe('ChartNavigation', () => {
 
     render(<ChartNavigation />);
 
+    expect(screen.getByText('Technical Analysis')).toBeInTheDocument();
+    expect(screen.getByText('Open Chart')).toBeInTheDocument();
     expect(
       screen.getByText('Analyze price action and indicators for AAPL')
     ).toBeInTheDocument();

@@ -2,39 +2,54 @@
  * @jest-environment jsdom
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { KLineChart } from '../KLineChart';
 import { useKlineSeries } from '../../hooks/useKlineSeries';
-import type { KLineInterval } from '@/lib/types/stock-api';
 import { StockApiResponseError } from '../../lib/stock-api-error';
+import { createKLineChart } from '../../lib/klinecharts';
+import type { KLineCandle, KLineInterval } from '@/lib/types/stock-api';
 
 jest.mock('../../hooks/useKlineSeries');
 jest.mock('../../lib/klinecharts', () => ({
-  createKLineChart: jest.fn().mockResolvedValue({
-    update: jest.fn(),
-    destroy: jest.fn()
-  })
+  createKLineChart: jest.fn()
 }));
 
 const mockUseKlineSeries = useKlineSeries as jest.MockedFunction<
   typeof useKlineSeries
 >;
+const mockCreateKLineChart = createKLineChart as jest.MockedFunction<
+  typeof createKLineChart
+>;
 
 describe('KLineChart', () => {
-  const buildSeries = (interval: KLineInterval = 'day') => ({
+  let mockChartHandle: {
+    update: jest.Mock;
+    destroy: jest.Mock;
+  };
+
+  const buildSeries = (
+    interval: KLineInterval = 'day',
+    candles: KLineCandle[] = []
+  ) => ({
     symbol: 'AAPL',
     range: {
       startDate: '2023-01-01T00:00:00.000Z',
       endDate: '2024-01-01T00:00:00.000Z',
       interval
     },
-    candles: [],
+    candles,
     lastUpdated: '2024-01-01T00:00:00.000Z'
   });
 
   beforeEach(() => {
     mockUseKlineSeries.mockReset();
+    mockChartHandle = {
+      update: jest.fn(),
+      destroy: jest.fn()
+    };
+    mockCreateKLineChart.mockReset();
+    mockCreateKLineChart.mockResolvedValue(mockChartHandle as any);
   });
 
   it('renders loading state and chart container', () => {
@@ -110,7 +125,9 @@ describe('KLineChart', () => {
     );
 
     expect(screen.getByText('Monthly candles')).toBeInTheDocument();
-    expect(screen.getByText(/1M/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Jan 1, 2023 - Jan 1, 2024 · 1M/)
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('radio', { name: 'Month interval' })
     ).toHaveAttribute('data-state', 'on');
@@ -118,6 +135,130 @@ describe('KLineChart', () => {
     await userEvent.click(screen.getByRole('radio', { name: 'Week interval' }));
 
     expect(onIntervalChange).toHaveBeenCalledWith('week');
+  });
+
+  it('renders range and display preference controls', async () => {
+    mockUseKlineSeries.mockReturnValue({
+      data: buildSeries('day'),
+      isLoading: false,
+      isError: false,
+      error: null,
+      noData: false,
+      refetch: jest.fn()
+    } as any);
+
+    const onRangeChange = jest.fn();
+    const onPreferencesChange = jest.fn();
+
+    render(
+      <KLineChart
+        ticker='AAPL'
+        range='3m'
+        onRangeChange={onRangeChange}
+        preferences={{
+          showVolume: false,
+          showGrid: true,
+          candleType: 'area'
+        }}
+        onPreferencesChange={onPreferencesChange}
+      />
+    );
+
+    expect(screen.getByRole('radio', { name: '3M range' })).toHaveAttribute(
+      'data-state',
+      'on'
+    );
+    expect(screen.getByRole('switch', { name: 'Volume' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Grid' })).toBeChecked();
+    expect(
+      screen.getByRole('radio', { name: 'Area candle type' })
+    ).toHaveAttribute('data-state', 'on');
+
+    await userEvent.click(screen.getByRole('radio', { name: '6M range' }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Grid' }));
+    await userEvent.click(
+      screen.getByRole('radio', { name: 'OHLC candle type' })
+    );
+
+    expect(onRangeChange).toHaveBeenCalledWith('6m');
+    expect(onPreferencesChange).toHaveBeenCalledWith({ showGrid: false });
+    expect(onPreferencesChange).toHaveBeenCalledWith({ candleType: 'ohlc' });
+  });
+
+  it('filters candles by range before updating the chart', async () => {
+    mockUseKlineSeries.mockReturnValue({
+      data: buildSeries('day', [
+        {
+          timestamp: Date.UTC(2024, 0, 1),
+          open: 100,
+          high: 110,
+          low: 95,
+          close: 105,
+          volume: 100
+        },
+        {
+          timestamp: Date.UTC(2024, 2, 20),
+          open: 106,
+          high: 112,
+          low: 101,
+          close: 108,
+          volume: 150
+        },
+        {
+          timestamp: Date.UTC(2024, 3, 20),
+          open: 108,
+          high: 116,
+          low: 104,
+          close: 114,
+          volume: 175
+        }
+      ]),
+      isLoading: false,
+      isError: false,
+      error: null,
+      noData: false,
+      refetch: jest.fn()
+    } as any);
+
+    render(<KLineChart ticker='AAPL' range='1m' />);
+
+    await waitFor(() => expect(mockChartHandle.update).toHaveBeenCalled());
+
+    const calls = mockChartHandle.update.mock.calls;
+    const latestCall = calls[calls.length - 1];
+
+    expect(latestCall[1]).toHaveLength(2);
+    expect(latestCall[1].map((candle: { close: number }) => candle.close)).toEqual([
+      108, 114
+    ]);
+  });
+
+  it('passes display preferences to the klinecharts adapter', async () => {
+    mockUseKlineSeries.mockReturnValue({
+      data: buildSeries('day'),
+      isLoading: false,
+      isError: false,
+      error: null,
+      noData: false,
+      refetch: jest.fn()
+    } as any);
+
+    const preferences = {
+      showVolume: false,
+      showGrid: false,
+      candleType: 'ohlc' as const
+    };
+
+    render(<KLineChart ticker='AAPL' preferences={preferences} />);
+
+    await waitFor(() => expect(mockCreateKLineChart).toHaveBeenCalled());
+
+    expect(mockCreateKLineChart).toHaveBeenCalledWith(expect.any(HTMLElement), {
+      symbol: 'AAPL',
+      interval: 'day',
+      data: [],
+      preferences
+    });
   });
 
   it('renders error state and calls retry', async () => {

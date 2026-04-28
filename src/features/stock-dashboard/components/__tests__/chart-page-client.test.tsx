@@ -6,6 +6,12 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { ChartPageClient } from '../ChartPageClient';
 import { useDashboardStore } from '../../store';
 import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  DEFAULT_CHART_WORKSPACE,
+  type ChartPreferences,
+  type ChartRange
+} from '../../lib/chart-workspace';
+import type { KLineInterval } from '@/lib/types/stock-api';
 
 jest.mock('../../store', () => ({
   useDashboardStore: jest.fn()
@@ -24,41 +30,91 @@ jest.mock('../KLineChart', () => ({
   KLineChart: ({
     ticker,
     interval,
-    onIntervalChange
+    range,
+    onIntervalChange,
+    onRangeChange,
+    onPreferencesChange
   }: {
     ticker: string;
-    interval: string;
-    onIntervalChange?: (interval: 'day' | 'week' | 'month' | 'year') => void;
+    interval: KLineInterval;
+    range: ChartRange;
+    preferences: ChartPreferences;
+    onIntervalChange?: (interval: KLineInterval) => void;
+    onRangeChange?: (range: ChartRange) => void;
+    onPreferencesChange?: (preferences: Partial<ChartPreferences>) => void;
   }) => (
     <div>
-      <div data-testid='kline-chart'>{`${ticker}:${interval}`}</div>
+      <div data-testid='kline-chart'>{`${ticker}:${interval}:${range}`}</div>
       <button type='button' onClick={() => onIntervalChange?.('year')}>
         Switch Interval
+      </button>
+      <button type='button' onClick={() => onRangeChange?.('6m')}>
+        Switch Range
+      </button>
+      <button
+        type='button'
+        onClick={() => onPreferencesChange?.({ showGrid: false })}
+      >
+        Toggle Grid
       </button>
     </div>
   )
 }));
+
+function createSearchParams(params: Record<string, string | null>) {
+  return {
+    get: (key: string) => params[key] ?? null,
+    toString: () => {
+      const searchParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== null) {
+          searchParams.set(key, value);
+        }
+      });
+      return searchParams.toString();
+    }
+  };
+}
+
+function createStore(overrides: Record<string, unknown> = {}) {
+  return {
+    selectedTicker: null,
+    setSelectedTicker: jest.fn(),
+    quoteProvider: 'default',
+    hydrateFromStorage: jest.fn(),
+    chartWorkspace: DEFAULT_CHART_WORKSPACE,
+    setChartWorkspace: jest.fn(),
+    setChartPreferences: jest.fn(),
+    ...overrides
+  };
+}
 
 describe('ChartPageClient', () => {
   beforeEach(() => {
     jest.resetAllMocks();
   });
 
-  test('replaces the symbol query param when searching from the charts page and preserves the interval', () => {
+  test('replaces the symbol query param when searching from the charts page and preserves the interval and range', () => {
     const replace = jest.fn();
-    const setSelectedTicker = jest.fn();
+    const store = createStore({
+      selectedTicker: 'GOOGL',
+      chartWorkspace: {
+        ...DEFAULT_CHART_WORKSPACE,
+        symbol: 'GOOGL',
+        interval: 'week',
+        range: '3m'
+      }
+    });
 
     (useRouter as jest.Mock).mockReturnValue({ replace });
-    (useSearchParams as jest.Mock).mockReturnValue({
-      get: (key: string) =>
-        key === 'symbol' ? 'GOOGL' : key === 'interval' ? 'week' : null,
-      toString: () => 'symbol=GOOGL&interval=week'
-    });
-    (useDashboardStore as unknown as jest.Mock).mockReturnValue({
-      selectedTicker: 'GOOGL',
-      setSelectedTicker,
-      quoteProvider: 'default'
-    });
+    (useSearchParams as jest.Mock).mockReturnValue(
+      createSearchParams({
+        symbol: 'GOOGL',
+        interval: 'week',
+        range: '3m'
+      })
+    );
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(store);
 
     render(<ChartPageClient />);
 
@@ -67,88 +123,103 @@ describe('ChartPageClient', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Search' }));
 
-    expect(replace).toHaveBeenCalledWith(
-      '/dashboard/charts?symbol=AAPL&interval=week'
+    expect(replace).toHaveBeenLastCalledWith(
+      '/dashboard/charts?symbol=AAPL&interval=week&range=3m'
     );
-    expect(setSelectedTicker).not.toHaveBeenCalled();
+    expect(store.setSelectedTicker).not.toHaveBeenCalled();
   });
 
-  test('passes the selected interval from the URL into the chart', () => {
+  test('passes the selected interval and range from the URL into the chart', () => {
     (useRouter as jest.Mock).mockReturnValue({ replace: jest.fn() });
-    (useSearchParams as jest.Mock).mockReturnValue({
-      get: (key: string) =>
-        key === 'symbol' ? 'GOOGL' : key === 'interval' ? 'month' : null,
-      toString: () => 'symbol=GOOGL&interval=month'
-    });
-    (useDashboardStore as unknown as jest.Mock).mockReturnValue({
+    (useSearchParams as jest.Mock).mockReturnValue(
+      createSearchParams({
+        symbol: 'GOOGL',
+        interval: 'month',
+        range: '6m'
+      })
+    );
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
       selectedTicker: 'GOOGL',
-      setSelectedTicker: jest.fn(),
-      quoteProvider: 'default'
-    });
+      chartWorkspace: {
+        ...DEFAULT_CHART_WORKSPACE,
+        symbol: 'AAPL',
+        interval: 'day',
+        range: '1m'
+      }
+    }));
 
     render(<ChartPageClient />);
 
-    expect(screen.getByTestId('kline-chart')).toHaveTextContent('GOOGL:month');
+    expect(screen.getByTestId('kline-chart')).toHaveTextContent(
+      'GOOGL:month:6m'
+    );
   });
 
-  test('defaults the chart interval to day when the URL omits it', () => {
+  test('defaults the chart interval and range when the URL omits them', () => {
     (useRouter as jest.Mock).mockReturnValue({ replace: jest.fn() });
-    (useSearchParams as jest.Mock).mockReturnValue({
-      get: (key: string) => (key === 'symbol' ? 'AAPL' : null),
-      toString: () => 'symbol=AAPL'
-    });
-    (useDashboardStore as unknown as jest.Mock).mockReturnValue({
+    (useSearchParams as jest.Mock).mockReturnValue(
+      createSearchParams({ symbol: 'AAPL' })
+    );
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
       selectedTicker: 'AAPL',
-      setSelectedTicker: jest.fn(),
-      quoteProvider: 'default'
-    });
+      chartWorkspace: {
+        ...DEFAULT_CHART_WORKSPACE,
+        symbol: 'AAPL'
+      }
+    }));
 
     render(<ChartPageClient />);
 
-    expect(screen.getByTestId('kline-chart')).toHaveTextContent('AAPL:day');
+    expect(screen.getByTestId('kline-chart')).toHaveTextContent('AAPL:day:1y');
   });
 
-  test('hydrates the missing symbol in the URL from the store without dropping the interval', () => {
+  test('hydrates missing URL workspace fields from the store', () => {
     const replace = jest.fn();
 
     (useRouter as jest.Mock).mockReturnValue({ replace });
-    (useSearchParams as jest.Mock).mockReturnValue({
-      get: (key: string) => (key === 'interval' ? 'month' : null),
-      toString: () => 'interval=month'
-    });
-    (useDashboardStore as unknown as jest.Mock).mockReturnValue({
-      selectedTicker: 'NVDA',
-      setSelectedTicker: jest.fn(),
-      quoteProvider: 'default'
-    });
+    (useSearchParams as jest.Mock).mockReturnValue(createSearchParams({}));
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
+      chartWorkspace: {
+        ...DEFAULT_CHART_WORKSPACE,
+        symbol: 'NVDA',
+        interval: 'month',
+        range: '3m'
+      }
+    }));
 
     render(<ChartPageClient />);
 
     expect(replace).toHaveBeenCalledWith(
-      '/dashboard/charts?symbol=NVDA&interval=month'
+      '/dashboard/charts?symbol=NVDA&interval=month&range=3m'
     );
   });
 
-  test('preserves the symbol when the chart interval changes', () => {
+  test('preserves the symbol and range when the chart interval changes', () => {
     const replace = jest.fn();
 
     (useRouter as jest.Mock).mockReturnValue({ replace });
-    (useSearchParams as jest.Mock).mockReturnValue({
-      get: (key: string) =>
-        key === 'symbol' ? 'MSFT' : key === 'interval' ? 'week' : null,
-      toString: () => 'symbol=MSFT&interval=week'
-    });
-    (useDashboardStore as unknown as jest.Mock).mockReturnValue({
+    (useSearchParams as jest.Mock).mockReturnValue(
+      createSearchParams({
+        symbol: 'MSFT',
+        interval: 'week',
+        range: '3m'
+      })
+    );
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
       selectedTicker: 'MSFT',
-      setSelectedTicker: jest.fn(),
-      quoteProvider: 'default'
-    });
+      chartWorkspace: {
+        ...DEFAULT_CHART_WORKSPACE,
+        symbol: 'MSFT',
+        interval: 'week',
+        range: '3m'
+      }
+    }));
 
     render(<ChartPageClient />);
     fireEvent.click(screen.getByRole('button', { name: 'Switch Interval' }));
 
-    expect(replace).toHaveBeenCalledWith(
-      '/dashboard/charts?symbol=MSFT&interval=year'
+    expect(replace).toHaveBeenLastCalledWith(
+      '/dashboard/charts?symbol=MSFT&interval=year&range=3m'
     );
   });
 
@@ -156,15 +227,8 @@ describe('ChartPageClient', () => {
     const replace = jest.fn();
 
     (useRouter as jest.Mock).mockReturnValue({ replace });
-    (useSearchParams as jest.Mock).mockReturnValue({
-      get: () => null,
-      toString: () => ''
-    });
-    (useDashboardStore as unknown as jest.Mock).mockReturnValue({
-      selectedTicker: null,
-      setSelectedTicker: jest.fn(),
-      quoteProvider: 'default'
-    });
+    (useSearchParams as jest.Mock).mockReturnValue(createSearchParams({}));
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore());
 
     render(<ChartPageClient />);
 
@@ -173,7 +237,66 @@ describe('ChartPageClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'AAPL' }));
 
     expect(replace).toHaveBeenCalledWith(
-      '/dashboard/charts?symbol=AAPL&interval=day'
+      '/dashboard/charts?symbol=AAPL&interval=day&range=1y'
     );
+  });
+
+  test('preserves the symbol and interval when the chart range changes', () => {
+    const replace = jest.fn();
+
+    (useRouter as jest.Mock).mockReturnValue({ replace });
+    (useSearchParams as jest.Mock).mockReturnValue(
+      createSearchParams({
+        symbol: 'MSFT',
+        interval: 'week',
+        range: '3m'
+      })
+    );
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
+      selectedTicker: 'MSFT',
+      chartWorkspace: {
+        ...DEFAULT_CHART_WORKSPACE,
+        symbol: 'MSFT',
+        interval: 'week',
+        range: '3m'
+      }
+    }));
+
+    render(<ChartPageClient />);
+    fireEvent.click(screen.getByRole('button', { name: 'Switch Range' }));
+
+    expect(replace).toHaveBeenLastCalledWith(
+      '/dashboard/charts?symbol=MSFT&interval=week&range=6m'
+    );
+  });
+
+  test('persists preference changes without adding preferences to the URL', () => {
+    const replace = jest.fn();
+    const setChartPreferences = jest.fn();
+
+    (useRouter as jest.Mock).mockReturnValue({ replace });
+    (useSearchParams as jest.Mock).mockReturnValue(
+      createSearchParams({
+        symbol: 'MSFT',
+        interval: 'week',
+        range: '3m'
+      })
+    );
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
+      selectedTicker: 'MSFT',
+      setChartPreferences,
+      chartWorkspace: {
+        ...DEFAULT_CHART_WORKSPACE,
+        symbol: 'MSFT',
+        interval: 'week',
+        range: '3m'
+      }
+    }));
+
+    render(<ChartPageClient />);
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Grid' }));
+
+    expect(setChartPreferences).toHaveBeenCalledWith({ showGrid: false });
+    expect(replace).not.toHaveBeenCalled();
   });
 });
