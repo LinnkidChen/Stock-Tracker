@@ -8,8 +8,9 @@ import {
 import {
   CHART_WORKSPACE_STORAGE_KEY,
   DEFAULT_CHART_WORKSPACE,
+  mergeChartPreferences,
   parseChartWorkspace,
-  type ChartPreferences,
+  type ChartPreferencesPatch,
   type ChartWorkspace
 } from './lib/chart-workspace';
 
@@ -33,7 +34,7 @@ interface DashboardActions {
   addToLastTickers: (ticker: string) => void;
   setQuoteProvider: (provider: string) => void;
   setChartWorkspace: (workspace: Partial<ChartWorkspace>) => void;
-  setChartPreferences: (preferences: Partial<ChartPreferences>) => void;
+  setChartPreferences: (preferences: ChartPreferencesPatch) => void;
   hydrateFromStorage: () => void;
 }
 
@@ -110,24 +111,20 @@ export const useDashboardStore = create<DashboardState & DashboardActions>()(
       const nextWorkspace = {
         ...current,
         ...workspace,
-        preferences: {
-          ...current.preferences,
-          ...(workspace.preferences ?? {})
-        }
+        preferences: workspace.preferences
+          ? mergeChartPreferences(current.preferences, workspace.preferences)
+          : current.preferences
       };
 
       set({ chartWorkspace: nextWorkspace });
       persistChartWorkspace(nextWorkspace);
     },
 
-    setChartPreferences: (preferences: Partial<ChartPreferences>) => {
+    setChartPreferences: (preferences: ChartPreferencesPatch) => {
       const current = get().chartWorkspace;
       const nextWorkspace = {
         ...current,
-        preferences: {
-          ...current.preferences,
-          ...preferences
-        }
+        preferences: mergeChartPreferences(current.preferences, preferences)
       };
 
       set({ chartWorkspace: nextWorkspace });

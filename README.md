@@ -16,7 +16,8 @@ alerts, reports, settings, and overview pages remain planned.
 - `/dashboard/stocks` with market overview, quote provider selection, ticker
   search, watchlist card, and portfolio holdings card.
 - `/dashboard/charts` with a klinecharts-based chart workspace for a selected
-  ticker, interval, range, and display preferences.
+  ticker, interval, range, display preferences, and configurable SMA, EMA, RSI,
+  MACD, Bollinger Bands, and VWAP indicators.
 - `/dashboard/operations` with setup diagnostics for Clerk, Supabase, and
   Longbridge configuration.
 - Longbridge-backed quote and k-line API routes.
@@ -35,8 +36,8 @@ alerts, reports, settings, and overview pages remain planned.
   history, lots, realized P&L, and tax workflows are not implemented.
 - Watchlist management exists inside the stock dashboard card, but does not yet
   have a dedicated full-page workflow.
-- Charting supports k-line visualization and display preferences, but does not
-  include a full indicator library.
+- Charting supports k-line visualization, display preferences, and the initial
+  technical indicator library. Custom indicator authoring is still planned.
 - Dashboard UX still carries some starter-shell structure while the app becomes
   fully stock-tracker-specific.
 
@@ -47,7 +48,7 @@ alerts, reports, settings, and overview pages remain planned.
 - Reports, exports, and tax-oriented workflows.
 - Settings page for user preferences and alert configuration.
 - Full dashboard overview page instead of redirecting `/dashboard` to stocks.
-- Advanced technical indicators and analytics.
+- Custom technical indicators and analytics.
 - Committed screenshots for the README.
 
 ## Feature Matrix
