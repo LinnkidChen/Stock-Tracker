@@ -1,9 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog';
 import { normalizeTicker, validateTicker } from '@/lib/validation/ticker';
 import * as Sentry from '@sentry/nextjs';
 import { AddTickerError, getAddTickerError } from '../lib/add-ticker-error';
@@ -15,10 +26,25 @@ import { TickerErrorModal } from './TickerErrorModal';
 import { useDashboardStore } from '../store';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
+import type { WatchlistItem as ApiWatchlistItem } from '@/types/watchlist';
 
 type SpanLike = {
   setAttribute?: (key: string, value: string | number) => void;
 };
+
+type WatchlistMutationResponse =
+  | {
+      ok: true;
+    }
+  | {
+      ok: false;
+      status?: number;
+      message?: string;
+      error?: unknown;
+    };
+
+const NOTE_MAX_LENGTH = 500;
+const UNGROUPED_LABEL = 'Ungrouped';
 
 async function runWithSpan<T>(
   context: Parameters<typeof Sentry.startSpan>[0],
@@ -49,17 +75,147 @@ async function runWithSpan<T>(
   return fn();
 }
 
+function normalizeExchangeInput(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed ? trimmed.toUpperCase() : null;
+}
+
+function normalizeNoteInput(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function getGroupKey(item: ApiWatchlistItem): string {
+  return item.exchange?.trim() || '';
+}
+
+function getGroupLabel(groupKey: string): string {
+  return groupKey || UNGROUPED_LABEL;
+}
+
+function compareGroupKeys(a: string, b: string): number {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  return a.localeCompare(b);
+}
+
+function compareWatchlistItems(
+  a: ApiWatchlistItem,
+  b: ApiWatchlistItem
+): number {
+  const groupCompare = compareGroupKeys(getGroupKey(a), getGroupKey(b));
+  if (groupCompare !== 0) return groupCompare;
+
+  const sortA = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+  const sortB = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+  if (sortA !== sortB) return sortA - sortB;
+
+  const createdA = Date.parse(a.created_at) || 0;
+  const createdB = Date.parse(b.created_at) || 0;
+  if (createdA !== createdB) return createdA - createdB;
+
+  return a.symbol.localeCompare(b.symbol);
+}
+
+function getResponseItems(json: any): ApiWatchlistItem[] {
+  if (Array.isArray(json?.data?.items)) {
+    return json.data.items;
+  }
+
+  if (Array.isArray(json?.data?.watchlist)) {
+    const now = new Date().toISOString();
+    return json.data.watchlist.map((symbol: string) => ({
+      id: `watchlist-${symbol}`,
+      symbol,
+      exchange: null,
+      note: null,
+      sort_order: null,
+      created_at: now,
+      updated_at: now
+    }));
+  }
+
+  return [];
+}
+
+function createOptimisticItem(
+  symbol: string,
+  exchange: string | null,
+  note: string | null,
+  items: ApiWatchlistItem[]
+): ApiWatchlistItem {
+  const now = new Date().toISOString();
+  const groupKey = exchange ?? '';
+  const groupOrders = items
+    .filter((item) => getGroupKey(item) === groupKey)
+    .map((item) => item.sort_order)
+    .filter((sortOrder): sortOrder is number => typeof sortOrder === 'number');
+
+  return {
+    id: `watchlist-${symbol}`,
+    symbol,
+    exchange,
+    note,
+    sort_order: groupOrders.length > 0 ? Math.max(...groupOrders) + 1 : 0,
+    created_at: now,
+    updated_at: now
+  };
+}
+
+function toPricedItem(
+  item: ApiWatchlistItem,
+  priceData: ReturnType<typeof useWatchlistPrices>['pricesMap'][string] | undefined
+): WatchlistItemWithPrice {
+  return {
+    id: item.id,
+    userId: 'current-user',
+    symbol: item.symbol,
+    addedAt: new Date(item.created_at),
+    exchange: item.exchange,
+    note: item.note,
+    sort_order: item.sort_order,
+    currentPrice: priceData?.price,
+    change: priceData?.change,
+    changePercent: priceData?.changePercent,
+    lastUpdated: priceData?.lastUpdated
+  };
+}
+
 export function WatchlistCard() {
-  const [items, setItems] = useState<string[]>([]);
+  const [items, setItems] = useState<ApiWatchlistItem[]>([]);
   const [symbol, setSymbol] = useState('');
+  const [exchange, setExchange] = useState('');
+  const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reorderingSymbol, setReorderingSymbol] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [addError, setAddError] = useState<AddTickerError | null>(null);
-
+  const [editingItem, setEditingItem] = useState<ApiWatchlistItem | null>(null);
+  const [editExchange, setEditExchange] = useState('');
+  const [editNote, setEditNote] = useState('');
   const [retryCount, setRetryCount] = useState(0);
 
-  const { pricesMap, isLoading, errorSymbols } = useWatchlistPrices(items);
+  const symbols = useMemo(() => items.map((item) => item.symbol), [items]);
+  const sortedItems = useMemo(
+    () => [...items].sort(compareWatchlistItems),
+    [items]
+  );
+  const groupedItems = useMemo(() => {
+    const groups = new Map<string, ApiWatchlistItem[]>();
+
+    sortedItems.forEach((item) => {
+      const groupKey = getGroupKey(item);
+      groups.set(groupKey, [...(groups.get(groupKey) ?? []), item]);
+    });
+
+    return Array.from(groups.entries()).sort(([a], [b]) =>
+      compareGroupKeys(a, b)
+    );
+  }, [sortedItems]);
+
+  const { pricesMap, isLoading, errorSymbols } = useWatchlistPrices(symbols);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -77,11 +233,9 @@ export function WatchlistCard() {
             const json = await res.json();
 
             if (!controller.signal.aborted && json.success) {
-              setItems(json.data.watchlist);
-              span?.setAttribute?.(
-                'watchlist.count',
-                json.data.watchlist.length
-              );
+              const nextItems = getResponseItems(json);
+              setItems(nextItems);
+              span?.setAttribute?.('watchlist.count', nextItems.length);
             } else if (!controller.signal.aborted) {
               throw new Error(json.error?.message || 'Failed to load');
             }
@@ -101,13 +255,31 @@ export function WatchlistCard() {
     };
   }, [retryCount]);
 
-  async function mutate(action: 'add' | 'remove', sym: string) {
+  async function mutate(
+    action: 'add' | 'remove',
+    sym: string,
+    metadata: { exchange?: string | null; note?: string | null } = {}
+  ): Promise<WatchlistMutationResponse> {
     setBusy(true);
-    const optimistic = new Set(items);
-    if (action === 'add') optimistic.add(sym);
-    if (action === 'remove') optimistic.delete(sym);
     const prev = items;
-    setItems(Array.from(optimistic));
+
+    if (action === 'add') {
+      setItems((currentItems) => [
+        ...currentItems,
+        createOptimisticItem(
+          sym,
+          metadata.exchange ?? null,
+          metadata.note ?? null,
+          currentItems
+        )
+      ]);
+    }
+
+    if (action === 'remove') {
+      setItems((currentItems) =>
+        currentItems.filter((item) => item.symbol !== sym)
+      );
+    }
 
     try {
       const { res, json } = await runWithSpan(
@@ -118,7 +290,11 @@ export function WatchlistCard() {
           const response = await fetch('/api/watchlist', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action, symbol: sym })
+            body: JSON.stringify({
+              action,
+              symbol: sym,
+              ...(action === 'add' ? metadata : {})
+            })
           });
           span?.setAttribute?.('http.status_code', response.status);
           const payload = await response.json();
@@ -129,20 +305,138 @@ export function WatchlistCard() {
         setItems(prev);
         toast.error('Failed to update watchlist');
         return {
-          ok: false as const,
+          ok: false,
           status: res.status,
           message: json?.error?.message || 'Request failed'
         };
       }
-      setItems(json.data.watchlist);
-      return { ok: true as const };
+      setItems(getResponseItems(json));
+      return { ok: true };
     } catch (error) {
       logger.error('Watchlist mutation failed', { error });
-      setItems(prev); // rollback
+      setItems(prev);
       toast.error('Failed to update watchlist');
-      return { ok: false as const, error };
+      return { ok: false, error };
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function updateMetadata() {
+    if (!editingItem) return;
+    const normalizedExchange = normalizeExchangeInput(editExchange);
+    const normalizedNote = normalizeNoteInput(editNote);
+
+    if ((normalizedNote?.length ?? 0) > NOTE_MAX_LENGTH) {
+      toast.error('Note must be 500 characters or less');
+      return;
+    }
+
+    setBusy(true);
+    const prev = items;
+    const updatedAt = new Date().toISOString();
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        item.symbol === editingItem.symbol
+          ? {
+              ...item,
+              exchange: normalizedExchange,
+              note: normalizedNote,
+              updated_at: updatedAt
+            }
+          : item
+      )
+    );
+
+    try {
+      const response = await fetch('/api/watchlist', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          symbol: editingItem.symbol,
+          exchange: normalizedExchange,
+          note: normalizedNote
+        })
+      });
+      const json = await response.json();
+
+      if (!response.ok || !json?.success) {
+        setItems(prev);
+        toast.error('Failed to update watchlist item');
+        return;
+      }
+
+      setItems(getResponseItems(json));
+      setEditingItem(null);
+    } catch (error) {
+      logger.error('Watchlist metadata update failed', { error });
+      setItems(prev);
+      toast.error('Failed to update watchlist item');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reorderWithinGroup(symbolToMove: string, direction: -1 | 1) {
+    const currentItem = items.find((item) => item.symbol === symbolToMove);
+    if (!currentItem) return;
+
+    const groupKey = getGroupKey(currentItem);
+    const groupItems = sortedItems.filter((item) => getGroupKey(item) === groupKey);
+    const currentIndex = groupItems.findIndex(
+      (item) => item.symbol === symbolToMove
+    );
+    const nextIndex = currentIndex + direction;
+
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= groupItems.length) {
+      return;
+    }
+
+    const reorderedGroup = [...groupItems];
+    const [movedItem] = reorderedGroup.splice(currentIndex, 1);
+    reorderedGroup.splice(nextIndex, 0, movedItem);
+
+    const orderBySymbol = new Map(
+      reorderedGroup.map((item, index) => [item.symbol, index])
+    );
+    const prev = items;
+    const nextItems = items.map((item) =>
+      orderBySymbol.has(item.symbol)
+        ? { ...item, sort_order: orderBySymbol.get(item.symbol)! }
+        : item
+    );
+
+    setReorderingSymbol(symbolToMove);
+    setItems(nextItems);
+
+    try {
+      const response = await fetch('/api/watchlist', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reorder',
+          items: reorderedGroup.map((item, index) => ({
+            symbol: item.symbol,
+            sort_order: index
+          }))
+        })
+      });
+      const json = await response.json();
+
+      if (!response.ok || !json?.success) {
+        setItems(prev);
+        toast.error('Failed to reorder watchlist');
+        return;
+      }
+
+      setItems(getResponseItems(json));
+    } catch (error) {
+      logger.error('Watchlist reorder failed', { error });
+      setItems(prev);
+      toast.error('Failed to reorder watchlist');
+    } finally {
+      setReorderingSymbol(null);
     }
   }
 
@@ -171,7 +465,7 @@ export function WatchlistCard() {
       }
 
       const normalized = normalizeTicker(rawSymbol);
-      if (items.includes(normalized)) {
+      if (items.some((item) => item.symbol === normalized)) {
         const mapped = getAddTickerError({ type: 'duplicate' });
         setAddError(mapped);
         logger.info('Add ticker duplicate prevented', {
@@ -181,7 +475,16 @@ export function WatchlistCard() {
         return;
       }
 
-      const response = await mutate('add', normalized);
+      const normalizedNote = normalizeNoteInput(note);
+      if ((normalizedNote?.length ?? 0) > NOTE_MAX_LENGTH) {
+        toast.error('Note must be 500 characters or less');
+        return;
+      }
+
+      const response = await mutate('add', normalized, {
+        exchange: normalizeExchangeInput(exchange),
+        note: normalizedNote
+      });
       if (!response.ok) {
         const mapped = response.status
           ? getAddTickerError({
@@ -200,8 +503,19 @@ export function WatchlistCard() {
       }
 
       setSymbol('');
+      setExchange('');
+      setNote('');
     });
   };
+
+  function openEditDialog(item: WatchlistItemWithPrice) {
+    const sourceItem = items.find((candidate) => candidate.symbol === item.symbol);
+    if (!sourceItem) return;
+
+    setEditingItem(sourceItem);
+    setEditExchange(sourceItem.exchange ?? '');
+    setEditNote(sourceItem.note ?? '');
+  }
 
   return (
     <Card>
@@ -209,7 +523,7 @@ export function WatchlistCard() {
         <CardTitle>Watchlist</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onAdd} className='mb-3 flex gap-2'>
+        <form onSubmit={onAdd} className='mb-4 grid gap-2 sm:grid-cols-4'>
           <Input
             placeholder='Add symbol (1-5 letters, e.g., MSFT)'
             value={symbol}
@@ -217,11 +531,23 @@ export function WatchlistCard() {
               setSymbol(e.target.value.toUpperCase());
               if (addError) setAddError(null);
             }}
-            className='w-40'
+            className='sm:col-span-2'
+          />
+          <Input
+            placeholder='Exchange'
+            value={exchange}
+            onChange={(e) => setExchange(e.target.value.toUpperCase())}
           />
           <Button type='submit' disabled={busy}>
             Add
           </Button>
+          <Textarea
+            placeholder='Note'
+            value={note}
+            maxLength={NOTE_MAX_LENGTH}
+            onChange={(e) => setNote(e.target.value)}
+            className='min-h-10 resize-none sm:col-span-4'
+          />
         </form>
         {initialLoading ? (
           <LoadingSkeleton count={3} />
@@ -247,37 +573,43 @@ export function WatchlistCard() {
         ) : isLoading && Object.keys(pricesMap).length === 0 ? (
           <LoadingSkeleton count={items.length} />
         ) : (
-          <div className='space-y-2'>
-            {items.map((symbol) => {
-              const priceData = pricesMap[symbol];
-              const hasError = errorSymbols.includes(symbol);
-              const isItemLoading = isLoading && !priceData && !hasError;
+          <div className='space-y-4'>
+            {groupedItems.map(([groupKey, groupItems]) => (
+              <section key={groupKey || 'ungrouped'} className='space-y-2'>
+                <h3 className='text-muted-foreground text-xs font-semibold tracking-normal'>
+                  {getGroupLabel(groupKey)}
+                </h3>
+                <div className='space-y-2'>
+                  {groupItems.map((item, index) => {
+                    const symbol = item.symbol;
+                    const priceData = pricesMap[symbol];
+                    const hasError = errorSymbols.includes(symbol);
+                    const isItemLoading = isLoading && !priceData && !hasError;
+                    const watchlistItem = toPricedItem(item, priceData);
 
-              const watchlistItem: WatchlistItemWithPrice = {
-                id: `watchlist-${symbol}`,
-                userId: 'current-user',
-                symbol,
-                addedAt: new Date(),
-                currentPrice: priceData?.price,
-                change: priceData?.change,
-                changePercent: priceData?.changePercent,
-                lastUpdated: priceData?.lastUpdated
-              };
-
-              return (
-                <WatchlistItemDisplay
-                  key={symbol}
-                  item={watchlistItem}
-                  onRemove={(sym) => mutate('remove', sym)}
-                  onClick={(sym) =>
-                    useDashboardStore.getState().setSelectedTicker(sym)
-                  }
-                  isLoading={isItemLoading}
-                  isRemoving={busy}
-                  error={hasError ? 'Failed to load price' : null}
-                />
-              );
-            })}
+                    return (
+                      <WatchlistItemDisplay
+                        key={item.id}
+                        item={watchlistItem}
+                        onRemove={(sym) => mutate('remove', sym)}
+                        onEdit={openEditDialog}
+                        onMoveUp={(sym) => reorderWithinGroup(sym, -1)}
+                        onMoveDown={(sym) => reorderWithinGroup(sym, 1)}
+                        onClick={(sym) =>
+                          useDashboardStore.getState().setSelectedTicker(sym)
+                        }
+                        isLoading={isItemLoading}
+                        isRemoving={busy}
+                        isReordering={reorderingSymbol === symbol}
+                        canMoveUp={index > 0}
+                        canMoveDown={index < groupItems.length - 1}
+                        error={hasError ? 'Failed to load price' : null}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </div>
         )}
         {addError ? (
@@ -290,6 +622,60 @@ export function WatchlistCard() {
           />
         ) : null}
       </CardContent>
+      <Dialog
+        open={Boolean(editingItem)}
+        onOpenChange={(open) => {
+          if (!open) setEditingItem(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Edit {editingItem ? editingItem.symbol : 'watchlist item'}
+            </DialogTitle>
+            <DialogDescription>
+              Update the exchange group and research note.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className='space-y-4'
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateMetadata();
+            }}
+          >
+            <div className='space-y-2'>
+              <Label htmlFor='watchlist-edit-exchange'>Exchange</Label>
+              <Input
+                id='watchlist-edit-exchange'
+                value={editExchange}
+                onChange={(e) => setEditExchange(e.target.value.toUpperCase())}
+                placeholder='Exchange'
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='watchlist-edit-note'>Note</Label>
+              <Textarea
+                id='watchlist-edit-note'
+                value={editNote}
+                maxLength={NOTE_MAX_LENGTH}
+                onChange={(e) => setEditNote(e.target.value)}
+                placeholder='Note'
+              />
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type='button' variant='outline'>
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button type='submit' disabled={busy}>
+                Save
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

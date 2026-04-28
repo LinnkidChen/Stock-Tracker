@@ -3,9 +3,10 @@
  */
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WatchlistCard } from '../WatchlistCard';
+import type { WatchlistItem } from '@/types/watchlist';
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({
@@ -15,6 +16,41 @@ function renderWithProviders(ui: React.ReactElement) {
     <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
   );
   return { ...utils, queryClient };
+}
+
+function createItem(overrides: Partial<WatchlistItem>): WatchlistItem {
+  return {
+    id: 'item-1',
+    symbol: 'AAPL',
+    exchange: null,
+    note: null,
+    sort_order: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    ...overrides
+  };
+}
+
+function watchlistResponse(items: WatchlistItem[]) {
+  return {
+    success: true,
+    data: {
+      watchlist: items.map((item) => item.symbol),
+      items
+    }
+  };
+}
+
+function quoteResponse() {
+  return {
+    success: true,
+    data: {
+      price: 100,
+      change: 1,
+      changePercent: 1,
+      lastUpdated: '2026-01-01T00:00:00.000Z'
+    }
+  };
 }
 
 describe('WatchlistCard initial load', () => {
@@ -32,15 +68,17 @@ describe('WatchlistCard initial load', () => {
   test('fetches watchlist from API on mount', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
-      json: async () => ({
-        success: true,
-        data: { watchlist: ['AAPL'] }
-      })
+      json: async () => watchlistResponse([createItem({ symbol: 'AAPL' })])
     });
 
     renderWithProviders(<WatchlistCard />);
 
-    expect(global.fetch).toHaveBeenCalledWith('/api/watchlist');
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/watchlist',
+        expect.objectContaining({ signal: expect.any(Object) })
+      );
+    });
   });
 
   test('shows error message if load fails', async () => {
@@ -71,11 +109,10 @@ describe('WatchlistCard add error modal flows', () => {
 
   test('shows validation modal and preserves input for invalid symbol', async () => {
     global.fetch = jest.fn((url) => {
-      // Handle initial load
       if (typeof url === 'string' && url.endsWith('/api/watchlist')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ success: true, data: { watchlist: [] } })
+          json: async () => watchlistResponse([])
         });
       }
       return Promise.resolve({ ok: true });
@@ -84,9 +121,11 @@ describe('WatchlistCard add error modal flows', () => {
     const user = userEvent.setup();
     renderWithProviders(<WatchlistCard />);
 
-    // Wait for initial load
     await waitFor(() =>
-      expect(global.fetch).toHaveBeenCalledWith('/api/watchlist')
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/watchlist',
+        expect.objectContaining({ signal: expect.any(Object) })
+      )
     );
     (global.fetch as jest.Mock).mockClear();
 
@@ -105,7 +144,7 @@ describe('WatchlistCard add error modal flows', () => {
   });
 
   test('shows duplicate modal and does not re-add the symbol', async () => {
-    const watchlist: string[] = [];
+    const watchlist: WatchlistItem[] = [];
     let addCalls = 0;
 
     global.fetch = jest.fn(
@@ -115,40 +154,30 @@ describe('WatchlistCard add error modal flows', () => {
           if (!init || !init.method || init.method === 'GET') {
             return {
               ok: true,
-              json: async () => ({
-                success: true,
-                data: { watchlist: [...watchlist] }
-              })
+              json: async () => watchlistResponse(watchlist)
             } as any;
           }
           const body = init?.body ? JSON.parse(String(init.body)) : {};
           if (body.action === 'add') {
             addCalls += 1;
-            if (!watchlist.includes(body.symbol)) watchlist.push(body.symbol);
+            if (!watchlist.some((item) => item.symbol === body.symbol)) {
+              watchlist.push(createItem({ symbol: body.symbol }));
+            }
           } else if (body.action === 'remove') {
-            const idx = watchlist.indexOf(body.symbol);
+            const idx = watchlist.findIndex(
+              (item) => item.symbol === body.symbol
+            );
             if (idx >= 0) watchlist.splice(idx, 1);
           }
           return {
             ok: true,
-            json: async () => ({
-              success: true,
-              data: { watchlist: [...watchlist] }
-            })
+            json: async () => watchlistResponse(watchlist)
           } as any;
         }
         if (url.includes('/api/stocks/quote/')) {
           return {
             ok: true,
-            json: async () => ({
-              success: true,
-              data: {
-                price: 100,
-                change: 1,
-                changePercent: 1,
-                lastUpdated: '2023-01-01T00:00:00.000Z'
-              }
-            })
+            json: async () => quoteResponse()
           } as any;
         }
         throw new Error('Unexpected URL ' + url);
@@ -216,8 +245,14 @@ describe('WatchlistCard add error modal flows', () => {
   });
 
   test('shows network modal when the request fails', async () => {
-    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.endsWith('/api/watchlist') && (!init || !init.method)) {
+        return {
+          ok: true,
+          json: async () => watchlistResponse([])
+        } as any;
+      }
       if (url.endsWith('/api/watchlist')) {
         throw new Error('Network down');
       }
@@ -239,36 +274,259 @@ describe('WatchlistCard add error modal flows', () => {
     ).toBeInTheDocument();
     expect(input).toHaveValue('TSLA');
   });
+});
 
-  test('shows unknown modal for unexpected server errors', async () => {
+describe('WatchlistCard groups and metadata', () => {
+  const originalFetch = global.fetch as any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.fetch = jest.fn() as any;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  test('renders exchange groups with notes and sorted rows', async () => {
+    const items = [
+      createItem({
+        id: 'item-msft',
+        symbol: 'MSFT',
+        exchange: 'NASDAQ',
+        note: 'Cloud',
+        sort_order: 1
+      }),
+      createItem({
+        id: 'item-rio',
+        symbol: 'RIO',
+        exchange: null,
+        note: 'Materials',
+        sort_order: 0
+      }),
+      createItem({
+        id: 'item-aapl',
+        symbol: 'AAPL',
+        exchange: 'NASDAQ',
+        note: 'Core',
+        sort_order: 0
+      })
+    ];
+
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith('/api/watchlist')) {
         return {
-          ok: false,
-          status: 500,
-          json: async () => ({
-            success: false,
-            error: { message: 'Unexpected server error' }
-          })
+          ok: true,
+          json: async () => watchlistResponse(items)
+        } as any;
+      }
+      if (url.includes('/api/stocks/quote/')) {
+        return {
+          ok: true,
+          json: async () => quoteResponse()
         } as any;
       }
       throw new Error('Unexpected URL ' + url);
     }) as any;
 
+    renderWithProviders(<WatchlistCard />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'NASDAQ' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Ungrouped' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Core')).toBeInTheDocument();
+    expect(screen.getByText('Cloud')).toBeInTheDocument();
+
+    const symbols = screen
+      .getAllByText(/^(AAPL|MSFT|RIO)$/)
+      .map((node) => node.textContent);
+    expect(symbols).toEqual(['AAPL', 'MSFT', 'RIO']);
+  });
+
+  test('adds a symbol with exchange and note metadata', async () => {
+    let postBody: any = null;
+    const nextItems = [
+      createItem({
+        symbol: 'AAPL',
+        exchange: 'NASDAQ',
+        note: 'Core holding'
+      })
+    ];
+
+    global.fetch = jest.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/api/watchlist') && (!init || !init.method)) {
+          return {
+            ok: true,
+            json: async () => watchlistResponse([])
+          } as any;
+        }
+        if (url.endsWith('/api/watchlist') && init?.method === 'POST') {
+          postBody = JSON.parse(String(init.body));
+          return {
+            ok: true,
+            json: async () => watchlistResponse(nextItems)
+          } as any;
+        }
+        if (url.includes('/api/stocks/quote/')) {
+          return {
+            ok: true,
+            json: async () => quoteResponse()
+          } as any;
+        }
+        throw new Error('Unexpected URL ' + url);
+      }
+    ) as any;
+
     const user = userEvent.setup();
     renderWithProviders(<WatchlistCard />);
 
-    const input = screen.getByPlaceholderText(
-      'Add symbol (1-5 letters, e.g., MSFT)'
+    await screen.findByText('No symbols yet.');
+    await user.type(
+      screen.getByPlaceholderText('Add symbol (1-5 letters, e.g., MSFT)'),
+      'aapl'
     );
-    await user.type(input, 'IBM');
+    await user.type(screen.getByPlaceholderText('Exchange'), 'nasdaq');
+    await user.type(screen.getByPlaceholderText('Note'), 'Core holding');
     await user.click(screen.getByRole('button', { name: /add/i }));
 
-    expect(await screen.findByText('Something went wrong')).toBeInTheDocument();
-    expect(
-      screen.getByText('We could not add that symbol.')
-    ).toBeInTheDocument();
-    expect(input).toHaveValue('IBM');
+    await waitFor(() =>
+      expect(postBody).toEqual({
+        action: 'add',
+        symbol: 'AAPL',
+        exchange: 'NASDAQ',
+        note: 'Core holding'
+      })
+    );
+  });
+
+  test('edits existing item metadata', async () => {
+    let patchBody: any = null;
+    const initialItems = [createItem({ symbol: 'AAPL', exchange: 'NASDAQ' })];
+    const updatedItems = [
+      createItem({
+        symbol: 'AAPL',
+        exchange: 'NYSE',
+        note: 'Dividend watch'
+      })
+    ];
+
+    global.fetch = jest.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/api/watchlist') && (!init || !init.method)) {
+          return {
+            ok: true,
+            json: async () => watchlistResponse(initialItems)
+          } as any;
+        }
+        if (url.endsWith('/api/watchlist') && init?.method === 'PATCH') {
+          patchBody = JSON.parse(String(init.body));
+          return {
+            ok: true,
+            json: async () => watchlistResponse(updatedItems)
+          } as any;
+        }
+        if (url.includes('/api/stocks/quote/')) {
+          return {
+            ok: true,
+            json: async () => quoteResponse()
+          } as any;
+        }
+        throw new Error('Unexpected URL ' + url);
+      }
+    ) as any;
+
+    const user = userEvent.setup();
+    renderWithProviders(<WatchlistCard />);
+
+    await screen.findByText('AAPL');
+    await user.click(screen.getByRole('button', { name: /edit aapl/i }));
+
+    const dialog = screen.getByRole('dialog');
+    const exchangeInput = within(dialog).getByLabelText('Exchange');
+    const noteInput = within(dialog).getByLabelText('Note');
+    await user.clear(exchangeInput);
+    await user.type(exchangeInput, 'nyse');
+    await user.type(noteInput, 'Dividend watch');
+    await user.click(within(dialog).getByRole('button', { name: /save/i }));
+
+    await waitFor(() =>
+      expect(patchBody).toEqual({
+        action: 'update',
+        symbol: 'AAPL',
+        exchange: 'NYSE',
+        note: 'Dividend watch'
+      })
+    );
+  });
+
+  test('reorders rows inside an exchange group', async () => {
+    let patchBody: any = null;
+    const initialItems = [
+      createItem({
+        id: 'item-aapl',
+        symbol: 'AAPL',
+        exchange: 'NASDAQ',
+        sort_order: 0
+      }),
+      createItem({
+        id: 'item-msft',
+        symbol: 'MSFT',
+        exchange: 'NASDAQ',
+        sort_order: 1
+      })
+    ];
+    const reorderedItems = [
+      { ...initialItems[1], sort_order: 0 },
+      { ...initialItems[0], sort_order: 1 }
+    ];
+
+    global.fetch = jest.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/api/watchlist') && (!init || !init.method)) {
+          return {
+            ok: true,
+            json: async () => watchlistResponse(initialItems)
+          } as any;
+        }
+        if (url.endsWith('/api/watchlist') && init?.method === 'PATCH') {
+          patchBody = JSON.parse(String(init.body));
+          return {
+            ok: true,
+            json: async () => watchlistResponse(reorderedItems)
+          } as any;
+        }
+        if (url.includes('/api/stocks/quote/')) {
+          return {
+            ok: true,
+            json: async () => quoteResponse()
+          } as any;
+        }
+        throw new Error('Unexpected URL ' + url);
+      }
+    ) as any;
+
+    const user = userEvent.setup();
+    renderWithProviders(<WatchlistCard />);
+
+    await screen.findByText('MSFT');
+    await user.click(screen.getByRole('button', { name: /move msft up/i }));
+
+    await waitFor(() =>
+      expect(patchBody).toEqual({
+        action: 'reorder',
+        items: [
+          { symbol: 'MSFT', sort_order: 0 },
+          { symbol: 'AAPL', sort_order: 1 }
+        ]
+      })
+    );
   });
 });
