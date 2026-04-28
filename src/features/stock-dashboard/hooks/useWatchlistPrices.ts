@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import { StockQuote, APIResponse } from '@/lib/types/stock-api';
+import { StockQuote } from '@/lib/types/stock-api';
 import { WatchlistPricesMap } from '@/types/stocks';
 import { useDashboardStore } from '../store';
+import {
+  isLongbridgeCredentialError,
+  readStockApiResponse
+} from '../lib/stock-api-error';
 
 const DEFAULT_REFRESH_INTERVAL_MS = 60_000;
 const DEFAULT_STALE_AFTER_MS = 60_000;
@@ -26,19 +30,10 @@ async function fetchStockQuote(
     );
     clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch stock quote: ${response.statusText}`);
-    }
-
-    const apiResponse: APIResponse<StockQuote> = await response.json();
-
-    if (!apiResponse.success || !apiResponse.data) {
-      throw new Error(
-        apiResponse.error?.message || 'Failed to fetch stock data'
-      );
-    }
-
-    return apiResponse.data;
+    return await readStockApiResponse<StockQuote>(
+      response,
+      `Failed to fetch stock quote: ${response.statusText}`
+    );
   } catch (error) {
     clearTimeout(timeoutId);
     throw error;
@@ -107,7 +102,8 @@ export function useWatchlistPrices(
       staleTime: staleAfterMs,
       refetchInterval,
       refetchIntervalInBackground: false,
-      retry: 3,
+      retry: (failureCount: number, error: Error) =>
+        !isLongbridgeCredentialError(error) && failureCount < 3,
       retryDelay: (attemptIndex: number) =>
         Math.min(1000 * 2 ** attemptIndex, 30000)
     }))

@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import Link from 'next/link';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
@@ -21,6 +22,7 @@ import {
 } from '@/lib/types/stock-api';
 import { useKlineSeries } from '../hooks/useKlineSeries';
 import { createKLineChart, type KLineChartHandle } from '../lib/klinecharts';
+import { isLongbridgeCredentialError } from '../lib/stock-api-error';
 import {
   DEFAULT_CHART_WORKSPACE,
   filterCandlesByRange,
@@ -261,6 +263,8 @@ export function KLineChart({
     title: string;
     description?: string;
     showRetry?: boolean;
+    actionHref?: string;
+    actionLabel?: string;
     tone?: 'error' | 'muted';
   } | null = null;
 
@@ -269,6 +273,15 @@ export function KLineChart({
       title: 'Enter a valid ticker to view the K line chart.',
       description: validation.error,
       tone: 'muted'
+    };
+  } else if (isLongbridgeCredentialError(error)) {
+    overlay = {
+      title: 'Market data setup required.',
+      description:
+        'Configure Longbridge credentials before loading K line charts.',
+      actionHref: '/dashboard/operations',
+      actionLabel: 'Open Operations',
+      tone: 'error'
     };
   } else if (chartError || isError) {
     overlay = {
@@ -435,6 +448,11 @@ export function KLineChart({
               {overlay.showRetry && (
                 <Button onClick={handleRetry} size='sm'>
                   Retry
+                </Button>
+              )}
+              {overlay.actionHref && overlay.actionLabel && (
+                <Button asChild size='sm' variant='outline'>
+                  <Link href={overlay.actionHref}>{overlay.actionLabel}</Link>
                 </Button>
               )}
             </div>

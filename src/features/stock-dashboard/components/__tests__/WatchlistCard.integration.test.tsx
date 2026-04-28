@@ -131,9 +131,12 @@ describe('WatchlistCard Persistence Integration', () => {
     const removeBtn = screen.getByRole('button', { name: /remove/i });
     await user.click(removeBtn);
 
-    // Verify removal
+    // Verify removal by checking the saved item controls disappear.
     await waitFor(() =>
-      expect(screen.queryByText('MSFT')).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /remove/i })
+      ).not.toBeInTheDocument()
     );
+    expect(screen.getByText('Build your watchlist')).toBeInTheDocument();
   });
 });
