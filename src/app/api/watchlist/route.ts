@@ -12,38 +12,17 @@ import {
 /**
  * Action types for watchlist operations
  */
-export type WatchlistAction = 'add' | 'remove';
+type WatchlistAction = 'add' | 'remove';
 
 /**
  * Request body structure for watchlist operations
  */
-export interface WatchlistRequestBody {
+interface WatchlistRequestBody {
   action?: WatchlistAction;
   symbol?: string;
 }
 
-/**
- * Response structure for successful watchlist operations
- */
-export interface WatchlistResponse {
-  success: true;
-  data: {
-    watchlist: string[];
-  };
-}
-
-/**
- * Response structure for failed watchlist operations
- */
-export interface WatchlistErrorResponse {
-  success: false;
-  error: {
-    message: string;
-    code?: string;
-  };
-}
-
-export const WATCHLIST_AUTH_MISCONFIGURED_CODE = 'WATCHLIST_AUTH_MISCONFIGURED';
+const WATCHLIST_AUTH_MISCONFIGURED_CODE = 'WATCHLIST_AUTH_MISCONFIGURED';
 const WATCHLIST_AUTH_MISCONFIGURED_MESSAGE =
   'Watchlist authentication is not configured on the server.';
 const WATCHLIST_AUTH_MISCONFIGURED_REMEDIATION =
