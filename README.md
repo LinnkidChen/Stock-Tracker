@@ -17,8 +17,8 @@ alerts, reports, settings, and overview pages remain planned.
   search, watchlist card, and portfolio holdings card.
 - `/dashboard/charts` with a klinecharts-based chart workspace for a selected
   ticker, interval, range, and display preferences.
-- `/dashboard/operations` with setup diagnostics for Clerk, Supabase, and
-  Longbridge configuration.
+- `/dashboard/operations` with setup diagnostics for Clerk, Supabase, Supabase
+  RLS access, and Longbridge configuration.
 - Longbridge-backed quote and k-line API routes.
 - Watchlist API with Supabase persistence, symbol metadata, ordering, and tests.
 - Portfolio holdings API with Supabase persistence for current symbol quantity
@@ -212,6 +212,11 @@ Security and Clerk-issued Supabase JWTs. The expected setup is:
 If this setup is missing, `/api/watchlist` returns
 `WATCHLIST_AUTH_MISCONFIGURED`, and `/api/portfolio/holdings` returns
 `PORTFOLIO_AUTH_MISCONFIGURED`.
+
+Use `/dashboard/operations` after signing in to run the setup checklist. It
+validates Clerk keys, Supabase URL/key configuration, Clerk's `supabase` JWT
+template, and read-only RLS access to the watchlist and portfolio tables without
+exposing secret values.
 
 ## Portfolio Model
 

@@ -31,6 +31,14 @@ function buildDiagnostics(
         remediation: 'Configure Supabase.'
       },
       {
+        id: 'supabase-rls',
+        title: 'Supabase RLS',
+        status: 'blocked',
+        summary: 'RLS policy access is failing.',
+        details: [],
+        remediation: 'Apply Supabase RLS policies.'
+      },
+      {
         id: 'longbridge',
         title: 'Longbridge',
         status: 'warning',
@@ -44,11 +52,12 @@ function buildDiagnostics(
 }
 
 describe('DashboardReadinessPanel', () => {
-  it('renders Supabase and Longbridge setup guidance when checks need attention', () => {
+  it('renders Supabase, RLS, and Longbridge setup guidance when checks need attention', () => {
     render(<DashboardReadinessPanel diagnostics={buildDiagnostics()} />);
 
     expect(screen.getByText('Finish first-run setup')).toBeInTheDocument();
     expect(screen.getByText('Supabase')).toBeInTheDocument();
+    expect(screen.getByText('Supabase RLS')).toBeInTheDocument();
     expect(screen.getByText('Longbridge')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /open operations/i })
