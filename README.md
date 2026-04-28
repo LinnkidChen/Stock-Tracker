@@ -170,8 +170,9 @@ cp env.example.txt .env.local
    - Clerk 认证密钥（初始化可选）
    - Sentry DSN（可选）。设置 `NEXT_PUBLIC_SENTRY_DISABLED=true` 可禁用。
    - Longbridge API Config（行情接口必需）：`LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`, `LONGPORT_ACCESS_TOKEN`。
-   - Supabase Config (用于关注列表持久化): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`.
-   - 关注列表认证集成：Clerk 中必须存在名为 `supabase` 的 JWT template，且 Supabase 必须配置为验证 Clerk 签发的 JWT。
+   - Supabase Config (用于关注列表与组合持仓持久化): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`.
+   - Supabase schema：执行 `database_schema/watchlist.sql` 与 `database_schema/portfolio.sql`。
+   - Supabase 认证集成：Clerk 中必须存在名为 `supabase` 的 JWT template，且 Supabase 必须配置为验证 Clerk 签发的 JWT。
 
 5. 启动开发服务:
 
@@ -181,15 +182,20 @@ pnpm dev
 
 应用将运行在 http://localhost:3000
 
-### 关注列表认证说明
+### Supabase 认证说明
 
-关注列表接口依赖 Supabase Row Level Security，并假设请求里的 JWT 满足：
+关注列表与组合持仓接口依赖 Supabase Row Level Security，并假设请求里的 JWT 满足：
 
 - JWT 来自 Clerk 的 `supabase` template
 - JWT 的 `sub` 等于 Clerk user id
 - Supabase 已配置为信任并验证 Clerk 签发的 JWT
 
 如果缺少以上配置，`/api/watchlist` 现在会返回 `503`，并带上稳定错误码 `WATCHLIST_AUTH_MISCONFIGURED`，而不是继续回退到不被 Supabase 接受的默认 Clerk token。
+`/api/portfolio/holdings` 会返回 `PORTFOLIO_AUTH_MISCONFIGURED`。
+
+### 组合持仓
+
+股票仪表盘的 Portfolio 卡片使用当前持仓模型：每个用户每个 symbol 一条持仓，包含 `quantity` 与 `avgCost`。卡片支持新增、编辑、删除，并用实时 quote 计算 Total Value、Day P&L 与 Total P&L。税务批次与交易流水不在当前版本范围内。
 
 ### 开发命令
 
@@ -201,4 +207,9 @@ pnpm lint         # 运行 ESLint
 pnpm lint:fix     # 修复 lint 问题
 pnpm format       # 使用 Prettier 格式化代码
 pnpm format:check # 校验格式
+pnpm test         # 运行 Jest 单元测试
+pnpm test:e2e     # 运行 Playwright 端到端测试
+pnpm test:e2e:ui  # 打开 Playwright UI 模式
 ```
+
+首次运行或 Playwright 升级后，执行 `pnpm exec playwright install chromium` 安装浏览器。Playwright 默认会在 `localhost:3100` 启动本地 Next.js 服务。若要复用已启动的服务，可设置 `PLAYWRIGHT_BASE_URL`。
