@@ -230,7 +230,10 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
   it('maps API_LIMIT_EXCEEDED to 429', async () => {
     mockStockServiceInstance.getQuote.mockRejectedValue({
       code: 'API_LIMIT_EXCEEDED',
-      message: 'Rate limit'
+      message: 'Rate limit',
+      details: {
+        retryAfter: 7
+      }
     });
 
     const response = await GET(createMockRequest(), {
@@ -238,6 +241,7 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
     });
 
     expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('7');
   });
 
   it('maps NETWORK_ERROR to 502', async () => {
