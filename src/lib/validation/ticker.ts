@@ -1,7 +1,13 @@
+const BARE_TICKER_PATTERN = /^[A-Z]{1,5}$/;
+const QUALIFIED_TICKER_PATTERN = /^[A-Z0-9]{1,6}\.(US|HK|SS|SZ|CN)$/;
+
 export function isValidTicker(symbol: string): boolean {
   if (!symbol) return false;
   const normalized = symbol.trim().toUpperCase();
-  return /^[A-Z]{1,5}$/.test(normalized);
+  return (
+    BARE_TICKER_PATTERN.test(normalized) ||
+    QUALIFIED_TICKER_PATTERN.test(normalized)
+  );
 }
 
 export function normalizeTicker(symbol: string): string {
@@ -17,20 +23,38 @@ export function validateTicker(symbol: string): {
   }
 
   const trimmed = symbol.trim();
+  const normalized = trimmed.toUpperCase();
   if (trimmed.length === 0) {
     return { isValid: false, error: 'Ticker symbol is required' };
   }
 
-  if (trimmed.length > 5) {
+  if (isValidTicker(normalized)) {
+    return { isValid: true };
+  }
+
+  if (!/^[A-Za-z0-9.]+$/.test(trimmed)) {
     return {
       isValid: false,
-      error: 'Ticker symbol must be 5 characters or less'
+      error: 'Ticker symbol must contain only letters, numbers, or one dot'
     };
   }
 
-  if (!/^[A-Za-z]+$/.test(trimmed)) {
-    return { isValid: false, error: 'Ticker symbol must contain only letters' };
+  if ((trimmed.match(/\./g) ?? []).length > 1) {
+    return {
+      isValid: false,
+      error: 'Ticker symbol must include at most one market suffix'
+    };
   }
 
-  return { isValid: true };
+  if (trimmed.includes('.')) {
+    return {
+      isValid: false,
+      error: 'Market-qualified symbols must look like AAPL.US or 0700.HK'
+    };
+  }
+
+  return {
+    isValid: false,
+    error: 'Ticker symbol must be 1-5 letters'
+  };
 }

@@ -8,7 +8,12 @@ import {
   TimeRange
 } from '../types/stock-api';
 import { logger } from '../logger';
-import { ProviderHealthCheck, StockDataProvider } from './types';
+import {
+  ProviderCapabilities,
+  ProviderHealthCheck,
+  StockDataProvider
+} from './types';
+import { LONGBRIDGE_QUOTE_PROVIDER } from './config';
 import {
   Config,
   QuoteContext,
@@ -33,6 +38,15 @@ const LONG_BRIDGE_RETRY_MAX_DELAY_MS = 2000;
 const LONG_BRIDGE_HEALTH_CACHE_TTL_MS = 30_000;
 const LONG_BRIDGE_HEALTH_SYMBOL = 'AAPL.US';
 
+export const LONGBRIDGE_PROVIDER_CAPABILITIES: ProviderCapabilities = {
+  quotes: true,
+  kLines: true,
+  realtime: 'polling',
+  intervals: ['day', 'week', 'month', 'year'],
+  markets: ['US', 'HK', 'CN'],
+  requiresCredentials: true
+};
+
 // Longbridge exposes const-enum Period values where 17 is Quarter and 18 is Year.
 const LONG_BRIDGE_PERIOD_MAP: Record<KLineInterval, number> = {
   day: 14,
@@ -56,7 +70,9 @@ interface ExecuteOptions {
 }
 
 export class LongbridgeProvider implements StockDataProvider {
+  id = LONGBRIDGE_QUOTE_PROVIDER;
   name = 'Longbridge';
+  capabilities = LONGBRIDGE_PROVIDER_CAPABILITIES;
   private static healthCache:
     | {
         expiresAt: number;
@@ -216,6 +232,7 @@ export class LongbridgeProvider implements StockDataProvider {
     if (!this.hasCredentials()) {
       return {
         provider: this.name,
+        providerId: this.id,
         status: 'unconfigured',
         latencyMs: 0,
         checkedAt,
@@ -249,6 +266,7 @@ export class LongbridgeProvider implements StockDataProvider {
 
       return {
         provider: this.name,
+        providerId: this.id,
         status: 'healthy',
         latencyMs: Math.max(0, this.now() - startedAt),
         checkedAt,
@@ -264,6 +282,7 @@ export class LongbridgeProvider implements StockDataProvider {
 
       return {
         provider: this.name,
+        providerId: this.id,
         status:
           apiError.code === 'INVALID_API_KEY' ? 'unconfigured' : 'degraded',
         latencyMs: Math.max(0, this.now() - startedAt),
