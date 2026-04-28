@@ -223,6 +223,24 @@ describe('ChartPageClient', () => {
     );
   });
 
+  test('renders suggested ticker actions when no chart symbol is selected', () => {
+    const replace = jest.fn();
+
+    (useRouter as jest.Mock).mockReturnValue({ replace });
+    (useSearchParams as jest.Mock).mockReturnValue(createSearchParams({}));
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore());
+
+    render(<ChartPageClient />);
+
+    expect(screen.getByText('Choose a ticker')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'AAPL' }));
+
+    expect(replace).toHaveBeenCalledWith(
+      '/dashboard/charts?symbol=AAPL&interval=day&range=1y'
+    );
+  });
+
   test('preserves the symbol and interval when the chart range changes', () => {
     const replace = jest.fn();
 
