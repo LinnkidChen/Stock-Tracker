@@ -1,11 +1,24 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
-import { NextRequest } from 'next/server';
+import type { NextFetchEvent, NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 const isProtectedRoute = createRouteMatcher(['/dashboard(.*)']);
 
-export default clerkMiddleware(async (auth, req: NextRequest) => {
+const clerkAuthMiddleware = clerkMiddleware(async (auth, req: NextRequest) => {
   if (isProtectedRoute(req)) await auth.protect();
 });
+
+export default function middleware(req: NextRequest, event: NextFetchEvent) {
+  if (
+    process.env.E2E_AUTH_BYPASS === 'true' &&
+    req.nextUrl.pathname.startsWith('/e2e-')
+  ) {
+    return NextResponse.next();
+  }
+
+  return clerkAuthMiddleware(req, event);
+}
+
 export const config = {
   matcher: [
     // Skip Next.js internals and all static files, unless found in search params
