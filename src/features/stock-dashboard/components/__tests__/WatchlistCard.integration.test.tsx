@@ -26,6 +26,13 @@ function renderWithProviders(ui: React.ReactElement) {
   );
 }
 
+function expectWatchlistLoadFetch() {
+  expect(global.fetch).toHaveBeenCalledWith(
+    '/api/watchlist',
+    expect.objectContaining({ signal: expect.any(Object) })
+  );
+}
+
 function createItem(symbol: string): WatchlistItem {
   return {
     id: `item-${symbol}`,
@@ -56,8 +63,7 @@ describe('WatchlistCard Persistence Integration', () => {
       if (typeof url === 'string' && url.endsWith('/api/watchlist')) {
         return Promise.resolve({
           ok: true,
-          json: () =>
-            Promise.resolve(watchlistResponse(['MSFT', 'GOOGL']))
+          json: () => Promise.resolve(watchlistResponse(['MSFT', 'GOOGL']))
         });
       }
       if (typeof url === 'string' && url.includes('/api/stocks/quote/')) {
@@ -76,10 +82,7 @@ describe('WatchlistCard Persistence Integration', () => {
     renderWithProviders(<WatchlistCard />);
 
     // Should call GET /api/watchlist
-    expect(global.fetch).toHaveBeenCalledWith(
-      '/api/watchlist',
-      expect.objectContaining({ signal: expect.any(Object) })
-    );
+    await waitFor(() => expectWatchlistLoadFetch());
 
     // Should display loaded symbols
     await waitFor(() => {
@@ -94,8 +97,7 @@ describe('WatchlistCard Persistence Integration', () => {
         if (!init || !init.method || init.method === 'GET') {
           return Promise.resolve({
             ok: true,
-            json: () =>
-              Promise.resolve(watchlistResponse(['MSFT']))
+            json: () => Promise.resolve(watchlistResponse(['MSFT']))
           });
         }
         if (init.method === 'POST') {
@@ -103,8 +105,7 @@ describe('WatchlistCard Persistence Integration', () => {
           if (body.action === 'remove' && body.symbol === 'MSFT') {
             return Promise.resolve({
               ok: true,
-              json: () =>
-                Promise.resolve(watchlistResponse([]))
+              json: () => Promise.resolve(watchlistResponse([]))
             });
           }
         }

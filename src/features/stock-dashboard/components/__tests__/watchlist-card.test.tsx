@@ -18,6 +18,13 @@ function renderWithProviders(ui: React.ReactElement) {
   return { ...utils, queryClient };
 }
 
+function expectWatchlistLoadFetch() {
+  expect(global.fetch).toHaveBeenCalledWith(
+    '/api/watchlist',
+    expect.objectContaining({ signal: expect.any(Object) })
+  );
+}
+
 function createItem(overrides: Partial<WatchlistItem>): WatchlistItem {
   return {
     id: 'item-1',
@@ -73,12 +80,7 @@ describe('WatchlistCard initial load', () => {
 
     renderWithProviders(<WatchlistCard />);
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/watchlist',
-        expect.objectContaining({ signal: expect.any(Object) })
-      );
-    });
+    await waitFor(() => expectWatchlistLoadFetch());
   });
 
   test('shows error message if load fails', async () => {
@@ -121,12 +123,7 @@ describe('WatchlistCard add error modal flows', () => {
     const user = userEvent.setup();
     renderWithProviders(<WatchlistCard />);
 
-    await waitFor(() =>
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/watchlist',
-        expect.objectContaining({ signal: expect.any(Object) })
-      )
-    );
+    await waitFor(() => expectWatchlistLoadFetch());
     (global.fetch as jest.Mock).mockClear();
 
     const input = screen.getByPlaceholderText(
@@ -245,19 +242,21 @@ describe('WatchlistCard add error modal flows', () => {
   });
 
   test('shows network modal when the request fails', async () => {
-    global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url.endsWith('/api/watchlist') && (!init || !init.method)) {
-        return {
-          ok: true,
-          json: async () => watchlistResponse([])
-        } as any;
+    global.fetch = jest.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/api/watchlist') && (!init || !init.method)) {
+          return {
+            ok: true,
+            json: async () => watchlistResponse([])
+          } as any;
+        }
+        if (url.endsWith('/api/watchlist')) {
+          throw new Error('Network down');
+        }
+        throw new Error('Unexpected URL ' + url);
       }
-      if (url.endsWith('/api/watchlist')) {
-        throw new Error('Network down');
-      }
-      throw new Error('Unexpected URL ' + url);
-    }) as any;
+    ) as any;
 
     const user = userEvent.setup();
     renderWithProviders(<WatchlistCard />);
