@@ -151,4 +151,29 @@ describe('ChartPageClient', () => {
       '/dashboard/charts?symbol=MSFT&interval=year'
     );
   });
+
+  test('renders suggested ticker actions when no chart symbol is selected', () => {
+    const replace = jest.fn();
+
+    (useRouter as jest.Mock).mockReturnValue({ replace });
+    (useSearchParams as jest.Mock).mockReturnValue({
+      get: () => null,
+      toString: () => ''
+    });
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue({
+      selectedTicker: null,
+      setSelectedTicker: jest.fn(),
+      quoteProvider: 'default'
+    });
+
+    render(<ChartPageClient />);
+
+    expect(screen.getByText('Choose a ticker')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'AAPL' }));
+
+    expect(replace).toHaveBeenCalledWith(
+      '/dashboard/charts?symbol=AAPL&interval=day'
+    );
+  });
 });

@@ -3,6 +3,13 @@
 import { useQueries } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import type { StockQuote } from '@/lib/types/stock-api';
+import {
+  isLongbridgeCredentialError,
+  readStockApiResponse
+} from '../lib/stock-api-error';
 
 // Market indices configuration
 const MARKET_INDICES = [
@@ -25,11 +32,10 @@ export function MarketOverview() {
           });
           clearTimeout(timeoutId);
 
-          if (!res.ok) throw new Error(`Failed to fetch ${symbol}`);
-          const data = await res.json();
-          if (!data.success || !data.data)
-            throw new Error(data.error?.message || 'Failed to fetch data');
-          return data.data;
+          return await readStockApiResponse<StockQuote>(
+            res,
+            `Failed to fetch ${symbol}`
+          );
         } catch (error) {
           clearTimeout(timeoutId);
           throw error;
@@ -37,11 +43,15 @@ export function MarketOverview() {
       },
       staleTime: 5 * 60 * 1000, // 5 minutes to respect rate limits
       refetchInterval: false as const, // Disabled auto-refresh
-      retry: 3
+      retry: (failureCount: number, error: Error) =>
+        !isLongbridgeCredentialError(error) && failureCount < 3
     }))
   });
 
   const hasError = queries.some((query) => query.error);
+  const hasCredentialError = queries.some((query) =>
+    isLongbridgeCredentialError(query.error)
+  );
   const isStale = queries.some((query) => query.isStale);
 
   const marketData = queries.map((query, index) => {
@@ -67,6 +77,29 @@ export function MarketOverview() {
     const percentSign = changePercent >= 0 ? '+' : '';
     return `${sign}${formatPrice(change)} (${percentSign}${changePercent.toFixed(2)}%)`;
   };
+
+  if (hasCredentialError && !marketData.some((item) => item.data)) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Market Overview</CardTitle>
+        </CardHeader>
+        <CardContent className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+          <div className='space-y-1'>
+            <div className='text-sm font-medium'>
+              Market data setup required
+            </div>
+            <p className='text-muted-foreground text-sm'>
+              Configure Longbridge credentials before loading market snapshots.
+            </p>
+          </div>
+          <Button asChild variant='outline' size='sm'>
+            <Link href='/dashboard/operations'>Open Operations</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (hasError && !marketData.some((item) => item.data)) {
     return (

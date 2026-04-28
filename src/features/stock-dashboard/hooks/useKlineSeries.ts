@@ -3,12 +3,15 @@
 import { useQuery } from '@tanstack/react-query';
 import * as Sentry from '@sentry/nextjs';
 import {
-  APIResponse,
   DEFAULT_KLINE_INTERVAL,
   type KLineInterval,
   KLineSeries
 } from '@/lib/types/stock-api';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
+import {
+  isLongbridgeCredentialError,
+  readStockApiResponse
+} from '../lib/stock-api-error';
 
 async function fetchKlineSeries(
   symbol: string,
@@ -32,23 +35,14 @@ async function fetchKlineSeries(
 
         span?.setAttribute('http.status', response.status);
 
-        if (!response.ok) {
-          throw new Error(
-            `Failed to fetch kline series: ${response.statusText}`
-          );
-        }
+        const series = await readStockApiResponse<KLineSeries>(
+          response,
+          `Failed to fetch kline series: ${response.statusText}`
+        );
 
-        const apiResponse: APIResponse<KLineSeries> = await response.json();
+        span?.setAttribute('kline.candles', series.candles.length);
 
-        if (!apiResponse.success || !apiResponse.data) {
-          throw new Error(
-            apiResponse.error?.message || 'Failed to fetch kline data'
-          );
-        }
-
-        span?.setAttribute('kline.candles', apiResponse.data.candles.length);
-
-        return apiResponse.data;
+        return series;
       } catch (error) {
         Sentry.captureException(error);
         throw error;
@@ -70,7 +64,8 @@ export function useKlineSeries(
     enabled: !!symbol,
     staleTime: 24 * 60 * 60 * 1000,
     refetchInterval: false as const,
-    retry: 2,
+    retry: (failureCount, error) =>
+      !isLongbridgeCredentialError(error) && failureCount < 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000)
   });
 

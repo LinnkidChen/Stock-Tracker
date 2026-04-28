@@ -40,7 +40,10 @@ describe('WatchlistCard initial load', () => {
 
     renderWithProviders(<WatchlistCard />);
 
-    expect(global.fetch).toHaveBeenCalledWith('/api/watchlist');
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/watchlist',
+      expect.objectContaining({ signal: expect.any(Object) })
+    );
   });
 
   test('shows error message if load fails', async () => {
@@ -54,6 +57,84 @@ describe('WatchlistCard initial load', () => {
     await waitFor(() => {
       expect(screen.getByText('Failed to load watchlist')).toBeInTheDocument();
     });
+  });
+
+  test('shows actionable empty state and adds a suggested symbol', async () => {
+    (global.fetch as jest.Mock).mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url.endsWith('/api/watchlist')) {
+          if (!init || !init.method || init.method === 'GET') {
+            return {
+              ok: true,
+              json: async () => ({
+                success: true,
+                data: { watchlist: [] }
+              })
+            } as any;
+          }
+
+          return {
+            ok: true,
+            json: async () => ({
+              success: true,
+              data: { watchlist: ['AAPL'] }
+            })
+          } as any;
+        }
+
+        if (url.includes('/api/stocks/quote/')) {
+          return {
+            ok: true,
+            json: async () => ({
+              success: true,
+              data: {
+                price: 100,
+                change: 1,
+                changePercent: 1,
+                lastUpdated: '2026-04-28T00:00:00.000Z'
+              }
+            })
+          } as any;
+        }
+
+        throw new Error('Unexpected URL ' + url);
+      }
+    );
+
+    const user = userEvent.setup();
+    renderWithProviders(<WatchlistCard />);
+
+    expect(await screen.findByText('Build your watchlist')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'AAPL' }));
+
+    expect(await screen.findByText('AAPL')).toBeInTheDocument();
+  });
+
+  test('shows setup-specific state when watchlist auth is misconfigured', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({
+        success: false,
+        error: {
+          code: 'WATCHLIST_AUTH_MISCONFIGURED',
+          message: 'Watchlist authentication is not configured on the server.'
+        }
+      })
+    });
+
+    renderWithProviders(<WatchlistCard />);
+
+    expect(
+      await screen.findByText('Watchlist setup required')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /open operations/i })
+    ).toHaveAttribute('href', '/dashboard/operations');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 });
 
@@ -86,7 +167,10 @@ describe('WatchlistCard add error modal flows', () => {
 
     // Wait for initial load
     await waitFor(() =>
-      expect(global.fetch).toHaveBeenCalledWith('/api/watchlist')
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/watchlist',
+        expect.objectContaining({ signal: expect.any(Object) })
+      )
     );
     (global.fetch as jest.Mock).mockClear();
 
@@ -94,7 +178,7 @@ describe('WatchlistCard add error modal flows', () => {
       'Add symbol (1-5 letters, e.g., MSFT)'
     );
     await user.type(input, 'AAPL1');
-    await user.click(screen.getByRole('button', { name: /add/i }));
+    await user.click(screen.getByRole('button', { name: /^Add$/ }));
 
     expect(await screen.findByText('Invalid symbol')).toBeInTheDocument();
     expect(
@@ -162,14 +246,14 @@ describe('WatchlistCard add error modal flows', () => {
       screen.getByPlaceholderText('Add symbol (1-5 letters, e.g., MSFT)'),
       'AAPL'
     );
-    await user.click(screen.getByRole('button', { name: /add/i }));
+    await user.click(screen.getByRole('button', { name: /^Add$/ }));
     await screen.findByText('AAPL');
 
     await user.type(
       screen.getByPlaceholderText('Add symbol (1-5 letters, e.g., MSFT)'),
       'AAPL'
     );
-    await user.click(screen.getByRole('button', { name: /add/i }));
+    await user.click(screen.getByRole('button', { name: /^Add$/ }));
 
     expect(
       await screen.findByText('Already in your watchlist')
@@ -206,7 +290,7 @@ describe('WatchlistCard add error modal flows', () => {
       'Add symbol (1-5 letters, e.g., MSFT)'
     );
     await user.type(input, 'MSFT');
-    await user.click(screen.getByRole('button', { name: /add/i }));
+    await user.click(screen.getByRole('button', { name: /^Add$/ }));
 
     expect(await screen.findByText('Too many requests')).toBeInTheDocument();
     expect(
@@ -231,7 +315,7 @@ describe('WatchlistCard add error modal flows', () => {
       'Add symbol (1-5 letters, e.g., MSFT)'
     );
     await user.type(input, 'TSLA');
-    await user.click(screen.getByRole('button', { name: /add/i }));
+    await user.click(screen.getByRole('button', { name: /^Add$/ }));
 
     expect(await screen.findByText('Connection issue')).toBeInTheDocument();
     expect(
@@ -263,7 +347,7 @@ describe('WatchlistCard add error modal flows', () => {
       'Add symbol (1-5 letters, e.g., MSFT)'
     );
     await user.type(input, 'IBM');
-    await user.click(screen.getByRole('button', { name: /add/i }));
+    await user.click(screen.getByRole('button', { name: /^Add$/ }));
 
     expect(await screen.findByText('Something went wrong')).toBeInTheDocument();
     expect(

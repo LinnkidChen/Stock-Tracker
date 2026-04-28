@@ -5,12 +5,18 @@ import { MarketOverview } from './MarketOverview';
 import { WatchlistCard } from './WatchlistCard';
 import { PortfolioCard } from './PortfolioCard';
 import { TickerInput } from './TickerInput';
+import type { SetupDiagnostics } from '@/lib/diagnostics/setup';
 
 import { useDashboardStore } from '../store';
 
 import { QuoteProviderToggle } from './QuoteProviderToggle';
+import { DashboardReadinessPanel } from './DashboardReadinessPanel';
 
-export function DashboardClient() {
+export function DashboardClient({
+  diagnostics
+}: {
+  diagnostics?: SetupDiagnostics;
+}) {
   const { hydrateFromStorage } = useDashboardStore();
   const tickerInputRef = useRef<HTMLInputElement>(null);
 
@@ -46,6 +52,8 @@ export function DashboardClient() {
           <TickerInput ref={tickerInputRef} />
         </div>
       </div>
+
+      <DashboardReadinessPanel diagnostics={diagnostics} />
 
       <MarketOverview />
 

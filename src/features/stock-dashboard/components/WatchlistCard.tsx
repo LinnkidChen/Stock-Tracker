@@ -15,6 +15,12 @@ import { TickerErrorModal } from './TickerErrorModal';
 import { useDashboardStore } from '../store';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
+import Link from 'next/link';
+
+const WATCHLIST_AUTH_MISCONFIGURED_CODE = 'WATCHLIST_AUTH_MISCONFIGURED';
+const SUGGESTED_WATCHLIST_SYMBOLS = ['AAPL', 'MSFT', 'NVDA'] as const;
+
+type WatchlistLoadIssue = 'auth-config' | 'generic' | null;
 
 type SpanLike = {
   setAttribute?: (key: string, value: string | number) => void;
@@ -54,7 +60,7 @@ export function WatchlistCard() {
   const [symbol, setSymbol] = useState('');
   const [busy, setBusy] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadIssue, setLoadIssue] = useState<WatchlistLoadIssue>(null);
   const [addError, setAddError] = useState<AddTickerError | null>(null);
 
   const [retryCount, setRetryCount] = useState(0);
@@ -72,11 +78,22 @@ export function WatchlistCard() {
               signal: controller.signal
             });
             span?.setAttribute?.('http.status_code', res.status);
+            const json = await res.json().catch(() => null);
 
-            if (!res.ok) throw new Error('Failed to load');
-            const json = await res.json();
+            if (!res.ok) {
+              if (
+                json?.error?.code === WATCHLIST_AUTH_MISCONFIGURED_CODE &&
+                !controller.signal.aborted
+              ) {
+                setLoadIssue('auth-config');
+                return;
+              }
+
+              throw new Error(json?.error?.message || 'Failed to load');
+            }
 
             if (!controller.signal.aborted && json.success) {
+              setLoadIssue(null);
               setItems(json.data.watchlist);
               span?.setAttribute?.(
                 'watchlist.count',
@@ -88,7 +105,7 @@ export function WatchlistCard() {
           } catch (e) {
             if (e instanceof Error && e.name === 'AbortError') return;
             logger.error('Failed to load watchlist', { error: e });
-            if (!controller.signal.aborted) setLoadError(true);
+            if (!controller.signal.aborted) setLoadIssue('generic');
           } finally {
             if (!controller.signal.aborted) setInitialLoading(false);
           }
@@ -131,7 +148,8 @@ export function WatchlistCard() {
         return {
           ok: false as const,
           status: res.status,
-          message: json?.error?.message || 'Request failed'
+          message: json?.error?.message || 'Request failed',
+          code: json?.error?.code
         };
       }
       setItems(json.data.watchlist);
@@ -140,7 +158,7 @@ export function WatchlistCard() {
       logger.error('Watchlist mutation failed', { error });
       setItems(prev); // rollback
       toast.error('Failed to update watchlist');
-      return { ok: false as const, error };
+      return { ok: false as const, error, code: undefined };
     } finally {
       setBusy(false);
     }
@@ -183,6 +201,11 @@ export function WatchlistCard() {
 
       const response = await mutate('add', normalized);
       if (!response.ok) {
+        if (response.code === WATCHLIST_AUTH_MISCONFIGURED_CODE) {
+          setLoadIssue('auth-config');
+          return;
+        }
+
         const mapped = response.status
           ? getAddTickerError({
               type: 'http',
@@ -201,6 +224,39 @@ export function WatchlistCard() {
 
       setSymbol('');
     });
+  };
+
+  const addSuggestedSymbol = async (suggestedSymbol: string) => {
+    setSymbol(suggestedSymbol);
+    if (items.includes(suggestedSymbol)) {
+      return;
+    }
+
+    const response = await mutate('add', suggestedSymbol);
+    if (!response.ok) {
+      if (response.code === WATCHLIST_AUTH_MISCONFIGURED_CODE) {
+        setLoadIssue('auth-config');
+        return;
+      }
+
+      const mapped = response.status
+        ? getAddTickerError({
+            type: 'http',
+            status: response.status,
+            message: response.message
+          })
+        : getAddTickerError({ type: 'network', error: response.error });
+      setAddError(mapped);
+      return;
+    }
+
+    setSymbol('');
+  };
+
+  const retryLoad = () => {
+    setLoadIssue(null);
+    setInitialLoading(true);
+    setRetryCount((c) => c + 1);
   };
 
   return (
@@ -225,25 +281,59 @@ export function WatchlistCard() {
         </form>
         {initialLoading ? (
           <LoadingSkeleton count={3} />
-        ) : loadError ? (
+        ) : loadIssue === 'auth-config' ? (
+          <div className='flex flex-col items-center gap-3 rounded-lg border border-dashed p-6 text-center'>
+            <div className='space-y-1'>
+              <div className='text-sm font-medium'>
+                Watchlist setup required
+              </div>
+              <p className='text-muted-foreground max-w-sm text-sm'>
+                Configure the Clerk Supabase JWT template and Supabase JWT
+                verification before loading saved watchlists.
+              </p>
+            </div>
+            <div className='flex flex-wrap justify-center gap-2'>
+              <Button asChild variant='outline' size='sm'>
+                <Link href='/dashboard/operations'>Open Operations</Link>
+              </Button>
+              <Button variant='ghost' size='sm' onClick={retryLoad}>
+                Retry
+              </Button>
+            </div>
+          </div>
+        ) : loadIssue === 'generic' ? (
           <div className='flex flex-col items-center gap-2'>
             <div className='text-destructive text-sm'>
               Failed to load watchlist
             </div>
-            <Button
-              variant='outline'
-              size='sm'
-              onClick={() => {
-                setLoadError(false);
-                setInitialLoading(true);
-                setRetryCount((c) => c + 1);
-              }}
-            >
+            <Button variant='outline' size='sm' onClick={retryLoad}>
               Retry
             </Button>
           </div>
         ) : items.length === 0 ? (
-          <div className='text-muted-foreground text-sm'>No symbols yet.</div>
+          <div className='rounded-lg border border-dashed p-6 text-center'>
+            <div className='space-y-2'>
+              <div className='text-sm font-medium'>Build your watchlist</div>
+              <p className='text-muted-foreground mx-auto max-w-sm text-sm'>
+                Add symbols you want to monitor. Start with one of these, or use
+                the input above.
+              </p>
+            </div>
+            <div className='mt-4 flex flex-wrap justify-center gap-2'>
+              {SUGGESTED_WATCHLIST_SYMBOLS.map((suggestedSymbol) => (
+                <Button
+                  key={suggestedSymbol}
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  disabled={busy}
+                  onClick={() => addSuggestedSymbol(suggestedSymbol)}
+                >
+                  {suggestedSymbol}
+                </Button>
+              ))}
+            </div>
+          </div>
         ) : isLoading && Object.keys(pricesMap).length === 0 ? (
           <LoadingSkeleton count={items.length} />
         ) : (

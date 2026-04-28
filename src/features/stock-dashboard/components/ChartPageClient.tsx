@@ -7,11 +7,14 @@ import { useDashboardStore } from '../store';
 import { KLineChart } from './KLineChart';
 import { TickerInput } from './TickerInput';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import {
   DEFAULT_KLINE_INTERVAL,
   isKLineInterval,
   type KLineInterval
 } from '@/lib/types/stock-api';
+
+const SUGGESTED_CHART_SYMBOLS = ['AAPL', 'MSFT', 'NVDA'] as const;
 
 function buildChartsHref(
   searchParams: URLSearchParams,
@@ -116,11 +119,28 @@ export function ChartPageClient() {
             className='h-full'
           />
         ) : (
-          <Card className='flex h-[400px] items-center justify-center'>
-            <CardContent className='pt-6 text-center'>
-              <p className='text-muted-foreground'>
-                Please select a stock ticker to view the chart.
-              </p>
+          <Card className='flex min-h-[400px] items-center justify-center'>
+            <CardContent className='space-y-5 pt-6 text-center'>
+              <div className='space-y-2'>
+                <h2 className='text-xl font-semibold'>Choose a ticker</h2>
+                <p className='text-muted-foreground max-w-md text-sm'>
+                  Search for a symbol or start with a commonly watched ticker to
+                  open the technical analysis chart.
+                </p>
+              </div>
+              <div className='flex flex-wrap justify-center gap-2'>
+                {SUGGESTED_CHART_SYMBOLS.map((suggestedSymbol) => (
+                  <Button
+                    key={suggestedSymbol}
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    onClick={() => handleTickerSubmit(suggestedSymbol)}
+                  >
+                    {suggestedSymbol}
+                  </Button>
+                ))}
+              </div>
             </CardContent>
           </Card>
         )}

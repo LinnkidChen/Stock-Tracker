@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { KLineChart } from '../KLineChart';
 import { useKlineSeries } from '../../hooks/useKlineSeries';
 import type { KLineInterval } from '@/lib/types/stock-api';
+import { StockApiResponseError } from '../../lib/stock-api-error';
 
 jest.mock('../../hooks/useKlineSeries');
 jest.mock('../../lib/klinecharts', () => ({
@@ -137,5 +138,30 @@ describe('KLineChart', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(refetch).toHaveBeenCalled();
+  });
+
+  it('renders setup-specific state for missing Longbridge credentials without retry', () => {
+    mockUseKlineSeries.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isError: true,
+      error: new StockApiResponseError(
+        'Longbridge credentials not configured',
+        401,
+        'INVALID_API_KEY'
+      ),
+      noData: false,
+      refetch: jest.fn()
+    } as any);
+
+    render(<KLineChart ticker='AAPL' />);
+
+    expect(screen.getByText('Market data setup required.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /open operations/i })
+    ).toHaveAttribute('href', '/dashboard/operations');
+    expect(
+      screen.queryByRole('button', { name: 'Retry' })
+    ).not.toBeInTheDocument();
   });
 });
