@@ -17,6 +17,13 @@ function renderWithProviders(ui: React.ReactElement) {
   return { ...utils, queryClient };
 }
 
+function expectWatchlistLoadFetch() {
+  expect(global.fetch).toHaveBeenCalledWith(
+    '/api/watchlist',
+    expect.objectContaining({ signal: expect.any(Object) })
+  );
+}
+
 describe('WatchlistCard initial load', () => {
   const originalFetch = global.fetch as any;
 
@@ -40,7 +47,7 @@ describe('WatchlistCard initial load', () => {
 
     renderWithProviders(<WatchlistCard />);
 
-    expect(global.fetch).toHaveBeenCalledWith('/api/watchlist');
+    expectWatchlistLoadFetch();
   });
 
   test('shows error message if load fails', async () => {
@@ -85,9 +92,7 @@ describe('WatchlistCard add error modal flows', () => {
     renderWithProviders(<WatchlistCard />);
 
     // Wait for initial load
-    await waitFor(() =>
-      expect(global.fetch).toHaveBeenCalledWith('/api/watchlist')
-    );
+    await waitFor(() => expectWatchlistLoadFetch());
     (global.fetch as jest.Mock).mockClear();
 
     const input = screen.getByPlaceholderText(

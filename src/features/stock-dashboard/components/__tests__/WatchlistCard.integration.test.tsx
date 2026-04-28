@@ -25,6 +25,13 @@ function renderWithProviders(ui: React.ReactElement) {
   );
 }
 
+function expectWatchlistLoadFetch() {
+  expect(global.fetch).toHaveBeenCalledWith(
+    '/api/watchlist',
+    expect.objectContaining({ signal: expect.any(Object) })
+  );
+}
+
 describe('WatchlistCard Persistence Integration', () => {
   test('loads watchlist from API on mount', async () => {
     (global.fetch as jest.Mock).mockImplementation((url) => {
@@ -54,7 +61,7 @@ describe('WatchlistCard Persistence Integration', () => {
     renderWithProviders(<WatchlistCard />);
 
     // Should call GET /api/watchlist
-    expect(global.fetch).toHaveBeenCalledWith('/api/watchlist');
+    expectWatchlistLoadFetch();
 
     // Should display loaded symbols
     await waitFor(() => {
