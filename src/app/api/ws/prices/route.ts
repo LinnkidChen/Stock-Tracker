@@ -1,9 +1,23 @@
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
+import {
+  consumeWebSocketUpgradeRateLimit,
+  getWebSocketMaxSymbols,
+  toRateLimitError
+} from '@/lib/rate-limit';
 import { APIResponse, StockQuote } from '@/lib/types/stock-api';
 
 export const runtime = 'edge';
 
 const POLL_INTERVAL_MS = 5000;
+const FORWARDED_QUOTE_HEADERS = [
+  'authorization',
+  'cookie',
+  'user-agent',
+  'x-forwarded-for',
+  'x-real-ip',
+  'cf-connecting-ip',
+  'true-client-ip'
+] as const;
 
 type PriceUpdateMessage = {
   type: 'price_update';
@@ -36,12 +50,32 @@ export async function GET(request: Request) {
     return new Response('Expected websocket', { status: 400 });
   }
 
+  const rateLimit = await consumeWebSocketUpgradeRateLimit(request);
+  if (!rateLimit.allowed) {
+    const error = rateLimit.error ?? toRateLimitError(rateLimit);
+
+    return createJsonResponse(
+      {
+        success: false,
+        data: null,
+        error,
+        timestamp: new Date().toISOString()
+      },
+      {
+        status: 429,
+        headers: rateLimit.headers
+      }
+    );
+  }
+
   const pair = new (globalThis as any).WebSocketPair();
   const client = pair[0];
   const server = pair[1];
   const requestUrl = new URL(request.url);
   const provider =
     requestUrl.searchParams.get('provider') || CANONICAL_QUOTE_PROVIDER;
+  const quoteFetchHeaders = createForwardedQuoteHeaders(request);
+  const maxSymbols = getWebSocketMaxSymbols();
 
   const subs = new Set<string>();
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -103,7 +137,12 @@ export async function GET(request: Request) {
       for (const symbol of Array.from(subs)) {
         if (!subs.has(symbol)) continue;
 
-        const result = await fetchPriceUpdate(requestUrl, symbol, provider);
+        const result = await fetchPriceUpdate(
+          requestUrl,
+          symbol,
+          provider,
+          quoteFetchHeaders
+        );
 
         if (result.ok) {
           safeSend(result.message);
@@ -143,6 +182,16 @@ export async function GET(request: Request) {
 
       if (msg?.type === 'subscribe' && typeof msg.symbol === 'string') {
         const symbol = normalizeSymbol(msg.symbol);
+        if (!subs.has(symbol) && subs.size >= maxSymbols) {
+          safeSend({
+            type: 'error',
+            symbol,
+            code: 'API_LIMIT_EXCEEDED',
+            message: `WebSocket subscription limit exceeded. Maximum ${maxSymbols} symbols per connection.`
+          });
+          return;
+        }
+
         subs.add(symbol);
         safeSend({ type: 'subscribed', symbol });
         triggerPoll();
@@ -173,7 +222,8 @@ export async function GET(request: Request) {
 async function fetchPriceUpdate(
   requestUrl: URL,
   symbol: string,
-  provider: string
+  provider: string,
+  forwardedHeaders: Headers | undefined
 ): Promise<PriceFetchResult> {
   const quoteUrl = new URL(
     `/api/stocks/quote/${encodeURIComponent(symbol)}`,
@@ -182,9 +232,12 @@ async function fetchPriceUpdate(
   quoteUrl.searchParams.set('provider', provider);
 
   try {
-    const response = await fetch(quoteUrl.toString(), {
-      cache: 'no-store'
-    });
+    const requestInit: RequestInit = { cache: 'no-store' };
+    if (forwardedHeaders) {
+      requestInit.headers = forwardedHeaders;
+    }
+
+    const response = await fetch(quoteUrl.toString(), requestInit);
     const apiResponse = await readAPIResponse<StockQuote>(response);
 
     if (!response.ok || !apiResponse?.success || !apiResponse.data) {
@@ -222,6 +275,29 @@ async function fetchPriceUpdate(
       message: error instanceof Error ? error.message : 'Quote stream failed'
     };
   }
+}
+
+function createJsonResponse(payload: unknown, init: ResponseInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set('content-type', 'application/json');
+
+  return new Response(JSON.stringify(payload), {
+    ...init,
+    headers
+  });
+}
+
+function createForwardedQuoteHeaders(request: Request): Headers | undefined {
+  const headers = new Headers();
+
+  FORWARDED_QUOTE_HEADERS.forEach((header) => {
+    const value = request.headers.get(header);
+    if (value) {
+      headers.set(header, value);
+    }
+  });
+
+  return Array.from(headers.keys()).length > 0 ? headers : undefined;
 }
 
 async function readAPIResponse<T>(

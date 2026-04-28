@@ -4,6 +4,13 @@ import { auth } from '@clerk/nextjs/server';
 import { logger } from '@/lib/logger';
 import { isSupabaseAuthConfigError } from '@/lib/supabase/server';
 import {
+  consumeAuthenticatedMutationRateLimit,
+  consumeMutationAttemptRateLimit,
+  recordRateLimitTelemetry,
+  toRateLimitError,
+  type RateLimitResult
+} from '@/lib/rate-limit';
+import {
   createPortfolioHolding,
   DuplicatePortfolioHoldingError,
   getPortfolioHoldings
@@ -28,6 +35,25 @@ function createErrorResponse(message: string, status: number, code?: string) {
       }
     },
     { status }
+  );
+}
+
+function createRateLimitResponse(result: RateLimitResult) {
+  const error = result.error ?? toRateLimitError(result);
+
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code: error.code,
+        message: error.message,
+        details: error.details
+      }
+    },
+    {
+      status: 429,
+      headers: result.headers
+    }
   );
 }
 
@@ -86,9 +112,24 @@ export async function POST(req: NextRequest) {
   return Sentry.startSpan(
     { op: 'http.server', name: 'POST /api/portfolio/holdings' },
     async (span) => {
+      const attemptLimit = await consumeMutationAttemptRateLimit(req);
+      recordRateLimitTelemetry(span, attemptLimit);
+      if (!attemptLimit.allowed) {
+        return createRateLimitResponse(attemptLimit);
+      }
+
       const { userId } = await auth();
       if (!userId) {
         return createErrorResponse('Unauthorized', 401);
+      }
+
+      const userLimit = await consumeAuthenticatedMutationRateLimit(
+        req,
+        userId
+      );
+      recordRateLimitTelemetry(span, userLimit);
+      if (!userLimit.allowed) {
+        return createRateLimitResponse(userLimit);
       }
 
       let body: PortfolioHoldingRequestBody;

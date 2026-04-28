@@ -2,6 +2,8 @@
  * @jest-environment jsdom
  */
 import { GET } from '../route';
+import { getOptionalRateLimitUserId } from '@/lib/rate-limit-auth';
+import { consumeStockReadRateLimit } from '@/lib/rate-limit';
 import { StockProviderFactory } from '@/lib/providers/factory';
 import { APIResponse } from '@/lib/types/stock-api';
 import { ProviderHealthCheck } from '@/lib/providers/types';
@@ -42,10 +44,26 @@ jest.mock('@/lib/providers/factory', () => ({
     getProvider: jest.fn()
   }
 }));
+jest.mock('@/lib/rate-limit-auth', () => ({
+  getOptionalRateLimitUserId: jest.fn()
+}));
+jest.mock('@/lib/rate-limit', () => ({
+  consumeStockReadRateLimit: jest.fn(),
+  recordRateLimitTelemetry: jest.fn(),
+  toRateLimitError: jest.fn((result) => result.error)
+}));
 
 const mockGetProvider = StockProviderFactory.getProvider as jest.MockedFunction<
   typeof StockProviderFactory.getProvider
 >;
+const mockGetOptionalRateLimitUserId =
+  getOptionalRateLimitUserId as jest.MockedFunction<
+    typeof getOptionalRateLimitUserId
+  >;
+const mockConsumeStockReadRateLimit =
+  consumeStockReadRateLimit as jest.MockedFunction<
+    typeof consumeStockReadRateLimit
+  >;
 
 const mockProvider = {
   healthCheck: jest.fn()
@@ -55,6 +73,15 @@ describe('/api/stocks/providers/health API Route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetProvider.mockReturnValue(mockProvider as any);
+    mockGetOptionalRateLimitUserId.mockResolvedValue(null);
+    mockConsumeStockReadRateLimit.mockResolvedValue({
+      allowed: true,
+      degraded: false,
+      policy: 'anonymousStockReads',
+      scope: 'stock-read',
+      subject: { type: 'ip', id: '127.0.0.1' },
+      source: 'upstash'
+    });
   });
 
   it('returns healthy provider status', async () => {
@@ -80,6 +107,46 @@ describe('/api/stocks/providers/health API Route', () => {
     expect(responseData.data).toEqual(health);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(mockGetProvider).toHaveBeenCalledWith('longbridge');
+    expect(mockConsumeStockReadRateLimit).toHaveBeenCalledWith(
+      expect.anything(),
+      null
+    );
+  });
+
+  it('returns 429 when the stock read limiter denies the request', async () => {
+    mockConsumeStockReadRateLimit.mockResolvedValueOnce({
+      allowed: false,
+      degraded: false,
+      policy: 'anonymousStockReads',
+      scope: 'stock-read',
+      subject: { type: 'ip', id: '127.0.0.1' },
+      source: 'upstash',
+      limit: 120,
+      remaining: 0,
+      reset: 6000,
+      retryAfter: 5,
+      headers: {
+        'Retry-After': '5',
+        'RateLimit-Limit': '120',
+        'RateLimit-Remaining': '0',
+        'RateLimit-Reset': '6'
+      },
+      error: {
+        code: 'API_LIMIT_EXCEEDED',
+        message: 'Rate limit exceeded. Please try again later.',
+        details: { retryAfter: 5 }
+      }
+    });
+
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/providers/health')
+    );
+    const responseData: APIResponse<null> = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('5');
+    expect(responseData.error?.code).toBe('API_LIMIT_EXCEEDED');
+    expect(mockGetProvider).not.toHaveBeenCalled();
   });
 
   it('returns degraded provider status', async () => {

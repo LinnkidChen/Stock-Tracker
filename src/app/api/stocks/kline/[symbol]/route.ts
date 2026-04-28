@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
+import { getOptionalRateLimitUserId } from '@/lib/rate-limit-auth';
 import { getStockService } from '@/lib/services/stock-service';
 import {
   createAPIError,
@@ -9,6 +10,11 @@ import {
   getStatusCodeForError,
   isAPIError
 } from '@/lib/services/api-errors';
+import {
+  consumeStockReadRateLimit,
+  recordRateLimitTelemetry,
+  toRateLimitError
+} from '@/lib/rate-limit';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { DEFAULT_KLINE_INTERVAL, isKLineInterval } from '@/lib/types/stock-api';
 import { logger } from '@/lib/logger';
@@ -25,6 +31,21 @@ export async function GET(
       const requestPath = getRequestPath(request);
 
       try {
+        const rateLimitUserId = await getOptionalRateLimitUserId(requestPath);
+        const rateLimit = await consumeStockReadRateLimit(
+          request,
+          rateLimitUserId
+        );
+        recordRateLimitTelemetry(span, rateLimit);
+
+        if (!rateLimit.allowed) {
+          return createErrorResponse(
+            rateLimit.error ?? toRateLimitError(rateLimit),
+            429,
+            rateLimit.headers
+          );
+        }
+
         const { symbol: rawSymbol } = await params;
         const symbol = normalizeTicker(rawSymbol ?? '');
 

@@ -5,7 +5,7 @@ import { SUPABASE_JWT_TEMPLATE } from '@/lib/supabase/server';
 
 export type DiagnosticStatus = 'ready' | 'warning' | 'blocked';
 
-export type DiagnosticCheckId = 'clerk' | 'supabase' | 'longbridge';
+export type DiagnosticCheckId = 'clerk' | 'supabase' | 'longbridge' | 'upstash';
 
 export interface SetupDiagnosticCheck {
   id: DiagnosticCheckId;
@@ -38,6 +38,11 @@ const LONGBRIDGE_ENV_KEYS = [
   'LONGPORT_APP_KEY',
   'LONGPORT_APP_SECRET',
   'LONGPORT_ACCESS_TOKEN'
+] as const;
+
+const UPSTASH_ENV_KEYS = [
+  'UPSTASH_REDIS_REST_URL',
+  'UPSTASH_REDIS_REST_TOKEN'
 ] as const;
 
 function hasEnvValue(key: string): boolean {
@@ -140,7 +145,9 @@ async function createSupabaseCheck(
   const hasLegacyAnonKey = hasEnvValue('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
   if (!hasEnvValue('NEXT_PUBLIC_SUPABASE_URL')) {
-    blockedReasons.push('Missing environment variable: NEXT_PUBLIC_SUPABASE_URL.');
+    blockedReasons.push(
+      'Missing environment variable: NEXT_PUBLIC_SUPABASE_URL.'
+    );
   } else if (!isValidUrl(supabaseUrl)) {
     blockedReasons.push(
       'NEXT_PUBLIC_SUPABASE_URL must be a valid absolute URL.'
@@ -169,7 +176,9 @@ async function createSupabaseCheck(
     );
   } else {
     try {
-      const token = await authState.getToken({ template: SUPABASE_JWT_TEMPLATE });
+      const token = await authState.getToken({
+        template: SUPABASE_JWT_TEMPLATE
+      });
 
       if (token?.trim()) {
         details.push(
@@ -212,7 +221,8 @@ async function createSupabaseCheck(
       id: 'supabase',
       title: 'Supabase',
       status: 'warning',
-      summary: 'Supabase config is present, but token verification is incomplete.',
+      summary:
+        'Supabase config is present, but token verification is incomplete.',
       details,
       remediation:
         'Retry while signed in. If the warning persists, confirm Clerk can issue the Supabase JWT template.'
@@ -253,6 +263,35 @@ function createLongbridgeCheck(): SetupDiagnosticCheck {
     title: 'Longbridge',
     status: 'ready',
     summary: 'Market data credentials are configured.',
+    details,
+    remediation: null
+  };
+}
+
+function createUpstashCheck(): SetupDiagnosticCheck {
+  const missingKeys = getMissingEnvKeys(UPSTASH_ENV_KEYS);
+  const details =
+    missingKeys.length > 0
+      ? [`Missing environment variables: ${joinKeys(missingKeys)}.`]
+      : ['Required Upstash Redis environment variables are present.'];
+
+  if (missingKeys.length > 0) {
+    return {
+      id: 'upstash',
+      title: 'Upstash Redis',
+      status: 'warning',
+      summary: 'Distributed API rate limiting is running in fail-open mode.',
+      details,
+      remediation:
+        'Configure Upstash Redis REST URL and token to enforce shared rate limits across instances.'
+    };
+  }
+
+  return {
+    id: 'upstash',
+    title: 'Upstash Redis',
+    status: 'ready',
+    summary: 'Distributed rate limiting configuration is ready.',
     details,
     remediation: null
   };
@@ -303,7 +342,8 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
   const checks = [
     createClerkCheck(authState),
     await createSupabaseCheck(authState),
-    createLongbridgeCheck()
+    createLongbridgeCheck(),
+    createUpstashCheck()
   ];
   const status = getOverallStatus(checks);
 

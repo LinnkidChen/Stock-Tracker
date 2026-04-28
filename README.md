@@ -81,7 +81,7 @@ Stock Tracker 是一个全面的股票投资组合分析与指标平台，旨在
 | 功能               | 描述                                                                                         |
 | :----------------- | :------------------------------------------------------------------------------------------- |
 | **股票仪表盘**     | 使用 TradingView Lightweight Charts 的实时价格图表，支持蜡烛图形态、成交量指标与技术分析工具 |
-| **K 线图 Tab**     | 使用 klinecharts 展示 1 年日 K 线；仅支持单一 ticker，由 Longbridge 数据源提供                |
+| **K 线图 Tab**     | 使用 klinecharts 展示 1 年日 K 线；仅支持单一 ticker，由 Longbridge 数据源提供               |
 | **投资组合追踪**   | 监控多个组合的实时盈亏、资产配置可视化与绩效指标                                             |
 | **技术指标**       | RSI、MACD、移动平均、布林带等综合指标套件                                                    |
 | **关注列表与提醒** | 创建关注列表并设置价格提醒与指标提醒                                                         |
@@ -170,6 +170,7 @@ cp env.example.txt .env.local
    - Clerk 认证密钥（初始化可选）
    - Sentry DSN（可选）。设置 `NEXT_PUBLIC_SENTRY_DISABLED=true` 可禁用。
    - Longbridge API Config（行情接口必需）：`LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`, `LONGPORT_ACCESS_TOKEN`。
+   - Upstash Redis（分布式限流与 Longbridge provider budget）：`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`。缺少时限流会 fail-open。
    - Supabase Config (用于关注列表与组合持仓持久化): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`.
    - Supabase schema：执行 `database_schema/watchlist.sql` 与 `database_schema/portfolio.sql`。
    - Supabase 认证集成：Clerk 中必须存在名为 `supabase` 的 JWT template，且 Supabase 必须配置为验证 Clerk 签发的 JWT。

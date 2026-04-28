@@ -4,6 +4,13 @@ import { auth } from '@clerk/nextjs/server';
 import { logger } from '@/lib/logger';
 import { isSupabaseAuthConfigError } from '@/lib/supabase/server';
 import {
+  consumeAuthenticatedMutationRateLimit,
+  consumeMutationAttemptRateLimit,
+  recordRateLimitTelemetry,
+  toRateLimitError,
+  type RateLimitResult
+} from '@/lib/rate-limit';
+import {
   deletePortfolioHolding,
   DuplicatePortfolioHoldingError,
   PortfolioHoldingNotFoundError,
@@ -32,6 +39,25 @@ function createErrorResponse(message: string, status: number, code?: string) {
   );
 }
 
+function createRateLimitResponse(result: RateLimitResult) {
+  const error = result.error ?? toRateLimitError(result);
+
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code: error.code,
+        message: error.message,
+        details: error.details
+      }
+    },
+    {
+      status: 429,
+      headers: result.headers
+    }
+  );
+}
+
 function handlePortfolioAuthMisconfiguration(message: string, error: unknown) {
   logger.error(message, {
     error,
@@ -52,9 +78,24 @@ export async function PATCH(
   return Sentry.startSpan(
     { op: 'http.server', name: 'PATCH /api/portfolio/holdings/[id]' },
     async (span) => {
+      const attemptLimit = await consumeMutationAttemptRateLimit(req);
+      recordRateLimitTelemetry(span, attemptLimit);
+      if (!attemptLimit.allowed) {
+        return createRateLimitResponse(attemptLimit);
+      }
+
       const { userId } = await auth();
       if (!userId) {
         return createErrorResponse('Unauthorized', 401);
+      }
+
+      const userLimit = await consumeAuthenticatedMutationRateLimit(
+        req,
+        userId
+      );
+      recordRateLimitTelemetry(span, userLimit);
+      if (!userLimit.allowed) {
+        return createRateLimitResponse(userLimit);
       }
 
       const { id } = await params;
@@ -109,15 +150,30 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   return Sentry.startSpan(
     { op: 'http.server', name: 'DELETE /api/portfolio/holdings/[id]' },
     async (span) => {
+      const attemptLimit = await consumeMutationAttemptRateLimit(req);
+      recordRateLimitTelemetry(span, attemptLimit);
+      if (!attemptLimit.allowed) {
+        return createRateLimitResponse(attemptLimit);
+      }
+
       const { userId } = await auth();
       if (!userId) {
         return createErrorResponse('Unauthorized', 401);
+      }
+
+      const userLimit = await consumeAuthenticatedMutationRateLimit(
+        req,
+        userId
+      );
+      recordRateLimitTelemetry(span, userLimit);
+      if (!userLimit.allowed) {
+        return createRateLimitResponse(userLimit);
       }
 
       const { id } = await params;

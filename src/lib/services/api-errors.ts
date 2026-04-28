@@ -16,7 +16,8 @@ const API_ERROR_CODES = new Set<string>([
  */
 export function createErrorResponse<T = null>(
   error: APIError,
-  statusCode?: number
+  statusCode?: number,
+  headers?: HeadersInit
 ): NextResponse<APIResponse<T>> {
   const response: APIResponse<T> = {
     success: false,
@@ -27,11 +28,12 @@ export function createErrorResponse<T = null>(
 
   const status = statusCode || getStatusCodeForError(error.code);
   const retryAfter = getRetryAfterFromError(error);
-  const headers: HeadersInit = retryAfter
-    ? { 'Retry-After': String(retryAfter) }
-    : {};
+  const responseHeaders: HeadersInit = {
+    ...(headers ?? {}),
+    ...(retryAfter ? { 'Retry-After': String(retryAfter) } : {})
+  };
 
-  return NextResponse.json(response, { status, headers });
+  return NextResponse.json(response, { status, headers: responseHeaders });
 }
 
 /**

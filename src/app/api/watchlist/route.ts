@@ -4,6 +4,12 @@ import { isValidTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { logger } from '@/lib/logger';
 import { isSupabaseAuthConfigError } from '@/lib/supabase/server';
 import {
+  consumeAuthenticatedMutationRateLimit,
+  consumeMutationAttemptRateLimit,
+  toRateLimitError,
+  type RateLimitResult
+} from '@/lib/rate-limit';
+import {
   getWatchlistItems,
   addToWatchlist,
   removeFromWatchlist,
@@ -109,35 +115,23 @@ function createValidationError(message: string) {
   );
 }
 
-// Very simple in-memory stores keyed by client id (ip header) for rate limiting
-const rateBuckets = new Map<string, { count: number; reset: number }>();
+function createWatchlistRateLimitResponse(result: RateLimitResult) {
+  const error = result.error ?? toRateLimitError(result);
 
-/**
- * Extracts client identifier from request headers for rate limiting
- */
-function getClientId(req: Request): string {
-  const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0]?.trim();
-  return ip || 'anonymous';
-}
-
-/**
- * Implements simple rate limiting per client
- */
-function rateLimit(id: string, limit = 60, windowMs = 60_000) {
-  const now = Date.now();
-  const bucket = rateBuckets.get(id);
-  if (!bucket || now > bucket.reset) {
-    rateBuckets.set(id, { count: 1, reset: now + windowMs });
-    return { allowed: true };
-  }
-  if (bucket.count >= limit) {
-    return {
-      allowed: false,
-      retryAfter: Math.ceil((bucket.reset - now) / 1000)
-    };
-  }
-  bucket.count++;
-  return { allowed: true };
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code: error.code,
+        message: error.message,
+        details: error.details
+      }
+    },
+    {
+      status: 429,
+      headers: result.headers
+    }
+  );
 }
 
 export async function GET() {
@@ -169,21 +163,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const id = getClientId(req);
-  const rl = rateLimit(id);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { message: 'Rate limit exceeded. Try again later.' }
-      },
-      {
-        status: 429,
-        headers: rl.retryAfter
-          ? { 'Retry-After': String(rl.retryAfter) }
-          : undefined
-      }
-    );
+  const attemptLimit = await consumeMutationAttemptRateLimit(req);
+  if (!attemptLimit.allowed) {
+    return createWatchlistRateLimitResponse(attemptLimit);
   }
 
   const { userId } = await auth();
@@ -192,6 +174,11 @@ export async function POST(req: Request) {
       { success: false, error: { message: 'Unauthorized' } },
       { status: 401 }
     );
+  }
+
+  const userLimit = await consumeAuthenticatedMutationRateLimit(req, userId);
+  if (!userLimit.allowed) {
+    return createWatchlistRateLimitResponse(userLimit);
   }
 
   let body: WatchlistRequestBody;
@@ -261,21 +248,9 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const id = getClientId(req);
-  const rl = rateLimit(id);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { message: 'Rate limit exceeded. Try again later.' }
-      },
-      {
-        status: 429,
-        headers: rl.retryAfter
-          ? { 'Retry-After': String(rl.retryAfter) }
-          : undefined
-      }
-    );
+  const attemptLimit = await consumeMutationAttemptRateLimit(req);
+  if (!attemptLimit.allowed) {
+    return createWatchlistRateLimitResponse(attemptLimit);
   }
 
   const { userId } = await auth();
@@ -284,6 +259,11 @@ export async function PATCH(req: Request) {
       { success: false, error: { message: 'Unauthorized' } },
       { status: 401 }
     );
+  }
+
+  const userLimit = await consumeAuthenticatedMutationRateLimit(req, userId);
+  if (!userLimit.allowed) {
+    return createWatchlistRateLimitResponse(userLimit);
   }
 
   let body: WatchlistPatchRequestBody;
