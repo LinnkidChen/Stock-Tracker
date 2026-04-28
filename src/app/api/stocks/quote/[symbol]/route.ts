@@ -5,12 +5,14 @@ import { getStockService } from '@/lib/services/stock-service';
 import {
   createAPIError,
   createErrorResponse,
+  createRateLimitResponse,
   createSuccessResponse,
   getStatusCodeForError,
   isAPIError
 } from '@/lib/services/api-errors';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, createRateLimitHeaders } from '@/lib/rate-limit';
 
 export async function GET(
   request: NextRequest,
@@ -22,6 +24,11 @@ export async function GET(
       const requestPath = getRequestPath(request);
 
       try {
+        const rateLimit = await enforceQuoteRateLimit(request, requestPath);
+        if (rateLimit.response) {
+          return rateLimit.response;
+        }
+
         const { symbol: rawSymbol } = await params;
         const symbol = normalizeTicker(rawSymbol);
 
@@ -54,6 +61,7 @@ export async function GET(
         const quote = await stockService.getQuote(symbol, provider);
 
         return createSuccessResponse(quote, {
+          ...rateLimit.headers,
           'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30'
         });
       } catch (error) {
@@ -94,6 +102,35 @@ export async function GET(
       }
     }
   );
+}
+
+async function enforceQuoteRateLimit(request: NextRequest, path: string) {
+  try {
+    const result = await checkRateLimit(request, 'quote');
+    const headers = createRateLimitHeaders(result);
+
+    if (!result.allowed) {
+      return {
+        response: createRateLimitResponse(result.retryAfter, headers),
+        headers
+      };
+    }
+
+    return { headers };
+  } catch (error) {
+    logger.error('Quote API rate limiter unavailable', { error, path });
+
+    return {
+      response: createErrorResponse(
+        createAPIError(
+          'RATE_LIMIT_UNAVAILABLE',
+          'Rate limit service unavailable'
+        ),
+        503
+      ),
+      headers: {}
+    };
+  }
 }
 
 function getRequestPath(request: NextRequest): string {

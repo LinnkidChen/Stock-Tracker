@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import { GET } from '../route';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { getStockService } from '@/lib/services/stock-service';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { APIResponse, StockQuote } from '@/lib/types/stock-api';
@@ -47,9 +48,26 @@ jest.mock('@sentry/nextjs', () => ({
   captureException: jest.fn()
 }));
 
+jest.mock('@/lib/rate-limit', () => ({
+  checkRateLimit: jest.fn(),
+  createRateLimitHeaders: jest.fn((result) =>
+    result.retryAfter
+      ? {
+          'Retry-After': String(result.retryAfter),
+          'X-RateLimit-Limit': String(result.limit),
+          'X-RateLimit-Remaining': String(result.remaining),
+          'X-RateLimit-Reset': String(Math.ceil(result.resetAt / 1000))
+        }
+      : {}
+  )
+}));
+
 jest.mock('@/lib/services/stock-service');
 jest.mock('@/lib/validation/ticker');
 
+const mockCheckRateLimit = checkRateLimit as jest.MockedFunction<
+  typeof checkRateLimit
+>;
 const mockGetStockService = getStockService as jest.MockedFunction<
   typeof getStockService
 >;
@@ -89,6 +107,14 @@ const mockStockQuote: StockQuote = {
 describe('/api/stocks/quote/[symbol] API Route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCheckRateLimit.mockResolvedValue({
+      allowed: true,
+      limit: 120,
+      windowSeconds: 60,
+      remaining: 119,
+      resetAt: Date.now() + 60_000,
+      source: 'supabase'
+    });
     mockGetStockService.mockReturnValue(mockStockServiceInstance as any);
     mockNormalizeTicker.mockImplementation((value: string) =>
       value.trim().toUpperCase()
@@ -120,6 +146,29 @@ describe('/api/stocks/quote/[symbol] API Route', () => {
     expect(response.headers.get('Cache-Control')).toBe(
       'public, s-maxage=10, stale-while-revalidate=30'
     );
+    expect(mockCheckRateLimit).toHaveBeenCalledWith(expect.anything(), 'quote');
+  });
+
+  it('returns 429 when the shared limiter rejects the quote request', async () => {
+    mockCheckRateLimit.mockResolvedValue({
+      allowed: false,
+      limit: 120,
+      windowSeconds: 60,
+      remaining: 0,
+      resetAt: Date.now() + 12_000,
+      retryAfter: 12,
+      source: 'supabase'
+    });
+
+    const response = await GET(createMockRequest(), {
+      params: createMockParams('AAPL').params
+    });
+    const responseData: APIResponse<null> = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(responseData.error?.code).toBe('API_LIMIT_EXCEEDED');
+    expect(response.headers.get('Retry-After')).toBe('12');
+    expect(mockStockServiceInstance.getQuote).not.toHaveBeenCalled();
   });
 
   it('passes the canonical provider through to the service layer', async () => {
