@@ -1,9 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import { getStockService } from '@/lib/services/stock-service';
+import {
+  createAPIError,
+  createErrorResponse,
+  createSuccessResponse,
+  getStatusCodeForError,
+  isAPIError
+} from '@/lib/services/api-errors';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
-import { APIResponse, StockQuote, APIError } from '@/lib/types/stock-api';
 import { logger } from '@/lib/logger';
 
 export async function GET(
@@ -25,10 +31,10 @@ export async function GET(
         // Validate the ticker symbol
         const validation = validateTicker(symbol);
         if (!validation.isValid) {
-          const error: APIError = {
-            code: 'INVALID_SYMBOL',
-            message: validation.error || 'Invalid ticker symbol'
-          };
+          const error = createAPIError(
+            'INVALID_SYMBOL',
+            validation.error || 'Invalid ticker symbol'
+          );
 
           logger.warn(`API Error: ${error.message}`, {
             symbol: rawSymbol,
@@ -36,14 +42,7 @@ export async function GET(
             path: requestPath
           });
 
-          const response: APIResponse<null> = {
-            success: false,
-            data: null,
-            error,
-            timestamp: new Date().toISOString()
-          };
-
-          return NextResponse.json(response, { status: 400 });
+          return createErrorResponse(error, 400);
         }
 
         // Get the stock quote
@@ -54,19 +53,8 @@ export async function GET(
         const stockService = getStockService();
         const quote = await stockService.getQuote(symbol, provider);
 
-        // Return successful response
-        const response: APIResponse<StockQuote> = {
-          success: true,
-          data: quote,
-          error: null,
-          timestamp: new Date().toISOString()
-        };
-
-        return NextResponse.json(response, {
-          status: 200,
-          headers: {
-            'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30'
-          }
+        return createSuccessResponse(quote, {
+          'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30'
         });
       } catch (error) {
         Sentry.captureException(error);
@@ -87,14 +75,7 @@ export async function GET(
             logger.warn(`API Warning: ${error.message}`, logContext);
           }
 
-          const response: APIResponse<null> = {
-            success: false,
-            data: null,
-            error: error,
-            timestamp: new Date().toISOString()
-          };
-
-          return NextResponse.json(response, { status: statusCode });
+          return createErrorResponse(error);
         }
 
         // Handle unexpected errors
@@ -103,46 +84,16 @@ export async function GET(
           error
         });
 
-        const response: APIResponse<null> = {
-          success: false,
-          data: null,
-          error: {
+        return createErrorResponse(
+          {
             code: 'UNKNOWN_ERROR',
             message: 'An unexpected error occurred'
           },
-          timestamp: new Date().toISOString()
-        };
-
-        return NextResponse.json(response, { status: 500 });
+          500
+        );
       }
     }
   );
-}
-
-function isAPIError(error: unknown): error is APIError {
-  return (
-    error !== null &&
-    typeof error === 'object' &&
-    'code' in error &&
-    'message' in error
-  );
-}
-
-function getStatusCodeForError(code: string): number {
-  switch (code) {
-    case 'INVALID_SYMBOL':
-    case 'INVALID_PROVIDER':
-      return 400;
-    case 'API_LIMIT_EXCEEDED':
-      return 429;
-    case 'INVALID_API_KEY':
-      return 401;
-    case 'NETWORK_ERROR':
-      return 502;
-    case 'UNKNOWN_ERROR':
-    default:
-      return 500;
-  }
 }
 
 function getRequestPath(request: NextRequest): string {
