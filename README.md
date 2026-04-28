@@ -18,8 +18,10 @@ alerts, reports, settings, and overview pages remain planned.
 - `/dashboard/charts` with a klinecharts-based chart workspace for a selected
   ticker, interval, range, and display preferences.
 - `/dashboard/operations` with setup diagnostics for Clerk, Supabase, and
-  Longbridge configuration.
-- Longbridge-backed quote and k-line API routes.
+  market data provider configuration.
+- Multi-provider quote and k-line API routes with Longbridge primary routing,
+  Yahoo Finance fallback, provider health metadata, and per-symbol provider
+  selection.
 - Watchlist API with Supabase persistence, symbol metadata, ordering, and tests.
 - Portfolio holdings API with Supabase persistence for current symbol quantity
   and average cost, plus tests.
@@ -85,16 +87,16 @@ alerts, reports, settings, and overview pages remain planned.
 
 ### API Routes
 
-| Route                          | Methods                          | Status      | Description                                                    |
-| :----------------------------- | :------------------------------- | :---------- | :------------------------------------------------------------- |
-| `/api/stocks/quote/[symbol]`   | `GET`                            | Implemented | Fetches a quote from the configured stock provider.            |
-| `/api/stocks/kline/[symbol]`   | `GET`                            | Implemented | Fetches k-line series data from the configured stock provider. |
-| `/api/stocks/providers/health` | `GET`                            | Implemented | Checks provider readiness.                                     |
-| `/api/ws/prices`               | `GET` WebSocket upgrade          | Implemented | Poll-backed price updates for subscribed symbols.              |
-| `/api/watchlist`               | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist CRUD, metadata, and ordering.          |
-| `/api/portfolio/holdings`      | `GET`, `POST`                    | Implemented | Authenticated current holdings list and creation.              |
-| `/api/portfolio/holdings/[id]` | `PATCH`, `DELETE`                | Implemented | Authenticated holdings update and deletion.                    |
-| `/api/log`                     | `POST`                           | Implemented | Client log ingestion.                                          |
+| Route                          | Methods                          | Status      | Description                                               |
+| :----------------------------- | :------------------------------- | :---------- | :-------------------------------------------------------- |
+| `/api/stocks/quote/[symbol]`   | `GET`                            | Implemented | Fetches a quote through the provider registry.            |
+| `/api/stocks/kline/[symbol]`   | `GET`                            | Implemented | Fetches k-line series data through the provider registry. |
+| `/api/stocks/providers/health` | `GET`                            | Implemented | Checks provider readiness and fallback metadata.          |
+| `/api/ws/prices`               | `GET` WebSocket upgrade          | Implemented | Poll-backed price updates for subscribed symbols.         |
+| `/api/watchlist`               | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist CRUD, metadata, and ordering.     |
+| `/api/portfolio/holdings`      | `GET`, `POST`                    | Implemented | Authenticated current holdings list and creation.         |
+| `/api/portfolio/holdings/[id]` | `PATCH`, `DELETE`                | Implemented | Authenticated holdings update and deletion.               |
+| `/api/log`                     | `POST`                           | Implemented | Client log ingestion.                                     |
 
 ## Tech Stack
 
@@ -104,7 +106,8 @@ alerts, reports, settings, and overview pages remain planned.
 - Styling: Tailwind CSS v4 and shadcn/ui components
 - Authentication: Clerk
 - Persistence: Supabase with Clerk-issued JWTs
-- Stock data provider: Longbridge
+- Stock data providers: Longbridge and Yahoo Finance fallback via the provider
+  registry
 - Charting: klinecharts
 - State management: Zustand and React Query
 - Validation: Zod and local ticker validation
@@ -185,8 +188,9 @@ cp env.example.txt .env.local
 4. Configure environment variables as needed:
 
 - Clerk: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`
-- Longbridge: `LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`,
-  `LONGPORT_ACCESS_TOKEN`, `LONGPORT_REGION`
+- Longbridge primary provider: `LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`,
+  `LONGPORT_ACCESS_TOKEN`, `LONGPORT_REGION`. If these are missing, auto
+  routing can still fall back to the no-credential Yahoo Finance adapter.
 - Supabase: `NEXT_PUBLIC_SUPABASE_URL`,
   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`,
   `SUPABASE_SERVICE_ROLE_KEY`

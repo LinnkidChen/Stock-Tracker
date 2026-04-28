@@ -29,8 +29,8 @@ export const ADD_TICKER_ERROR_COPY: Record<
 > = {
   validation: {
     title: 'Invalid symbol',
-    message: 'Ticker symbols must be 1-5 letters.',
-    nextStep: 'Use 1-5 letters, like MSFT, and try again.'
+    message: 'Use a 1-5 letter symbol or a market suffix like 0700.HK.',
+    nextStep: 'Use a symbol like MSFT, AAPL.US, or 0700.HK and try again.'
   },
   duplicate: {
     title: 'Already in your watchlist',

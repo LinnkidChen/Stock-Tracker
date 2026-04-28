@@ -40,7 +40,7 @@ describe('dashboard provider state', () => {
     );
   });
 
-  it('migrates removed provider values to Longbridge', () => {
+  it('migrates removed provider values to auto routing', () => {
     localStorage.setItem('dashboard:quoteProvider', removedProvider);
 
     act(() => {
@@ -152,7 +152,9 @@ describe('dashboard provider state', () => {
       });
     });
 
-    expect(JSON.parse(localStorage.getItem(CHART_WORKSPACE_STORAGE_KEY)!)).toEqual({
+    expect(
+      JSON.parse(localStorage.getItem(CHART_WORKSPACE_STORAGE_KEY)!)
+    ).toEqual({
       symbol: 'NVDA',
       interval: 'month',
       range: '6m',
