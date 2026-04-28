@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { QuoteProviderToggle } from './QuoteProviderToggle';
 import { useDashboardStore } from '../store';
@@ -12,74 +12,125 @@ import {
   isKLineInterval,
   type KLineInterval
 } from '@/lib/types/stock-api';
-
-function buildChartsHref(
-  searchParams: URLSearchParams,
-  symbol?: string | null,
-  interval?: KLineInterval
-) {
-  const nextSearchParams = new URLSearchParams(searchParams.toString());
-
-  if (symbol) {
-    nextSearchParams.set('symbol', symbol);
-  } else {
-    nextSearchParams.delete('symbol');
-  }
-
-  if (interval) {
-    nextSearchParams.set('interval', interval);
-  } else {
-    nextSearchParams.delete('interval');
-  }
-
-  const query = nextSearchParams.toString();
-  return query ? `/dashboard/charts?${query}` : '/dashboard/charts';
-}
+import {
+  buildChartsHref,
+  isChartRange,
+  type ChartPreferences,
+  type ChartRange
+} from '../lib/chart-workspace';
 
 export function ChartPageClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { selectedTicker, setSelectedTicker, quoteProvider } =
-    useDashboardStore();
+  const {
+    selectedTicker,
+    setSelectedTicker,
+    quoteProvider,
+    hydrateFromStorage,
+    chartWorkspace,
+    setChartWorkspace,
+    setChartPreferences
+  } = useDashboardStore();
+  const [hydrated, setHydrated] = useState(false);
 
-  const symbol = searchParams.get('symbol');
+  const symbol = useMemo(() => {
+    const rawSymbol = searchParams.get('symbol')?.trim();
+    return rawSymbol ? rawSymbol.toUpperCase() : null;
+  }, [searchParams]);
   const rawInterval = searchParams.get('interval')?.toLowerCase();
-  const interval = isKLineInterval(rawInterval)
+  const queryInterval = isKLineInterval(rawInterval)
     ? rawInterval
-    : DEFAULT_KLINE_INTERVAL;
-  const intervalRef = useRef(interval);
+    : null;
+  const rawRange = searchParams.get('range')?.toLowerCase();
+  const queryRange = isChartRange(rawRange) ? rawRange : null;
 
-  intervalRef.current = interval;
+  const interval: KLineInterval =
+    queryInterval ?? chartWorkspace.interval ?? DEFAULT_KLINE_INTERVAL;
+  const range: ChartRange = queryRange ?? chartWorkspace.range;
+  const activeTicker = symbol ?? chartWorkspace.symbol ?? selectedTicker;
+  const workspaceSymbol = activeTicker ?? null;
 
   useEffect(() => {
-    if (!symbol || symbol === selectedTicker) {
+    hydrateFromStorage();
+    setHydrated(true);
+  }, [hydrateFromStorage]);
+
+  useEffect(() => {
+    if (!hydrated) {
       return;
     }
 
-    setSelectedTicker(symbol);
-  }, [selectedTicker, setSelectedTicker, symbol]);
+    if (activeTicker && activeTicker !== selectedTicker) {
+      setSelectedTicker(activeTicker);
+    }
+
+    if (
+      chartWorkspace.symbol !== workspaceSymbol ||
+      chartWorkspace.interval !== interval ||
+      chartWorkspace.range !== range
+    ) {
+      setChartWorkspace({
+        symbol: workspaceSymbol,
+        interval,
+        range
+      });
+    }
+  }, [
+    activeTicker,
+    chartWorkspace.interval,
+    chartWorkspace.range,
+    chartWorkspace.symbol,
+    hydrated,
+    interval,
+    range,
+    selectedTicker,
+    setChartWorkspace,
+    setSelectedTicker,
+    workspaceSymbol
+  ]);
 
   useEffect(() => {
-    if (symbol || !selectedTicker) {
+    if (!hydrated) {
+      return;
+    }
+
+    const nextWorkspace = {
+      ...(!symbol && activeTicker ? { symbol: activeTicker } : {}),
+      ...(!queryInterval ? { interval } : {}),
+      ...(!queryRange ? { range } : {})
+    };
+
+    if (Object.keys(nextWorkspace).length === 0) {
       return;
     }
 
     router.replace(
       buildChartsHref(
-        new URLSearchParams(),
-        selectedTicker,
-        intervalRef.current
+        new URLSearchParams(searchParams.toString()),
+        nextWorkspace
       )
     );
-  }, [router, selectedTicker, symbol]);
+  }, [
+    activeTicker,
+    hydrated,
+    interval,
+    queryInterval,
+    queryRange,
+    range,
+    router,
+    searchParams,
+    symbol
+  ]);
 
-  const activeTicker = symbol || selectedTicker;
   const handleTickerSubmit = (ticker: string) => {
     router.replace(
       buildChartsHref(
         new URLSearchParams(searchParams.toString()),
-        ticker,
-        interval
+        {
+          symbol: ticker,
+          interval,
+          range
+        }
       )
     );
   };
@@ -88,10 +139,32 @@ export function ChartPageClient() {
     router.replace(
       buildChartsHref(
         new URLSearchParams(searchParams.toString()),
-        activeTicker,
-        nextInterval
+        {
+          symbol: activeTicker,
+          interval: nextInterval,
+          range
+        }
       )
     );
+  };
+
+  const handleRangeChange = (nextRange: ChartRange) => {
+    router.replace(
+      buildChartsHref(
+        new URLSearchParams(searchParams.toString()),
+        {
+          symbol: activeTicker,
+          interval,
+          range: nextRange
+        }
+      )
+    );
+  };
+
+  const handlePreferencesChange = (
+    preferences: Partial<ChartPreferences>
+  ) => {
+    setChartPreferences(preferences);
   };
 
   return (
@@ -113,6 +186,10 @@ export function ChartPageClient() {
             provider={quoteProvider}
             interval={interval}
             onIntervalChange={handleIntervalChange}
+            range={range}
+            onRangeChange={handleRangeChange}
+            preferences={chartWorkspace.preferences}
+            onPreferencesChange={handlePreferencesChange}
             className='h-full'
           />
         ) : (

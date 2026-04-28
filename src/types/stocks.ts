@@ -26,6 +26,9 @@ export interface WatchlistItem {
   userId: string;
   symbol: string;
   addedAt: Date;
+  exchange?: string | null;
+  note?: string | null;
+  sort_order?: number | null;
   priceAlert?: number;
   notes?: string;
 }
