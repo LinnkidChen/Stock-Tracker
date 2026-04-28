@@ -4,7 +4,7 @@ import { getSetupDiagnostics } from '@/lib/diagnostics/setup';
 
 export const metadata: Metadata = {
   title: 'Operations | Stock Tracker',
-  description: 'Product readiness diagnostics'
+  description: 'Environment readiness diagnostics'
 };
 
 export const dynamic = 'force-dynamic';

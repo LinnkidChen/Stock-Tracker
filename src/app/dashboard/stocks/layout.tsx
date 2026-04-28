@@ -2,8 +2,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Stock Dashboard | Stock Tracker',
-  description:
-    'Real-time stock portfolio dashboard with interactive charts and market data'
+  description: 'Stock dashboard with market data, watchlist, and holdings'
 };
 
 export default function StocksLayout({
