@@ -56,8 +56,7 @@ describe('WatchlistCard Persistence Integration', () => {
       if (typeof url === 'string' && url.endsWith('/api/watchlist')) {
         return Promise.resolve({
           ok: true,
-          json: () =>
-            Promise.resolve(watchlistResponse(['MSFT', 'GOOGL']))
+          json: () => Promise.resolve(watchlistResponse(['MSFT', 'GOOGL']))
         });
       }
       if (typeof url === 'string' && url.includes('/api/stocks/quote/')) {
@@ -94,8 +93,7 @@ describe('WatchlistCard Persistence Integration', () => {
         if (!init || !init.method || init.method === 'GET') {
           return Promise.resolve({
             ok: true,
-            json: () =>
-              Promise.resolve(watchlistResponse(['MSFT']))
+            json: () => Promise.resolve(watchlistResponse(['MSFT']))
           });
         }
         if (init.method === 'POST') {
@@ -103,8 +101,7 @@ describe('WatchlistCard Persistence Integration', () => {
           if (body.action === 'remove' && body.symbol === 'MSFT') {
             return Promise.resolve({
               ok: true,
-              json: () =>
-                Promise.resolve(watchlistResponse([]))
+              json: () => Promise.resolve(watchlistResponse([]))
             });
           }
         }

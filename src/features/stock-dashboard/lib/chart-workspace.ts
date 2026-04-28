@@ -10,11 +10,7 @@ export const CHART_WORKSPACE_STORAGE_KEY = 'dashboard:chartWorkspace:v1';
 export const CHART_RANGES = ['1m', '3m', '6m', '1y', 'max'] as const;
 export type ChartRange = (typeof CHART_RANGES)[number];
 
-export const CHART_CANDLE_TYPES = [
-  'candle_solid',
-  'ohlc',
-  'area'
-] as const;
+export const CHART_CANDLE_TYPES = ['candle_solid', 'ohlc', 'area'] as const;
 export type ChartCandleType = (typeof CHART_CANDLE_TYPES)[number];
 
 export interface ChartPreferences {
@@ -122,7 +118,9 @@ export function filterCandlesByRange(
     startDate.setMonth(startDate.getMonth() - months);
   }
 
-  const filtered = candles.filter((candle) => candle.timestamp >= startDate.getTime());
+  const filtered = candles.filter(
+    (candle) => candle.timestamp >= startDate.getTime()
+  );
 
   return filtered.length > 0 ? filtered : [candles[candles.length - 1]];
 }

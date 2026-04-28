@@ -15,8 +15,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-coverage:
-    name: Test coverage
+  static-quality:
+    name: Static quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Run strict lint
+        run: pnpm lint:strict
+
+      - name: Run type check
+        run: pnpm typecheck
+
+  unit-coverage:
+    name: Unit coverage
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -39,7 +71,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run tests with coverage
-        run: pnpm exec jest --coverage --ci --runInBand
+        run: pnpm test:coverage --ci --runInBand
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -48,3 +80,69 @@ jobs:
           name: coverage-report
           path: coverage
           if-no-files-found: ignore
+
+  build-and-smoke:
+    name: Build and smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build production app
+        run: pnpm build
+        env:
+          CLERK_SECRET_KEY: ''
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ''
+          NEXT_PUBLIC_SENTRY_DISABLED: 'true'
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright smoke tests
+        run: pnpm test:e2e:smoke
+        env:
+          CLERK_SECRET_KEY: ''
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ''
+          NEXT_PUBLIC_SENTRY_DISABLED: 'true'
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit production dependencies
+        run: pnpm audit:prod

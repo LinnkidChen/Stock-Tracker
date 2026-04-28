@@ -138,15 +138,17 @@ describe('ChartPageClient', () => {
         range: '6m'
       })
     );
-    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
-      selectedTicker: 'GOOGL',
-      chartWorkspace: {
-        ...DEFAULT_CHART_WORKSPACE,
-        symbol: 'AAPL',
-        interval: 'day',
-        range: '1m'
-      }
-    }));
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(
+      createStore({
+        selectedTicker: 'GOOGL',
+        chartWorkspace: {
+          ...DEFAULT_CHART_WORKSPACE,
+          symbol: 'AAPL',
+          interval: 'day',
+          range: '1m'
+        }
+      })
+    );
 
     render(<ChartPageClient />);
 
@@ -160,13 +162,15 @@ describe('ChartPageClient', () => {
     (useSearchParams as jest.Mock).mockReturnValue(
       createSearchParams({ symbol: 'AAPL' })
     );
-    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
-      selectedTicker: 'AAPL',
-      chartWorkspace: {
-        ...DEFAULT_CHART_WORKSPACE,
-        symbol: 'AAPL'
-      }
-    }));
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(
+      createStore({
+        selectedTicker: 'AAPL',
+        chartWorkspace: {
+          ...DEFAULT_CHART_WORKSPACE,
+          symbol: 'AAPL'
+        }
+      })
+    );
 
     render(<ChartPageClient />);
 
@@ -178,14 +182,16 @@ describe('ChartPageClient', () => {
 
     (useRouter as jest.Mock).mockReturnValue({ replace });
     (useSearchParams as jest.Mock).mockReturnValue(createSearchParams({}));
-    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
-      chartWorkspace: {
-        ...DEFAULT_CHART_WORKSPACE,
-        symbol: 'NVDA',
-        interval: 'month',
-        range: '3m'
-      }
-    }));
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(
+      createStore({
+        chartWorkspace: {
+          ...DEFAULT_CHART_WORKSPACE,
+          symbol: 'NVDA',
+          interval: 'month',
+          range: '3m'
+        }
+      })
+    );
 
     render(<ChartPageClient />);
 
@@ -205,15 +211,17 @@ describe('ChartPageClient', () => {
         range: '3m'
       })
     );
-    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
-      selectedTicker: 'MSFT',
-      chartWorkspace: {
-        ...DEFAULT_CHART_WORKSPACE,
-        symbol: 'MSFT',
-        interval: 'week',
-        range: '3m'
-      }
-    }));
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(
+      createStore({
+        selectedTicker: 'MSFT',
+        chartWorkspace: {
+          ...DEFAULT_CHART_WORKSPACE,
+          symbol: 'MSFT',
+          interval: 'week',
+          range: '3m'
+        }
+      })
+    );
 
     render(<ChartPageClient />);
     fireEvent.click(screen.getByRole('button', { name: 'Switch Interval' }));
@@ -252,15 +260,17 @@ describe('ChartPageClient', () => {
         range: '3m'
       })
     );
-    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
-      selectedTicker: 'MSFT',
-      chartWorkspace: {
-        ...DEFAULT_CHART_WORKSPACE,
-        symbol: 'MSFT',
-        interval: 'week',
-        range: '3m'
-      }
-    }));
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(
+      createStore({
+        selectedTicker: 'MSFT',
+        chartWorkspace: {
+          ...DEFAULT_CHART_WORKSPACE,
+          symbol: 'MSFT',
+          interval: 'week',
+          range: '3m'
+        }
+      })
+    );
 
     render(<ChartPageClient />);
     fireEvent.click(screen.getByRole('button', { name: 'Switch Range' }));
@@ -282,16 +292,18 @@ describe('ChartPageClient', () => {
         range: '3m'
       })
     );
-    (useDashboardStore as unknown as jest.Mock).mockReturnValue(createStore({
-      selectedTicker: 'MSFT',
-      setChartPreferences,
-      chartWorkspace: {
-        ...DEFAULT_CHART_WORKSPACE,
-        symbol: 'MSFT',
-        interval: 'week',
-        range: '3m'
-      }
-    }));
+    (useDashboardStore as unknown as jest.Mock).mockReturnValue(
+      createStore({
+        selectedTicker: 'MSFT',
+        setChartPreferences,
+        chartWorkspace: {
+          ...DEFAULT_CHART_WORKSPACE,
+          symbol: 'MSFT',
+          interval: 'week',
+          range: '3m'
+        }
+      })
+    );
 
     render(<ChartPageClient />);
     fireEvent.click(screen.getByRole('button', { name: 'Toggle Grid' }));

@@ -1,5 +1,8 @@
 import { createClient } from '../supabase/server';
-import type { PortfolioHolding, PortfolioHoldingInput } from '@/types/portfolio';
+import type {
+  PortfolioHolding,
+  PortfolioHoldingInput
+} from '@/types/portfolio';
 
 const HOLDING_COLUMNS =
   'id, clerk_user_id, symbol, quantity, avg_cost, created_at, updated_at';
@@ -80,7 +83,10 @@ export async function getPortfolioHoldings(
     .order('created_at', { ascending: true });
 
   if (error) {
-    throw new PortfolioStorageError('Failed to fetch portfolio holdings', error);
+    throw new PortfolioStorageError(
+      'Failed to fetch portfolio holdings',
+      error
+    );
   }
 
   return (data || []).map((row: PortfolioHoldingRow) => mapHolding(row));
@@ -108,7 +114,10 @@ export async function createPortfolioHolding(
       throw new DuplicatePortfolioHoldingError(error);
     }
 
-    throw new PortfolioStorageError('Failed to create portfolio holding', error);
+    throw new PortfolioStorageError(
+      'Failed to create portfolio holding',
+      error
+    );
   }
 
   return mapHolding(data as PortfolioHoldingRow);
@@ -148,7 +157,10 @@ export async function updatePortfolioHolding(
       throw new PortfolioHoldingNotFoundError(error);
     }
 
-    throw new PortfolioStorageError('Failed to update portfolio holding', error);
+    throw new PortfolioStorageError(
+      'Failed to update portfolio holding',
+      error
+    );
   }
 
   return mapHolding(data as PortfolioHoldingRow);
@@ -173,6 +185,9 @@ export async function deletePortfolioHolding(
       throw new PortfolioHoldingNotFoundError(error);
     }
 
-    throw new PortfolioStorageError('Failed to delete portfolio holding', error);
+    throw new PortfolioStorageError(
+      'Failed to delete portfolio holding',
+      error
+    );
   }
 }

@@ -91,10 +91,7 @@ async function waitFor(predicate: () => boolean, timeout = 2000) {
   }
 }
 
-async function waitForWithFakeTimers(
-  predicate: () => boolean,
-  timeout = 2000
-) {
+async function waitForWithFakeTimers(predicate: () => boolean, timeout = 2000) {
   const start = Date.now();
 
   while (!predicate()) {

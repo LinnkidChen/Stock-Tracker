@@ -1,5 +1,4 @@
-export const PORTFOLIO_AUTH_MISCONFIGURED_CODE =
-  'PORTFOLIO_AUTH_MISCONFIGURED';
+export const PORTFOLIO_AUTH_MISCONFIGURED_CODE = 'PORTFOLIO_AUTH_MISCONFIGURED';
 
 export const PORTFOLIO_AUTH_MISCONFIGURED_MESSAGE =
   'Portfolio authentication is not configured on the server.';

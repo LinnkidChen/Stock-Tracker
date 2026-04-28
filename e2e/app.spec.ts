@@ -18,4 +18,16 @@ test.describe('app shell', () => {
 
     await expect(page).toHaveURL(/\/e2e-missing-start$/);
   });
+
+  test('renders sign-in setup guidance without Clerk credentials', async ({
+    page
+  }) => {
+    await page.goto('/auth/sign-in');
+
+    await expect(page.getByText('Authentication setup required')).toBeVisible();
+    await expect(
+      page.getByText('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY')
+    ).toBeVisible();
+    await expect(page.getByText('CLERK_SECRET_KEY')).toBeVisible();
+  });
 });

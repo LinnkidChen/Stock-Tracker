@@ -245,7 +245,12 @@ export function KLineChart({
 
   useEffect(() => {
     if (!chartRef.current || !querySymbol) return;
-    chartRef.current.update(querySymbol, chartData, interval, activePreferences);
+    chartRef.current.update(
+      querySymbol,
+      chartData,
+      interval,
+      activePreferences
+    );
   }, [activePreferences, chartData, chartReady, interval, querySymbol]);
 
   const handleRetry = () => {

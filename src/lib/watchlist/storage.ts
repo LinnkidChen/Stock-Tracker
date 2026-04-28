@@ -68,17 +68,15 @@ export async function addToWatchlist(
   const supabase = await createClient();
 
   // "ignoreDuplicates" might verify the unique constraint on (clerk_user_id, symbol)
-  const { error } = await supabase
-    .from('stock_watchlist_items')
-    .upsert(
-      {
-        clerk_user_id: userId,
-        symbol: symbol.toUpperCase(),
-        exchange: metadata.exchange ?? null,
-        note: metadata.note ?? null
-      },
-      { onConflict: 'clerk_user_id,symbol', ignoreDuplicates: true }
-    );
+  const { error } = await supabase.from('stock_watchlist_items').upsert(
+    {
+      clerk_user_id: userId,
+      symbol: symbol.toUpperCase(),
+      exchange: metadata.exchange ?? null,
+      note: metadata.note ?? null
+    },
+    { onConflict: 'clerk_user_id,symbol', ignoreDuplicates: true }
+  );
 
   if (error) {
     throw new WatchlistStorageError('Failed to add to watchlist', error);

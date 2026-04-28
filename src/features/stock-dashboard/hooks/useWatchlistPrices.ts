@@ -131,7 +131,9 @@ export function useWatchlistPrices(
     const updatedAtMs = result.dataUpdatedAt || 0;
     const updatedAt = updatedAtMs ? new Date(updatedAtMs) : null;
     const isStale =
-      Boolean(result.data) && updatedAtMs > 0 && now - updatedAtMs > staleAfterMs;
+      Boolean(result.data) &&
+      updatedAtMs > 0 &&
+      now - updatedAtMs > staleAfterMs;
 
     if (result.isLoading && !streamPrice) {
       hasAnyLoading = true;

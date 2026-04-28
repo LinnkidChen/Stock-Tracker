@@ -48,22 +48,24 @@ function makeHolding(overrides: Partial<PortfolioHolding> = {}) {
 }
 
 function mockPortfolioFetch(holdings: PortfolioHolding[]) {
-  global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
+  global.fetch = jest.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
 
-    if (url === '/api/portfolio/holdings' && !init?.method) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
-          success: true,
-          data: { holdings }
-        })
-      } as any;
+      if (url === '/api/portfolio/holdings' && !init?.method) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            data: { holdings }
+          })
+        } as any;
+      }
+
+      throw new Error(`Unexpected request ${url}`);
     }
-
-    throw new Error(`Unexpected request ${url}`);
-  }) as any;
+  ) as any;
 }
 
 describe('PortfolioCard', () => {
@@ -240,7 +242,9 @@ describe('PortfolioCard', () => {
     await user.click(screen.getByRole('button', { name: /^save$/i }));
 
     expect(
-      await screen.findByText('Portfolio holding already exists for this symbol')
+      await screen.findByText(
+        'Portfolio holding already exists for this symbol'
+      )
     ).toBeInTheDocument();
   });
 
@@ -339,7 +343,9 @@ describe('PortfolioCard', () => {
 
     await screen.findByText('AAPL');
     expect(screen.getByText('MSFT')).toBeInTheDocument();
-    expect(screen.getByText('Prices unavailable for MSFT.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Prices unavailable for MSFT.')
+    ).toBeInTheDocument();
     expect(screen.getAllByText('$1,750.00').length).toBeGreaterThan(0);
   });
 });

@@ -1,6 +1,5 @@
 ---
-
-description: "功能实现的任务列表模板"
+description: '功能实现的任务列表模板'
 ---
 
 # 任务: [FEATURE NAME]
@@ -26,7 +25,7 @@ description: "功能实现的任务列表模板"
 - **移动端**: `api/src/`、`ios/src/` 或 `android/src/`
 - 下方路径示例按单体项目编写，请根据 plan.md 结构调整
 
-<!-- 
+<!--
   ============================================================================
   重要：以下任务仅为示例。
 
@@ -84,8 +83,8 @@ description: "功能实现的任务列表模板"
 
 > **注意：先写测试，确保失败后再实现**
 
-- [ ] T010 [P] [US1] 针对 [endpoint] 的契约测试，路径 tests/contract/test_[name].py
-- [ ] T011 [P] [US1] 针对 [user journey] 的集成测试，路径 tests/integration/test_[name].py
+- [ ] T010 [P] [US1] 针对 [endpoint] 的契约测试，路径 tests/contract/test\_[name].py
+- [ ] T011 [P] [US1] 针对 [user journey] 的集成测试，路径 tests/integration/test\_[name].py
 
 ### 用户故事 1 的实现
 
@@ -108,8 +107,8 @@ description: "功能实现的任务列表模板"
 
 ### 用户故事 2 的测试（必需）⚠️
 
-- [ ] T018 [P] [US2] 针对 [endpoint] 的契约测试，路径 tests/contract/test_[name].py
-- [ ] T019 [P] [US2] 针对 [user journey] 的集成测试，路径 tests/integration/test_[name].py
+- [ ] T018 [P] [US2] 针对 [endpoint] 的契约测试，路径 tests/contract/test\_[name].py
+- [ ] T019 [P] [US2] 针对 [user journey] 的集成测试，路径 tests/integration/test\_[name].py
 
 ### 用户故事 2 的实现
 
@@ -130,8 +129,8 @@ description: "功能实现的任务列表模板"
 
 ### 用户故事 3 的测试（必需）⚠️
 
-- [ ] T024 [P] [US3] 针对 [endpoint] 的契约测试，路径 tests/contract/test_[name].py
-- [ ] T025 [P] [US3] 针对 [user journey] 的集成测试，路径 tests/integration/test_[name].py
+- [ ] T024 [P] [US3] 针对 [endpoint] 的契约测试，路径 tests/contract/test\_[name].py
+- [ ] T025 [P] [US3] 针对 [user journey] 的集成测试，路径 tests/integration/test\_[name].py
 
 ### 用户故事 3 的实现
 

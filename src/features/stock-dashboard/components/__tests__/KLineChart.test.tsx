@@ -228,9 +228,9 @@ describe('KLineChart', () => {
     const latestCall = calls[calls.length - 1];
 
     expect(latestCall[1]).toHaveLength(2);
-    expect(latestCall[1].map((candle: { close: number }) => candle.close)).toEqual([
-      108, 114
-    ]);
+    expect(
+      latestCall[1].map((candle: { close: number }) => candle.close)
+    ).toEqual([108, 114]);
   });
 
   it('passes display preferences to the klinecharts adapter', async () => {

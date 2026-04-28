@@ -124,14 +124,7 @@ export async function createKLineChart(
       data,
       interval,
       preferences = options.preferences ?? DEFAULT_CHART_WORKSPACE.preferences
-    ) =>
-      updateChart(
-        chart,
-        symbol,
-        data,
-        interval,
-        preferences
-      ),
+    ) => updateChart(chart, symbol, data, interval, preferences),
     destroy: () => {
       resizeObserver.disconnect();
       dispose(chart);

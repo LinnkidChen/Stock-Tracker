@@ -41,9 +41,7 @@ export function ChartPageClient() {
     return rawSymbol ? rawSymbol.toUpperCase() : null;
   }, [searchParams]);
   const rawInterval = searchParams.get('interval')?.toLowerCase();
-  const queryInterval = isKLineInterval(rawInterval)
-    ? rawInterval
-    : null;
+  const queryInterval = isKLineInterval(rawInterval) ? rawInterval : null;
   const rawRange = searchParams.get('range')?.toLowerCase();
   const queryRange = isChartRange(rawRange) ? rawRange : null;
 
@@ -127,46 +125,35 @@ export function ChartPageClient() {
 
   const handleTickerSubmit = (ticker: string) => {
     router.replace(
-      buildChartsHref(
-        new URLSearchParams(searchParams.toString()),
-        {
-          symbol: ticker,
-          interval,
-          range
-        }
-      )
+      buildChartsHref(new URLSearchParams(searchParams.toString()), {
+        symbol: ticker,
+        interval,
+        range
+      })
     );
   };
 
   const handleIntervalChange = (nextInterval: KLineInterval) => {
     router.replace(
-      buildChartsHref(
-        new URLSearchParams(searchParams.toString()),
-        {
-          symbol: activeTicker,
-          interval: nextInterval,
-          range
-        }
-      )
+      buildChartsHref(new URLSearchParams(searchParams.toString()), {
+        symbol: activeTicker,
+        interval: nextInterval,
+        range
+      })
     );
   };
 
   const handleRangeChange = (nextRange: ChartRange) => {
     router.replace(
-      buildChartsHref(
-        new URLSearchParams(searchParams.toString()),
-        {
-          symbol: activeTicker,
-          interval,
-          range: nextRange
-        }
-      )
+      buildChartsHref(new URLSearchParams(searchParams.toString()), {
+        symbol: activeTicker,
+        interval,
+        range: nextRange
+      })
     );
   };
 
-  const handlePreferencesChange = (
-    preferences: Partial<ChartPreferences>
-  ) => {
+  const handlePreferencesChange = (preferences: Partial<ChartPreferences>) => {
     setChartPreferences(preferences);
   };
 

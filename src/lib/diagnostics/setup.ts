@@ -140,7 +140,9 @@ async function createSupabaseCheck(
   const hasLegacyAnonKey = hasEnvValue('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
   if (!hasEnvValue('NEXT_PUBLIC_SUPABASE_URL')) {
-    blockedReasons.push('Missing environment variable: NEXT_PUBLIC_SUPABASE_URL.');
+    blockedReasons.push(
+      'Missing environment variable: NEXT_PUBLIC_SUPABASE_URL.'
+    );
   } else if (!isValidUrl(supabaseUrl)) {
     blockedReasons.push(
       'NEXT_PUBLIC_SUPABASE_URL must be a valid absolute URL.'
@@ -169,7 +171,9 @@ async function createSupabaseCheck(
     );
   } else {
     try {
-      const token = await authState.getToken({ template: SUPABASE_JWT_TEMPLATE });
+      const token = await authState.getToken({
+        template: SUPABASE_JWT_TEMPLATE
+      });
 
       if (token?.trim()) {
         details.push(
@@ -212,7 +216,8 @@ async function createSupabaseCheck(
       id: 'supabase',
       title: 'Supabase',
       status: 'warning',
-      summary: 'Supabase config is present, but token verification is incomplete.',
+      summary:
+        'Supabase config is present, but token verification is incomplete.',
       details,
       remediation:
         'Retry while signed in. If the warning persists, confirm Clerk can issue the Supabase JWT template.'

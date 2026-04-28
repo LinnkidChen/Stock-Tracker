@@ -325,19 +325,21 @@ describe('WatchlistCard add error modal flows', () => {
   });
 
   test('shows network modal when the request fails', async () => {
-    global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url.endsWith('/api/watchlist') && (!init || !init.method)) {
-        return {
-          ok: true,
-          json: async () => watchlistResponse([])
-        } as any;
+    global.fetch = jest.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/api/watchlist') && (!init || !init.method)) {
+          return {
+            ok: true,
+            json: async () => watchlistResponse([])
+          } as any;
+        }
+        if (url.endsWith('/api/watchlist')) {
+          throw new Error('Network down');
+        }
+        throw new Error('Unexpected URL ' + url);
       }
-      if (url.endsWith('/api/watchlist')) {
-        throw new Error('Network down');
-      }
-      throw new Error('Unexpected URL ' + url);
-    }) as any;
+    ) as any;
 
     const user = userEvent.setup();
     renderWithProviders(<WatchlistCard />);
