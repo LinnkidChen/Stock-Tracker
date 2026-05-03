@@ -8,6 +8,7 @@
 
 | File                                   | Description                          | When to Read            |
 | -------------------------------------- | ------------------------------------ | ----------------------- |
+| [Agent Methodology](../agent-methodology/index.md) | Trellis-first quality gates adapted from selected Superpowers methodology | Before planning, coding, debugging, verification, or review |
 | [code-quality.md](./code-quality.md)   | Code quality mandatory rules         | Always                  |
 | [typescript.md](./typescript.md)       | TypeScript best practices            | Type-related decisions  |
 | [dependencies.md](./dependencies.md)   | Dependency versions and constraints  | Adding/updating deps    |

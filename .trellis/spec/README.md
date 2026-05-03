@@ -49,6 +49,16 @@ Development thinking guides:
 - [Pre-Implementation Checklist](./guides/pre-implementation-checklist.md)
 - [Cross-Layer Thinking Guide](./guides/cross-layer-thinking-guide.md)
 
+### [Agent Methodology](./agent-methodology/index.md)
+
+Trellis-first quality gates adapted from selected Superpowers methodology:
+
+- [Planning](./agent-methodology/planning.md)
+- [TDD](./agent-methodology/tdd.md)
+- [Debugging](./agent-methodology/debugging.md)
+- [Verification](./agent-methodology/verification.md)
+- [Review](./agent-methodology/review.md)
+
 ### [Common Issues / Pitfalls](./big-question/index.md)
 
 Common issues and solutions:

@@ -27,3 +27,18 @@ If you're using Codex or another agent-capable tool, additional project-scoped h
 Managed by Trellis. Edits outside this block are preserved; edits inside may be overwritten by a future `trellis update`.
 
 <!-- TRELLIS:END -->
+
+## Trellis-Superpowers Adapter
+
+This project uses Trellis as the only workflow controller.
+
+Do not run the full Superpowers workflow in this project session. Use only the Trellis adapter specs and skills:
+
+- `.trellis/spec/agent-methodology/index.md`
+- `.agents/skills/trellis-superpowers-planning`
+- `.agents/skills/trellis-superpowers-tdd`
+- `.agents/skills/trellis-superpowers-debugging`
+- `.agents/skills/trellis-superpowers-verification`
+- `.agents/skills/trellis-superpowers-review`
+
+When rules conflict, Trellis wins.

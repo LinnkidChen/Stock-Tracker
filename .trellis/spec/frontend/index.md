@@ -18,6 +18,7 @@ Project-specific frontend guidance for this Stock Tracker Next.js application.
 
 | File | Use For |
 | --- | --- |
+| [Agent Methodology](../agent-methodology/index.md) | Trellis-first planning, TDD, debugging, verification, and review gates |
 | [directory-structure.md](./directory-structure.md) | Where code belongs in `src/app`, `src/features`, `src/components`, `src/lib`, and `src/types` |
 | [components.md](./components.md) | Server/client component split, UI primitives, accessibility, feature components |
 | [hooks.md](./hooks.md) | React Query hooks, fetch helpers, effects, cleanup |

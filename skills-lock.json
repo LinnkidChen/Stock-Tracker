@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "trellis-meta": {
+      "source": "mindfold-ai/marketplace",
+      "sourceType": "github",
+      "skillPath": "skills/trellis-meta/SKILL.md",
+      "computedHash": "335a71bf7a9ad39fd640635e4858c6126573e4b0a8bb79fc249aae37d427ec6b"
+    }
+  }
+}

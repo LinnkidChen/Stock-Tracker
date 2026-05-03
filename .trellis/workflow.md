@@ -12,6 +12,50 @@
 
 ---
 
+## Trellis-Superpowers Adapter Gates
+
+Trellis is the only workflow controller. Superpowers-derived material is used only as methodology inside Trellis.
+
+### Before Implementation
+
+For non-trivial tasks:
+
+1. Ensure there is an active Trellis task and approved `prd.md`.
+2. Read `.trellis/spec/agent-methodology/index.md`.
+3. If the task is multi-step, create or update `.trellis/tasks/<active-task>/implementation-plan.md`.
+4. Get user approval for the plan before coding.
+
+### Implementation
+
+For behavior changes:
+
+1. Apply the TDD gate.
+2. Write failing test first.
+3. Confirm expected failure.
+4. Write minimal code.
+5. Confirm passing tests.
+6. Refactor only after green.
+
+### Debugging
+
+For bugs or failures:
+
+1. Apply systematic debugging gate.
+2. Do not propose fixes before root-cause investigation.
+3. Create a failing regression test before fixing when practical.
+
+### Check and Completion
+
+Before claiming completion:
+
+1. Run Trellis check.
+2. Apply verification gate.
+3. Apply review gate for major changes.
+4. Critical and Important issues block progress.
+5. Durable learnings go to `/trellis:update-spec`.
+
+---
+
 ## Trellis System
 
 ### Developer Identity
