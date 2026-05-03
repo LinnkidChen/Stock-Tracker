@@ -8,10 +8,10 @@ import {
 } from '@/lib/rate-limit';
 import { isSupabaseAuthConfigError } from '@/lib/supabase/server';
 import {
-  WATCHLIST_AUTH_MISCONFIGURED_CODE,
-  WATCHLIST_AUTH_MISCONFIGURED_MESSAGE,
-  WATCHLIST_AUTH_MISCONFIGURED_REMEDIATION
-} from '@/lib/watchlist/api-errors';
+  classifyPersistenceError,
+  getErrorTaxonomy
+} from '@/lib/observability/error-taxonomy';
+import { WATCHLIST_AUTH_MISCONFIGURED_REMEDIATION } from '@/lib/watchlist/api-errors';
 import {
   applyWatchlistMutation,
   applyWatchlistPatch,
@@ -45,16 +45,26 @@ function createWatchlistResponse(items: WatchlistItem[]) {
 }
 
 function handleWatchlistAuthMisconfiguration(message: string, error: unknown) {
+  const entry = getErrorTaxonomy('RLS_AUTH_MISCONFIGURED');
+
   logger.error(message, {
     error,
     remediation: WATCHLIST_AUTH_MISCONFIGURED_REMEDIATION
   });
 
   return createErrorResponse(
-    WATCHLIST_AUTH_MISCONFIGURED_MESSAGE,
-    503,
-    WATCHLIST_AUTH_MISCONFIGURED_CODE
+    entry.dashboardMessage,
+    entry.httpStatus,
+    entry.code
   );
+}
+
+function handleWatchlistStorageError(message: string, error: unknown) {
+  const code = classifyPersistenceError(error);
+  const entry = getErrorTaxonomy(code);
+
+  logger.error(message, { error, code });
+  return createErrorResponse(entry.dashboardMessage, entry.httpStatus, code);
 }
 
 async function enforceWatchlistRateLimit(req: Request, userId: string | null) {
@@ -125,8 +135,7 @@ export async function GET(req: Request) {
       );
     }
 
-    logger.error('Watchlist fetch error', { error });
-    return createErrorResponse('Failed to fetch watchlist', 500);
+    return handleWatchlistStorageError('Watchlist fetch error', error);
   }
 }
 
@@ -166,8 +175,7 @@ export async function POST(req: Request) {
       );
     }
 
-    logger.error('Watchlist update error', { error });
-    return createErrorResponse('Failed to update watchlist', 500);
+    return handleWatchlistStorageError('Watchlist update error', error);
   }
 }
 
@@ -207,7 +215,6 @@ export async function PATCH(req: Request) {
       );
     }
 
-    logger.error('Watchlist patch error', { error });
-    return createErrorResponse('Failed to update watchlist', 500);
+    return handleWatchlistStorageError('Watchlist patch error', error);
   }
 }

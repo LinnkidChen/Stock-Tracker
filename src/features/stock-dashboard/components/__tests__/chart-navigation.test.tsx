@@ -42,10 +42,10 @@ describe('ChartNavigation', () => {
     render(<ChartNavigation />);
 
     expect(screen.getByText('Technical Analysis')).toBeInTheDocument();
-    expect(screen.getByText('Open Chart')).toBeInTheDocument();
     expect(
       screen.getByText('Analyze price action and indicators for AAPL')
     ).toBeInTheDocument();
+    expect(screen.getByText('Open Chart')).toBeInTheDocument();
     expect(screen.getByRole('link')).toHaveAttribute(
       'href',
       '/dashboard/charts?symbol=AAPL'

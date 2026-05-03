@@ -244,8 +244,8 @@ describe('/api/watchlist', () => {
       expect(res.status).toBe(503);
       expect(json.success).toBe(false);
       expect(json.error).toEqual({
-        code: 'WATCHLIST_AUTH_MISCONFIGURED',
-        message: 'Watchlist authentication is not configured on the server.'
+        code: 'RLS_AUTH_MISCONFIGURED',
+        message: 'Data persistence is temporarily unavailable.'
       });
     });
   });
@@ -359,8 +359,8 @@ describe('/api/watchlist', () => {
       expect(res.status).toBe(503);
       expect(json.success).toBe(false);
       expect(json.error).toEqual({
-        code: 'WATCHLIST_AUTH_MISCONFIGURED',
-        message: 'Watchlist authentication is not configured on the server.'
+        code: 'RLS_AUTH_MISCONFIGURED',
+        message: 'Data persistence is temporarily unavailable.'
       });
     });
   });
@@ -380,8 +380,29 @@ describe('/api/watchlist', () => {
       expect(res.status).toBe(503);
       expect(json.success).toBe(false);
       expect(json.error).toEqual({
-        code: 'WATCHLIST_AUTH_MISCONFIGURED',
-        message: 'Watchlist authentication is not configured on the server.'
+        code: 'RLS_AUTH_MISCONFIGURED',
+        message: 'Data persistence is temporarily unavailable.'
+      });
+    });
+
+    it('returns a canonical RLS error when storage reports a policy denial', async () => {
+      mockAuth.mockResolvedValue({ userId: 'user_123' });
+      mockGetItems.mockRejectedValue(
+        Object.assign(new Error('Failed to fetch watchlist'), {
+          originalError: {
+            code: '42501',
+            message: 'new row violates row-level security policy'
+          }
+        })
+      );
+
+      const res = await GET();
+      const json = await res.json();
+
+      expect(res.status).toBe(403);
+      expect(json.error).toEqual({
+        code: 'RLS_ACCESS_DENIED',
+        message: 'You do not have access to this data.'
       });
     });
   });

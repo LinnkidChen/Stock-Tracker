@@ -89,8 +89,8 @@ describe('/api/portfolio/holdings', () => {
 
     expect(res.status).toBe(503);
     expect(json.error).toEqual({
-      code: 'PORTFOLIO_AUTH_MISCONFIGURED',
-      message: 'Portfolio authentication is not configured on the server.'
+      code: 'RLS_AUTH_MISCONFIGURED',
+      message: 'Data persistence is temporarily unavailable.'
     });
   });
 

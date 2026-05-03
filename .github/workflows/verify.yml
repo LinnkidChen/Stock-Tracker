@@ -1,0 +1,43 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check docs and agent legibility
+        run: pnpm docs:check
+
+      - name: Lint
+        run: pnpm lint:strict
+
+      - name: Test
+        run: pnpm test --runInBand
+
+      - name: Build
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_SENTRY_DISABLED: 'true'
