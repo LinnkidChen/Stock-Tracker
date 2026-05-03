@@ -12,6 +12,9 @@ interface PriceUpdateMessage {
   change: number;
   changePercent: number;
   volume: number;
+  open?: number;
+  previousClose?: number;
+  avgVolume?: number | null;
   ts: number;
   lastUpdated?: string;
 }
@@ -88,6 +91,15 @@ export function usePriceStream(
               price: Number(message.price),
               change: Number(message.change),
               changePercent: Number(message.changePercent),
+              volume: Number(message.volume),
+              open:
+                message.open === undefined ? undefined : Number(message.open),
+              previousClose:
+                message.previousClose === undefined
+                  ? undefined
+                  : Number(message.previousClose),
+              avgVolume:
+                message.avgVolume === undefined ? undefined : message.avgVolume,
               lastUpdated: new Date(message.lastUpdated ?? message.ts)
             }
           }));
