@@ -2,6 +2,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 const port = Number(process.env.PLAYWRIGHT_PORT ?? process.env.PORT ?? 3100);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${port}`;
+const webServerCommand =
+  process.env.PLAYWRIGHT_WEB_SERVER_COMMAND ??
+  (process.env.CI
+    ? `pnpm exec next start -p ${port}`
+    : `pnpm exec next dev --turbopack -p ${port}`);
 
 export default defineConfig({
   testDir: './e2e',
@@ -19,7 +24,7 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
-        command: `pnpm exec next dev --turbopack -p ${port}`,
+        command: webServerCommand,
         url: `${baseURL}/next.svg`,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

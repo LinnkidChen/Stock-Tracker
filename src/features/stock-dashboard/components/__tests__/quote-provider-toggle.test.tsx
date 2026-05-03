@@ -14,12 +14,12 @@ describe('QuoteProviderToggle', () => {
     });
   });
 
-  it('shows Longbridge as the only visible provider option', () => {
+  it('shows the current provider in a source selector', () => {
     render(<QuoteProviderToggle />);
 
     expect(screen.getByText('Source:')).toBeInTheDocument();
-    expect(screen.getByText('Longbridge')).toBeInTheDocument();
-    expect(screen.queryByText('Default')).not.toBeInTheDocument();
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('combobox', { name: 'Quote data source' })
+    ).toHaveTextContent('Auto');
   });
 });

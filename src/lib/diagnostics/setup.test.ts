@@ -51,7 +51,7 @@ describe('getSetupDiagnostics', () => {
     process.env = originalEnv;
   });
 
-  it('returns ready checks when Clerk, Supabase, and Longbridge are configured', async () => {
+  it('returns ready checks when Clerk, Supabase, and market data are configured', async () => {
     const diagnostics = await getSetupDiagnostics();
 
     expect(diagnostics.status).toBe('ready');
@@ -77,7 +77,7 @@ describe('getSetupDiagnostics', () => {
     expect(diagnostics.status).toBe('blocked');
     expect(findCheck(diagnostics, 'clerk').status).toBe('blocked');
     expect(findCheck(diagnostics, 'supabase').status).toBe('blocked');
-    expect(findCheck(diagnostics, 'longbridge').status).toBe('blocked');
+    expect(findCheck(diagnostics, 'market-data').status).toBe('warning');
     expect(JSON.stringify(diagnostics)).toContain(
       'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'
     );
@@ -160,15 +160,19 @@ describe('getSetupDiagnostics', () => {
     );
   });
 
-  it('blocks Longbridge when any credential variable is missing', async () => {
+  it('warns when primary Longbridge credentials are missing', async () => {
     delete process.env.LONGPORT_ACCESS_TOKEN;
 
     const diagnostics = await getSetupDiagnostics();
 
-    const longbridge = findCheck(diagnostics, 'longbridge');
-    expect(longbridge.status).toBe('blocked');
-    expect(longbridge.details).toContain(
-      'Missing environment variables: LONGPORT_ACCESS_TOKEN.'
+    const marketData = findCheck(diagnostics, 'market-data');
+    expect(diagnostics.status).toBe('warning');
+    expect(marketData.status).toBe('warning');
+    expect(marketData.details).toContain(
+      'Missing Longbridge environment variables: LONGPORT_ACCESS_TOKEN.'
+    );
+    expect(marketData.details).toContain(
+      'Yahoo Finance fallback is available without server credentials.'
     );
     expect(JSON.stringify(diagnostics)).not.toContain('longbridge_app_secret');
   });

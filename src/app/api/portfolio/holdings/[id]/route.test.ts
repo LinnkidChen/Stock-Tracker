@@ -10,10 +10,15 @@ import {
   PortfolioHoldingNotFoundError,
   updatePortfolioHolding
 } from '@/lib/portfolio/storage';
+import { enforcePortfolioRateLimit } from '@/lib/portfolio/api-rate-limit';
 import { DELETE, PATCH } from './route';
 
 jest.mock('@clerk/nextjs/server', () => ({
   auth: jest.fn()
+}));
+
+jest.mock('@/lib/portfolio/api-rate-limit', () => ({
+  enforcePortfolioRateLimit: jest.fn()
 }));
 
 jest.mock('@/lib/portfolio/storage', () => {
@@ -39,11 +44,13 @@ const params = { params: Promise.resolve({ id: 'holding_1' }) };
 
 describe('/api/portfolio/holdings/[id]', () => {
   const mockAuth = auth as jest.Mock;
+  const mockEnforceRateLimit = enforcePortfolioRateLimit as jest.Mock;
   const mockUpdate = updatePortfolioHolding as jest.Mock;
   const mockDelete = deletePortfolioHolding as jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockEnforceRateLimit.mockResolvedValue(null);
   });
 
   describe('PATCH', () => {
@@ -59,6 +66,30 @@ describe('/api/portfolio/holdings/[id]', () => {
       );
 
       expect(res.status).toBe(401);
+    });
+
+    it('returns rate limit responses before parsing the patch', async () => {
+      mockAuth.mockResolvedValue({ userId: 'user_123' });
+      mockEnforceRateLimit.mockResolvedValue(
+        Response.json(
+          {
+            success: false,
+            error: { code: 'API_LIMIT_EXCEEDED' }
+          },
+          { status: 429 }
+        )
+      );
+
+      const res = await PATCH(
+        new NextRequest('http://localhost/api/portfolio/holdings/holding_1', {
+          method: 'PATCH',
+          body: JSON.stringify({ quantity: 5 })
+        }),
+        params
+      );
+
+      expect(res.status).toBe(429);
+      expect(mockUpdate).not.toHaveBeenCalled();
     });
 
     it('updates a holding', async () => {
