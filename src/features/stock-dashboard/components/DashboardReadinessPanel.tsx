@@ -20,7 +20,11 @@ import {
 } from '@tabler/icons-react';
 import Link from 'next/link';
 
-const READINESS_CHECK_IDS = new Set(['supabase', 'market-data']);
+const READINESS_CHECK_IDS = new Set([
+  'supabase',
+  'supabase-rls',
+  'market-data'
+]);
 
 const STATUS_CLASS_NAMES: Record<DiagnosticStatus, string> = {
   ready:

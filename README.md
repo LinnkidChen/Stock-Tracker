@@ -26,8 +26,8 @@ contributor and agent system of record.
 - `/dashboard/charts` with a klinecharts-based chart workspace for a selected
   ticker, interval, range, display preferences, and configurable SMA, EMA, RSI,
   MACD, Bollinger Bands, and VWAP indicators.
-- `/dashboard/operations` with setup diagnostics for Clerk, Supabase, and
-  market data provider configuration.
+- `/dashboard/operations` with setup diagnostics for Clerk, Supabase, Supabase
+  RLS access, and market data provider configuration.
 - Multi-provider quote and k-line API routes with Longbridge primary routing,
   Yahoo Finance fallback, provider health metadata, and per-symbol provider
   selection.
@@ -235,6 +235,11 @@ Security and Clerk-issued Supabase JWTs. The expected setup is:
 If this setup is missing, `/api/watchlist` returns
 `WATCHLIST_AUTH_MISCONFIGURED`, and `/api/portfolio/holdings` returns
 `PORTFOLIO_AUTH_MISCONFIGURED`.
+
+Use `/dashboard/operations` after signing in to run the setup checklist. It
+validates Clerk keys, Supabase URL/key configuration, Clerk's `supabase` JWT
+template, and read-only RLS access to the watchlist and portfolio tables without
+exposing secret values.
 
 In production, the rate limiter fails closed if `SUPABASE_SERVICE_ROLE_KEY` or
 the rate limit RPC is missing. Set `RATE_LIMIT_DISABLED=true` only for local
