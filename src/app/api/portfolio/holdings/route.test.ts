@@ -38,6 +38,10 @@ const summary = {
   withdrawals: 0
 };
 
+function createRequest() {
+  return new Request('http://localhost/api/portfolio/holdings');
+}
+
 describe('/api/portfolio/holdings', () => {
   const mockAuth = auth as jest.Mock;
   const mockGetSnapshot = getPortfolioSnapshot as jest.Mock;
@@ -49,7 +53,7 @@ describe('/api/portfolio/holdings', () => {
   it('returns 401 if user is unauthenticated', async () => {
     mockAuth.mockResolvedValue({ userId: null });
 
-    const res = await GET();
+    const res = await GET(createRequest());
 
     expect(res.status).toBe(401);
   });
@@ -62,7 +66,7 @@ describe('/api/portfolio/holdings', () => {
       transactions: []
     });
 
-    const res = await GET();
+    const res = await GET(createRequest());
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -80,7 +84,7 @@ describe('/api/portfolio/holdings', () => {
       )
     );
 
-    const res = await GET();
+    const res = await GET(createRequest());
     const json = await res.json();
 
     expect(res.status).toBe(503);

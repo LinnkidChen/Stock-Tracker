@@ -1,4 +1,12 @@
 import { GET } from './route';
+import { checkRateLimit } from '@/lib/rate-limit';
+
+jest.mock('@/lib/rate-limit', () => ({
+  checkRateLimit: jest.fn(),
+  createRateLimitHeaders: jest.fn((result) =>
+    result.retryAfter ? { 'Retry-After': String(result.retryAfter) } : {}
+  )
+}));
 
 class MockResponse {
   body: BodyInit | null;
@@ -66,19 +74,33 @@ const originalResponse = global.Response;
 const originalWebSocketPair = (globalThis as any).WebSocketPair;
 const originalFetch = global.fetch;
 let currentPair: MockPair | null = null;
+const mockCheckRateLimit = checkRateLimit as jest.MockedFunction<
+  typeof checkRateLimit
+>;
 
-function createWebSocketRequest(url = 'http://localhost/api/ws/prices') {
-  return createMockRequest(url, 'websocket');
+function createWebSocketRequest(
+  url = 'http://localhost/api/ws/prices',
+  headers: Record<string, string> = {}
+) {
+  return createMockRequest(url, 'websocket', headers);
 }
 
 function createMockRequest(
   url: string,
-  upgrade: string | null = null
+  upgrade: string | null = null,
+  headers: Record<string, string> = {}
 ): Request {
+  const headerMap = new Map<string, string>(
+    Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value])
+  );
+  if (upgrade) {
+    headerMap.set('upgrade', upgrade);
+  }
+
   return {
     url,
     headers: {
-      get: (name: string) => (name.toLowerCase() === 'upgrade' ? upgrade : null)
+      get: (name: string) => headerMap.get(name.toLowerCase()) ?? null
     }
   } as unknown as Request;
 }
@@ -176,6 +198,14 @@ describe('/api/ws/prices', () => {
 
   beforeEach(() => {
     jest.useFakeTimers();
+    mockCheckRateLimit.mockResolvedValue({
+      allowed: true,
+      limit: 20,
+      windowSeconds: 60,
+      remaining: 19,
+      resetAt: Date.now() + 60_000,
+      source: 'supabase'
+    });
     currentPair = null;
     global.fetch = jest.fn(async () => mockQuoteResponse({})) as any;
   });
@@ -197,6 +227,26 @@ describe('/api/ws/prices', () => {
 
     expect(response.status).toBe(400);
     await expect(response.text()).resolves.toBe('Expected websocket');
+  });
+
+  it('rejects websocket upgrades when the shared limiter rejects them', async () => {
+    mockCheckRateLimit.mockResolvedValue({
+      allowed: false,
+      limit: 20,
+      windowSeconds: 60,
+      remaining: 0,
+      resetAt: Date.now() + 15_000,
+      retryAfter: 15,
+      source: 'supabase'
+    });
+
+    const response = await GET(createWebSocketRequest());
+    const payload = JSON.parse(await response.text());
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('15');
+    expect(payload.error.code).toBe('API_LIMIT_EXCEEDED');
+    expect(currentPair).toBeNull();
   });
 
   it('subscribes and sends provider-backed price updates', async () => {
@@ -297,6 +347,29 @@ describe('/api/ws/prices', () => {
         expect.objectContaining({ type: 'pong' }),
         { type: 'error', message: 'Invalid message' }
       ])
+    );
+  });
+
+  it('forwards client identity headers to internal quote polling', async () => {
+    await GET(
+      createWebSocketRequest('http://localhost/api/ws/prices', {
+        'x-forwarded-for': '203.0.113.10',
+        'user-agent': 'jest-client'
+      })
+    );
+
+    currentPair!.server.message({ type: 'subscribe', symbol: 'AAPL' });
+    await waitForAsync(() => currentPair!.server.sentMessages().length > 1);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost/api/stocks/quote/AAPL?provider=longbridge',
+      {
+        cache: 'no-store',
+        headers: {
+          'x-forwarded-for': '203.0.113.10',
+          'user-agent': 'jest-client'
+        }
+      }
     );
   });
 });

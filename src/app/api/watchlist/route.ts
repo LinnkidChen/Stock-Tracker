@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { logger } from '@/lib/logger';
+import {
+  checkRateLimit,
+  createRateLimitHeaders,
+  type RateLimitResult
+} from '@/lib/rate-limit';
 import { isSupabaseAuthConfigError } from '@/lib/supabase/server';
 import {
   WATCHLIST_AUTH_MISCONFIGURED_CODE,
   WATCHLIST_AUTH_MISCONFIGURED_MESSAGE,
   WATCHLIST_AUTH_MISCONFIGURED_REMEDIATION
 } from '@/lib/watchlist/api-errors';
-import { getClientId, rateLimit } from '@/lib/watchlist/rate-limit';
 import {
   applyWatchlistMutation,
   applyWatchlistPatch,
@@ -53,31 +57,59 @@ function handleWatchlistAuthMisconfiguration(message: string, error: unknown) {
   );
 }
 
-function rateLimitResponse(req: Request) {
-  const rl = rateLimit(getClientId(req));
-  if (rl.allowed) return null;
+async function enforceWatchlistRateLimit(req: Request, userId: string | null) {
+  try {
+    const result = await checkRateLimit(req, 'watchlist', {
+      subject: userId
+    });
 
+    if (!result.allowed) {
+      return createWatchlistRateLimitResponse(result);
+    }
+
+    return null;
+  } catch (error) {
+    logger.error('Watchlist rate limiter unavailable', { error });
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'RATE_LIMIT_UNAVAILABLE',
+          message: 'Rate limit service unavailable'
+        }
+      },
+      { status: 503 }
+    );
+  }
+}
+
+function createWatchlistRateLimitResponse(result: RateLimitResult) {
   return NextResponse.json(
     {
       success: false,
-      error: { message: 'Rate limit exceeded. Try again later.' }
+      error: {
+        code: 'API_LIMIT_EXCEEDED',
+        message: 'Rate limit exceeded. Try again later.',
+        details: result.retryAfter
+          ? { retryAfter: result.retryAfter }
+          : undefined
+      }
     },
     {
       status: 429,
-      headers: rl.retryAfter
-        ? { 'Retry-After': String(rl.retryAfter) }
-        : undefined
+      headers: createRateLimitHeaders(result)
     }
   );
 }
 
-async function requireUser() {
+export async function GET(req: Request) {
   const { userId } = await auth();
-  return userId;
-}
+  const rateLimitResponse = await enforceWatchlistRateLimit(req, userId);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
 
-export async function GET() {
-  const userId = await requireUser();
   if (!userId) {
     return createErrorResponse('Unauthorized', 401);
   }
@@ -99,10 +131,12 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const limited = rateLimitResponse(req);
-  if (limited) return limited;
+  const { userId } = await auth();
+  const rateLimitResponse = await enforceWatchlistRateLimit(req, userId);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
 
-  const userId = await requireUser();
   if (!userId) {
     return createErrorResponse('Unauthorized', 401);
   }
@@ -138,10 +172,12 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const limited = rateLimitResponse(req);
-  if (limited) return limited;
+  const { userId } = await auth();
+  const rateLimitResponse = await enforceWatchlistRateLimit(req, userId);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
 
-  const userId = await requireUser();
   if (!userId) {
     return createErrorResponse('Unauthorized', 401);
   }

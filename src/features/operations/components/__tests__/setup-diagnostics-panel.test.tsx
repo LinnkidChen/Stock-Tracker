@@ -32,8 +32,8 @@ const diagnostics: SetupDiagnostics = {
         'Configure Supabase URL/key values and Clerk JWT template "supabase" for Clerk-issued Supabase tokens.'
     },
     {
-      id: 'longbridge',
-      title: 'Longbridge',
+      id: 'market-data',
+      title: 'Market data',
       status: 'warning',
       summary: 'Market data credentials need review.',
       details: ['Credential verification was skipped.'],
@@ -55,7 +55,7 @@ describe('SetupDiagnosticsPanel', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Clerk')).toBeInTheDocument();
     expect(screen.getByText('Supabase')).toBeInTheDocument();
-    expect(screen.getByText('Longbridge')).toBeInTheDocument();
+    expect(screen.getByText('Market data')).toBeInTheDocument();
     expect(
       screen.getByText('Clerk JWT template "supabase" was not found.')
     ).toBeInTheDocument();
