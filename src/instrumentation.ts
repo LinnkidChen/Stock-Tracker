@@ -8,8 +8,8 @@ const sentryOptions: Sentry.NodeOptions | Sentry.EdgeOptions = {
 
   enableLogs: true,
 
-  // Enable Spotlight in development
-  spotlight: process.env.NODE_ENV === 'development',
+  // Keep Spotlight off unless the local Spotlight sidecar is explicitly wired up.
+  spotlight: false,
 
   // Adds request headers and IP for users, for more info visit
   sendDefaultPii: true,

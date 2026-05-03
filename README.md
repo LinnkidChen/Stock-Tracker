@@ -16,13 +16,18 @@ alerts, reports, settings, and overview pages remain planned.
 - `/dashboard/stocks` with market overview, quote provider selection, ticker
   search, watchlist card, and portfolio holdings card.
 - `/dashboard/charts` with a klinecharts-based chart workspace for a selected
-  ticker, interval, range, and display preferences.
+  ticker, interval, range, display preferences, and configurable SMA, EMA, RSI,
+  MACD, Bollinger Bands, and VWAP indicators.
 - `/dashboard/operations` with setup diagnostics for Clerk, Supabase, and
-  Longbridge configuration.
-- Longbridge-backed quote and k-line API routes.
+  market data provider configuration.
+- Multi-provider quote and k-line API routes with Longbridge primary routing,
+  Yahoo Finance fallback, provider health metadata, and per-symbol provider
+  selection.
 - Watchlist API with Supabase persistence, symbol metadata, ordering, and tests.
 - Portfolio holdings API with Supabase persistence for current symbol quantity
   and average cost, plus tests.
+- Shared Supabase-backed API rate limiting for quote, k-line, streaming,
+  watchlist, and portfolio endpoints.
 - Clerk-protected dashboard routes, Sentry instrumentation, React Query, Zustand
   client state, Jest unit tests, and a small Playwright smoke test.
 
@@ -35,8 +40,8 @@ alerts, reports, settings, and overview pages remain planned.
   history, lots, realized P&L, and tax workflows are not implemented.
 - Watchlist management exists inside the stock dashboard card, but does not yet
   have a dedicated full-page workflow.
-- Charting supports k-line visualization and display preferences, but does not
-  include a full indicator library.
+- Charting supports k-line visualization, display preferences, and the initial
+  technical indicator library. Custom indicator authoring is still planned.
 - Dashboard UX still carries some starter-shell structure while the app becomes
   fully stock-tracker-specific.
 
@@ -47,7 +52,7 @@ alerts, reports, settings, and overview pages remain planned.
 - Reports, exports, and tax-oriented workflows.
 - Settings page for user preferences and alert configuration.
 - Full dashboard overview page instead of redirecting `/dashboard` to stocks.
-- Advanced technical indicators and analytics.
+- Custom technical indicators and analytics.
 - Committed screenshots for the README.
 
 ## Feature Matrix
@@ -83,16 +88,16 @@ alerts, reports, settings, and overview pages remain planned.
 
 ### API Routes
 
-| Route                          | Methods                          | Status      | Description                                                    |
-| :----------------------------- | :------------------------------- | :---------- | :------------------------------------------------------------- |
-| `/api/stocks/quote/[symbol]`   | `GET`                            | Implemented | Fetches a quote from the configured stock provider.            |
-| `/api/stocks/kline/[symbol]`   | `GET`                            | Implemented | Fetches k-line series data from the configured stock provider. |
-| `/api/stocks/providers/health` | `GET`                            | Implemented | Checks provider readiness.                                     |
-| `/api/ws/prices`               | `GET` WebSocket upgrade          | Implemented | Poll-backed price updates for subscribed symbols.              |
-| `/api/watchlist`               | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist CRUD, metadata, and ordering.          |
-| `/api/portfolio/holdings`      | `GET`, `POST`                    | Implemented | Authenticated current holdings list and creation.              |
-| `/api/portfolio/holdings/[id]` | `PATCH`, `DELETE`                | Implemented | Authenticated holdings update and deletion.                    |
-| `/api/log`                     | `POST`                           | Implemented | Client log ingestion.                                          |
+| Route                          | Methods                          | Status      | Description                                               |
+| :----------------------------- | :------------------------------- | :---------- | :-------------------------------------------------------- |
+| `/api/stocks/quote/[symbol]`   | `GET`                            | Implemented | Fetches a quote through the provider registry.            |
+| `/api/stocks/kline/[symbol]`   | `GET`                            | Implemented | Fetches k-line series data through the provider registry. |
+| `/api/stocks/providers/health` | `GET`                            | Implemented | Checks provider readiness and fallback metadata.          |
+| `/api/ws/prices`               | `GET` WebSocket upgrade          | Implemented | Poll-backed price updates for subscribed symbols.         |
+| `/api/watchlist`               | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist CRUD, metadata, and ordering.     |
+| `/api/portfolio/holdings`      | `GET`, `POST`                    | Implemented | Authenticated current holdings list and creation.         |
+| `/api/portfolio/holdings/[id]` | `PATCH`, `DELETE`                | Implemented | Authenticated holdings update and deletion.               |
+| `/api/log`                     | `POST`                           | Implemented | Client log ingestion.                                     |
 
 ## Tech Stack
 
@@ -102,7 +107,8 @@ alerts, reports, settings, and overview pages remain planned.
 - Styling: Tailwind CSS v4 and shadcn/ui components
 - Authentication: Clerk
 - Persistence: Supabase with Clerk-issued JWTs
-- Stock data provider: Longbridge
+- Stock data providers: Longbridge and Yahoo Finance fallback via the provider
+  registry
 - Charting: klinecharts
 - State management: Zustand and React Query
 - Validation: Zod and local ticker validation
@@ -183,16 +189,21 @@ cp env.example.txt .env.local
 4. Configure environment variables as needed:
 
 - Clerk: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`
-- Longbridge: `LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`,
-  `LONGPORT_ACCESS_TOKEN`, `LONGPORT_REGION`
+- Longbridge primary provider: `LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`,
+  `LONGPORT_ACCESS_TOKEN`, `LONGPORT_REGION`. If these are missing, auto
+  routing can still fall back to the no-credential Yahoo Finance adapter.
 - Supabase: `NEXT_PUBLIC_SUPABASE_URL`,
-  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY`
+- Rate limiting: apply `database_schema/api_rate_limits.sql`, then tune
+  `RATE_LIMIT_*` values if the defaults are not appropriate for the deployment.
 - Sentry: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`,
   `NEXT_PUBLIC_SENTRY_DISABLED`
 
 5. Start the development server:
 
 ```bash
+pnpm env:check
 pnpm dev
 ```
 
@@ -208,10 +219,16 @@ Security and Clerk-issued Supabase JWTs. The expected setup is:
 - The JWT `sub` claim matches the Clerk user id.
 - `database_schema/watchlist.sql` and `database_schema/portfolio.sql` have been
   applied to the Supabase project.
+- `database_schema/api_rate_limits.sql` has been applied to support the shared
+  API limiter used by stock, watchlist, portfolio, and streaming routes.
 
 If this setup is missing, `/api/watchlist` returns
 `WATCHLIST_AUTH_MISCONFIGURED`, and `/api/portfolio/holdings` returns
 `PORTFOLIO_AUTH_MISCONFIGURED`.
+
+In production, the rate limiter fails closed if `SUPABASE_SERVICE_ROLE_KEY` or
+the rate limit RPC is missing. Set `RATE_LIMIT_DISABLED=true` only for local
+debugging.
 
 ## Portfolio Model
 
@@ -228,6 +245,7 @@ outside the current implementation.
 ## Development Commands
 
 ```bash
+pnpm env:check    # Validate required environment variables
 pnpm dev          # Start the development server
 pnpm build        # Build for production
 pnpm start        # Start the production server

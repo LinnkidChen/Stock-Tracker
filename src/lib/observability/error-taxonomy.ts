@@ -125,6 +125,22 @@ export const ERROR_TAXONOMY = {
       description: 'Alert when rate limit responses occur repeatedly.'
     }
   },
+  RATE_LIMIT_UNAVAILABLE: {
+    code: 'RATE_LIMIT_UNAVAILABLE',
+    category: 'rate_limit',
+    defaultDomain: 'system',
+    dashboardMessage: 'Rate limiting is temporarily unavailable.',
+    operatorMessage: 'Rate limit store could not be reached.',
+    httpStatus: 503,
+    logLevel: 'error',
+    sentrySeverity: 'error',
+    alertThreshold: {
+      eventCount: 1,
+      windowMinutes: 5,
+      severity: 'critical',
+      description: 'Alert immediately when the rate limit store is unavailable.'
+    }
+  },
   NETWORK_ERROR: {
     code: 'NETWORK_ERROR',
     category: 'provider',

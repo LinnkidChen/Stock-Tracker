@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { auth } from '@clerk/nextjs/server';
 import { isValidTicker, normalizeTicker } from '@/lib/validation/ticker';
+import {
+  checkRateLimit,
+  createRateLimitHeaders,
+  type RateLimitResult
+} from '@/lib/rate-limit';
 import { isSupabaseAuthConfigError } from '@/lib/supabase/server';
 import {
   getWatchlistItems,
@@ -89,13 +94,15 @@ function createWatchlistError(
   span: TelemetrySpan | null | undefined,
   context: Record<string, unknown> = {},
   error?: unknown,
-  details?: Record<string, unknown>
+  details?: Record<string, unknown>,
+  headers?: HeadersInit
 ) {
   return reportAndCreateObservedErrorResponse({
     code,
     message,
     error,
     details,
+    headers,
     span,
     context: {
       errorDomain: 'watchlist',
@@ -168,38 +175,53 @@ function handleWatchlistPersistenceError(
   );
 }
 
-// Very simple in-memory stores keyed by client id (ip header) for rate limiting
-const rateBuckets = new Map<string, { count: number; reset: number }>();
+async function enforceWatchlistRateLimit(
+  req: Request,
+  userId: string | null,
+  span: TelemetrySpan | null | undefined,
+  context: Record<string, unknown>
+) {
+  try {
+    const result = await checkRateLimit(req, 'watchlist', {
+      subject: userId
+    });
 
-/**
- * Extracts client identifier from request headers for rate limiting
- */
-function getClientId(req: Request): string {
-  const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0]?.trim();
-  return ip || 'anonymous';
+    if (!result.allowed) {
+      return createWatchlistRateLimitResponse(result, span, context);
+    }
+
+    return null;
+  } catch (error) {
+    return createWatchlistError(
+      'RATE_LIMIT_UNAVAILABLE',
+      'Rate limit service unavailable',
+      span,
+      context,
+      error
+    );
+  }
 }
 
-/**
- * Implements simple rate limiting per client
- */
-function rateLimit(id: string, limit = 60, windowMs = 60_000) {
-  const now = Date.now();
-  const bucket = rateBuckets.get(id);
-  if (!bucket || now > bucket.reset) {
-    rateBuckets.set(id, { count: 1, reset: now + windowMs });
-    return { allowed: true };
-  }
-  if (bucket.count >= limit) {
-    return {
-      allowed: false,
-      retryAfter: Math.ceil((bucket.reset - now) / 1000)
-    };
-  }
-  bucket.count++;
-  return { allowed: true };
+function createWatchlistRateLimitResponse(
+  result: RateLimitResult,
+  span: TelemetrySpan | null | undefined,
+  context: Record<string, unknown>
+) {
+  return createWatchlistError(
+    'API_LIMIT_EXCEEDED',
+    'Rate limit exceeded. Try again later.',
+    span,
+    {
+      ...context,
+      rateLimitSource: result.source
+    },
+    undefined,
+    result.retryAfter ? { retryAfter: result.retryAfter } : undefined,
+    createRateLimitHeaders(result)
+  );
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   return Sentry.startSpan(
     { op: 'http.server', name: 'GET /api/watchlist' },
     async (span) => {
@@ -207,6 +229,19 @@ export async function GET() {
       span?.setAttribute?.('path', path);
 
       const { userId } = await auth();
+      const rateLimitResponse = await enforceWatchlistRateLimit(
+        req,
+        userId,
+        span,
+        {
+          path,
+          operation: 'watchlist.fetch'
+        }
+      );
+      if (rateLimitResponse) {
+        return rateLimitResponse;
+      }
+
       if (!userId) {
         return createUnauthenticatedError(span, {
           path,
@@ -249,24 +284,20 @@ export async function POST(req: Request) {
       const path = getRequestPath(req, '/api/watchlist');
       span?.setAttribute?.('path', path);
 
-      const id = getClientId(req);
-      const rl = rateLimit(id);
-      if (!rl.allowed) {
-        return createWatchlistError(
-          'API_LIMIT_EXCEEDED',
-          'Rate limit exceeded. Try again later.',
-          span,
-          {
-            path,
-            operation: 'watchlist.update',
-            rateLimitClient: id === 'anonymous' ? 'anonymous' : 'forwarded'
-          },
-          undefined,
-          rl.retryAfter ? { retryAfter: rl.retryAfter } : undefined
-        );
+      const { userId } = await auth();
+      const rateLimitResponse = await enforceWatchlistRateLimit(
+        req,
+        userId,
+        span,
+        {
+          path,
+          operation: 'watchlist.update'
+        }
+      );
+      if (rateLimitResponse) {
+        return rateLimitResponse;
       }
 
-      const { userId } = await auth();
       if (!userId) {
         return createUnauthenticatedError(span, {
           path,
@@ -367,24 +398,20 @@ export async function PATCH(req: Request) {
       const path = getRequestPath(req, '/api/watchlist');
       span?.setAttribute?.('path', path);
 
-      const id = getClientId(req);
-      const rl = rateLimit(id);
-      if (!rl.allowed) {
-        return createWatchlistError(
-          'API_LIMIT_EXCEEDED',
-          'Rate limit exceeded. Try again later.',
-          span,
-          {
-            path,
-            operation: 'watchlist.patch',
-            rateLimitClient: id === 'anonymous' ? 'anonymous' : 'forwarded'
-          },
-          undefined,
-          rl.retryAfter ? { retryAfter: rl.retryAfter } : undefined
-        );
+      const { userId } = await auth();
+      const rateLimitResponse = await enforceWatchlistRateLimit(
+        req,
+        userId,
+        span,
+        {
+          path,
+          operation: 'watchlist.patch'
+        }
+      );
+      if (rateLimitResponse) {
+        return rateLimitResponse;
       }
 
-      const { userId } = await auth();
       if (!userId) {
         return createUnauthenticatedError(span, {
           path,

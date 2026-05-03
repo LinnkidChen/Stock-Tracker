@@ -4,6 +4,7 @@ import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import { getStockService } from '@/lib/services/stock-service';
 import {
   createErrorResponse,
+  createRateLimitResponse,
   createSuccessResponse,
   getStatusCodeForError,
   isAPIError
@@ -15,6 +16,7 @@ import {
   reportApiError,
   reportObservedError
 } from '@/lib/observability/route-errors';
+import { checkRateLimit, createRateLimitHeaders } from '@/lib/rate-limit';
 
 export async function GET(
   request: NextRequest,
@@ -28,6 +30,11 @@ export async function GET(
       let symbol = 'unknown';
 
       try {
+        const rateLimit = await enforceQuoteRateLimit(request, requestPath);
+        if (rateLimit.response) {
+          return rateLimit.response;
+        }
+
         const { symbol: rawSymbol } = await params;
         symbol = normalizeTicker(rawSymbol);
 
@@ -65,6 +72,7 @@ export async function GET(
         const quote = await stockService.getQuote(symbol, provider);
 
         return createSuccessResponse(quote, {
+          ...rateLimit.headers,
           'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30'
         });
       } catch (error) {
@@ -109,6 +117,42 @@ export async function GET(
       }
     }
   );
+}
+
+async function enforceQuoteRateLimit(request: NextRequest, path: string) {
+  try {
+    const result = await checkRateLimit(request, 'quote');
+    const headers = createRateLimitHeaders(result);
+
+    if (!result.allowed) {
+      return {
+        response: createRateLimitResponse(result.retryAfter, headers),
+        headers
+      };
+    }
+
+    return { headers };
+  } catch (error) {
+    reportObservedError({
+      code: 'RATE_LIMIT_UNAVAILABLE',
+      message: 'Quote API rate limiter unavailable',
+      error,
+      context: {
+        path,
+        operation: 'stock.quote',
+        errorDomain: 'stock-data'
+      }
+    });
+
+    return {
+      response: createObservedErrorResponse({
+        code: 'RATE_LIMIT_UNAVAILABLE',
+        message: 'Rate limit service unavailable',
+        statusCode: 503
+      }),
+      headers: {}
+    };
+  }
 }
 
 function getRequestPath(request: NextRequest): string {

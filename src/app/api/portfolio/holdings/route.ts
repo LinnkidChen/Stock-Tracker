@@ -12,6 +12,7 @@ import {
   validatePortfolioHoldingBody
 } from '@/lib/portfolio/validation';
 import { PORTFOLIO_AUTH_MISCONFIGURED_REMEDIATION } from '@/lib/portfolio/api-errors';
+import { enforcePortfolioRateLimit } from '@/lib/portfolio/api-rate-limit';
 import {
   reportAndCreateObservedErrorResponse,
   toPersistenceErrorCode
@@ -99,11 +100,16 @@ function handlePortfolioPersistenceError(
   );
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   return Sentry.startSpan(
     { op: 'http.server', name: 'GET /api/portfolio/holdings' },
     async (span) => {
       const { userId } = await auth();
+      const rateLimitResponse = await enforcePortfolioRateLimit(req, userId);
+      if (rateLimitResponse) {
+        return rateLimitResponse;
+      }
+
       if (!userId) {
         return createUnauthenticatedError(span, {
           path: '/api/portfolio/holdings',
@@ -156,6 +162,11 @@ export async function POST(req: NextRequest) {
       span?.setAttribute?.('path', path);
 
       const { userId } = await auth();
+      const rateLimitResponse = await enforcePortfolioRateLimit(req, userId);
+      if (rateLimitResponse) {
+        return rateLimitResponse;
+      }
+
       if (!userId) {
         return createUnauthenticatedError(span, {
           path,

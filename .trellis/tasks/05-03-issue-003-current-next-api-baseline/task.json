@@ -1,0 +1,47 @@
+{
+  "id": "issue-003-current-next-api-baseline",
+  "name": "issue-003-current-next-api-baseline",
+  "title": "ISSUE-003 Document existing Next API behavior and response shapes",
+  "description": "Linear T-134: document current Next API behavior, response shapes, auth, errors, and fixtures.",
+  "status": "planning",
+  "dev_type": "docs",
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "tong-chen",
+  "assignee": "tong-chen",
+  "createdAt": "2026-05-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "docs/migration/current-api-baseline.md",
+    "tests/fixtures/current-api/"
+  ],
+  "notes": "",
+  "meta": {
+    "linear": {
+      "issueId": "T-134",
+      "planId": "ISSUE-003",
+      "url": "https://linear.app/linnkidchen/issue/T-134/issue-003-document-existing-next-api-behavior-and-response-shapes",
+      "status": "In Progress",
+      "labels": [
+        "contracts",
+        "api",
+        "p0",
+        "migration"
+      ],
+      "project": "Stock Tracker",
+      "milestone": "Milestone 1 - Architecture and monorepo foundation",
+      "dependsOn": [
+        "ISSUE-002"
+      ]
+    }
+  }
+}

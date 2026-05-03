@@ -4,12 +4,12 @@ describe('getAddTickerError', () => {
   it('maps validation failures with provided message', () => {
     const error = getAddTickerError({
       type: 'validation',
-      message: 'Ticker symbol must contain only letters'
+      message: 'Ticker symbol must be 1-5 letters'
     });
 
     expect(error.category).toBe('validation');
     expect(error.title).toBe(ADD_TICKER_ERROR_COPY.validation.title);
-    expect(error.message).toBe('Ticker symbol must contain only letters');
+    expect(error.message).toBe('Ticker symbol must be 1-5 letters');
     expect(error.nextStep).toBe(ADD_TICKER_ERROR_COPY.validation.nextStep);
     expect(error.source).toBe('client');
   });

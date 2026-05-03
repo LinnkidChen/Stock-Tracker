@@ -4,24 +4,34 @@ import {
   type KLineCandle,
   type KLineInterval
 } from '@/lib/types/stock-api';
+import {
+  DEFAULT_TECHNICAL_INDICATORS,
+  mergeTechnicalIndicatorPreferences,
+  normalizeTechnicalIndicators,
+  type TechnicalIndicatorPreferencePatch,
+  type TechnicalIndicatorPreferences
+} from './technical-indicators';
 
 export const CHART_WORKSPACE_STORAGE_KEY = 'dashboard:chartWorkspace:v1';
 
 export const CHART_RANGES = ['1m', '3m', '6m', '1y', 'max'] as const;
 export type ChartRange = (typeof CHART_RANGES)[number];
 
-export const CHART_CANDLE_TYPES = [
-  'candle_solid',
-  'ohlc',
-  'area'
-] as const;
+export const CHART_CANDLE_TYPES = ['candle_solid', 'ohlc', 'area'] as const;
 export type ChartCandleType = (typeof CHART_CANDLE_TYPES)[number];
 
 export interface ChartPreferences {
   showVolume: boolean;
   showGrid: boolean;
   candleType: ChartCandleType;
+  indicators: TechnicalIndicatorPreferences;
 }
+
+export type ChartPreferencesPatch = Partial<
+  Omit<ChartPreferences, 'indicators'>
+> & {
+  indicators?: TechnicalIndicatorPreferencePatch;
+};
 
 export interface ChartWorkspace {
   symbol: string | null;
@@ -41,7 +51,8 @@ export const DEFAULT_CHART_WORKSPACE: ChartWorkspace = {
   preferences: {
     showVolume: true,
     showGrid: true,
-    candleType: 'candle_solid'
+    candleType: 'candle_solid',
+    indicators: DEFAULT_TECHNICAL_INDICATORS
   }
 };
 
@@ -55,6 +66,44 @@ export function isChartCandleType(
   value: string | null | undefined
 ): value is ChartCandleType {
   return CHART_CANDLE_TYPES.includes(value as ChartCandleType);
+}
+
+export function normalizeChartPreferences(
+  preferences:
+    | (Partial<Omit<ChartPreferences, 'indicators'>> & {
+        indicators?: unknown;
+      })
+    | null
+    | undefined
+): ChartPreferences {
+  return {
+    showVolume:
+      typeof preferences?.showVolume === 'boolean'
+        ? preferences.showVolume
+        : DEFAULT_CHART_WORKSPACE.preferences.showVolume,
+    showGrid:
+      typeof preferences?.showGrid === 'boolean'
+        ? preferences.showGrid
+        : DEFAULT_CHART_WORKSPACE.preferences.showGrid,
+    candleType: isChartCandleType(preferences?.candleType)
+      ? preferences.candleType
+      : DEFAULT_CHART_WORKSPACE.preferences.candleType,
+    indicators: normalizeTechnicalIndicators(preferences?.indicators)
+  };
+}
+
+export function mergeChartPreferences(
+  current: ChartPreferences,
+  patch: ChartPreferencesPatch
+): ChartPreferences {
+  return normalizeChartPreferences({
+    ...current,
+    ...patch,
+    indicators: mergeTechnicalIndicatorPreferences(
+      current.indicators,
+      patch.indicators
+    )
+  });
 }
 
 export function parseChartWorkspace(raw: string | null): ChartWorkspace {
@@ -82,19 +131,7 @@ export function parseChartWorkspace(raw: string | null): ChartWorkspace {
       range: isChartRange(parsed.range)
         ? parsed.range
         : DEFAULT_CHART_WORKSPACE.range,
-      preferences: {
-        showVolume:
-          typeof preferences?.showVolume === 'boolean'
-            ? preferences.showVolume
-            : DEFAULT_CHART_WORKSPACE.preferences.showVolume,
-        showGrid:
-          typeof preferences?.showGrid === 'boolean'
-            ? preferences.showGrid
-            : DEFAULT_CHART_WORKSPACE.preferences.showGrid,
-        candleType: isChartCandleType(preferences?.candleType)
-          ? preferences.candleType
-          : DEFAULT_CHART_WORKSPACE.preferences.candleType
-      }
+      preferences: normalizeChartPreferences(preferences)
     };
   } catch {
     return DEFAULT_CHART_WORKSPACE;
@@ -122,7 +159,9 @@ export function filterCandlesByRange(
     startDate.setMonth(startDate.getMonth() - months);
   }
 
-  const filtered = candles.filter((candle) => candle.timestamp >= startDate.getTime());
+  const filtered = candles.filter(
+    (candle) => candle.timestamp >= startDate.getTime()
+  );
 
   return filtered.length > 0 ? filtered : [candles[candles.length - 1]];
 }

@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
-import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
+import {
+  AUTO_QUOTE_PROVIDER,
+  CANONICAL_QUOTE_PROVIDER
+} from '@/lib/providers/config';
 import { StockProviderFactory } from '@/lib/providers/factory';
 import {
   createErrorResponse,
@@ -28,14 +31,19 @@ export async function GET(request: NextRequest) {
       span?.setAttribute('path', requestPath);
 
       try {
-        const provider = StockProviderFactory.getProvider(providerName);
-        const health = await provider.healthCheck();
+        const health =
+          providerName === AUTO_QUOTE_PROVIDER || providerName === 'all'
+            ? await StockProviderFactory.getProviderHealthReport()
+            : await StockProviderFactory.getProvider(
+                providerName
+              ).healthCheck();
 
         span?.setAttribute('provider.status', health.status);
 
         if (health.status !== 'healthy') {
-          const code = isObservedErrorCode(health.details?.code)
-            ? health.details.code
+          const detailCode = 'details' in health ? health.details?.code : null;
+          const code = isObservedErrorCode(detailCode)
+            ? detailCode
             : 'PROVIDER_FAILURE';
 
           reportObservedError({

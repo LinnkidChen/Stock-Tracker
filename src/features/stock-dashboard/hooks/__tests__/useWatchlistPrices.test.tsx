@@ -91,10 +91,7 @@ async function waitFor(predicate: () => boolean, timeout = 2000) {
   }
 }
 
-async function waitForWithFakeTimers(
-  predicate: () => boolean,
-  timeout = 2000
-) {
+async function waitForWithFakeTimers(predicate: () => boolean, timeout = 2000) {
   const start = Date.now();
 
   while (!predicate()) {
@@ -420,7 +417,9 @@ describe('useWatchlistPrices', () => {
     await waitFor(() => MockBrowserWebSocket.instances.length === 1);
     const socket = MockBrowserWebSocket.instances[0];
 
-    expect(socket.url).toBe('ws://localhost/api/ws/prices?provider=longbridge');
+    expect(socket.url).toBe(
+      `ws://localhost/api/ws/prices?provider=${CANONICAL_QUOTE_PROVIDER}`
+    );
 
     act(() => {
       socket.open();

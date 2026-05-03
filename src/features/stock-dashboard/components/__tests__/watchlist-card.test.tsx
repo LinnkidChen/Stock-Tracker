@@ -210,14 +210,14 @@ describe('WatchlistCard add error modal flows', () => {
     (global.fetch as jest.Mock).mockClear();
 
     const input = screen.getByPlaceholderText(
-      'Add symbol (1-5 letters, e.g., MSFT)'
+      'Add symbol (e.g., MSFT or 0700.HK)'
     );
     await user.type(input, 'AAPL1');
     await user.click(screen.getByRole('button', { name: /^Add$/ }));
 
     expect(await screen.findByText('Invalid symbol')).toBeInTheDocument();
     expect(
-      screen.getByText('Ticker symbol must contain only letters')
+      screen.getByText('Ticker symbol must be 1-5 letters')
     ).toBeInTheDocument();
     expect(input).toHaveValue('AAPL1');
     expect(global.fetch).not.toHaveBeenCalled();
@@ -268,14 +268,14 @@ describe('WatchlistCard add error modal flows', () => {
     renderWithProviders(<WatchlistCard />);
 
     await user.type(
-      screen.getByPlaceholderText('Add symbol (1-5 letters, e.g., MSFT)'),
+      screen.getByPlaceholderText('Add symbol (e.g., MSFT or 0700.HK)'),
       'AAPL'
     );
     await user.click(screen.getByRole('button', { name: /^Add$/ }));
     await screen.findByText('AAPL');
 
     await user.type(
-      screen.getByPlaceholderText('Add symbol (1-5 letters, e.g., MSFT)'),
+      screen.getByPlaceholderText('Add symbol (e.g., MSFT or 0700.HK)'),
       'AAPL'
     );
     await user.click(screen.getByRole('button', { name: /^Add$/ }));
@@ -287,7 +287,7 @@ describe('WatchlistCard add error modal flows', () => {
       screen.getByText('That symbol is already in your watchlist.')
     ).toBeInTheDocument();
     expect(
-      screen.getByPlaceholderText('Add symbol (1-5 letters, e.g., MSFT)')
+      screen.getByPlaceholderText('Add symbol (e.g., MSFT or 0700.HK)')
     ).toHaveValue('AAPL');
     expect(addCalls).toBe(1);
   });
@@ -312,7 +312,7 @@ describe('WatchlistCard add error modal flows', () => {
     renderWithProviders(<WatchlistCard />);
 
     const input = screen.getByPlaceholderText(
-      'Add symbol (1-5 letters, e.g., MSFT)'
+      'Add symbol (e.g., MSFT or 0700.HK)'
     );
     await user.type(input, 'MSFT');
     await user.click(screen.getByRole('button', { name: /^Add$/ }));
@@ -345,7 +345,7 @@ describe('WatchlistCard add error modal flows', () => {
     renderWithProviders(<WatchlistCard />);
 
     const input = screen.getByPlaceholderText(
-      'Add symbol (1-5 letters, e.g., MSFT)'
+      'Add symbol (e.g., MSFT or 0700.HK)'
     );
     await user.type(input, 'TSLA');
     await user.click(screen.getByRole('button', { name: /^Add$/ }));
@@ -471,7 +471,7 @@ describe('WatchlistCard groups and metadata', () => {
 
     await screen.findByText('Build your watchlist');
     await user.type(
-      screen.getByPlaceholderText('Add symbol (1-5 letters, e.g., MSFT)'),
+      screen.getByPlaceholderText('Add symbol (e.g., MSFT or 0700.HK)'),
       'aapl'
     );
     await user.type(screen.getByPlaceholderText('Exchange'), 'nasdaq');

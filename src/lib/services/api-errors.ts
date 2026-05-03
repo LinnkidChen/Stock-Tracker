@@ -11,7 +11,8 @@ import {
  */
 export function createErrorResponse<T = null>(
   error: APIError,
-  statusCode?: number
+  statusCode?: number,
+  headers?: HeadersInit
 ): NextResponse<APIResponse<T>> {
   const responseError = toDashboardError(error);
   const response: APIResponse<T> = {
@@ -23,11 +24,12 @@ export function createErrorResponse<T = null>(
 
   const status = statusCode || getStatusCodeForError(error.code);
   const retryAfter = getRetryAfterFromError(error);
-  const headers: HeadersInit = retryAfter
-    ? { 'Retry-After': String(retryAfter) }
-    : {};
+  const responseHeaders = new Headers(headers);
+  if (retryAfter) {
+    responseHeaders.set('Retry-After', String(retryAfter));
+  }
 
-  return NextResponse.json(response, { status, headers });
+  return NextResponse.json(response, { status, headers: responseHeaders });
 }
 
 /**
@@ -120,7 +122,8 @@ export function wrapError(
  * Create a rate limit error response
  */
 export function createRateLimitResponse(
-  retryAfter?: number
+  retryAfter?: number,
+  headers?: HeadersInit
 ): NextResponse<APIResponse<null>> {
   // Validate and cap retry time to reasonable limits (max 5 minutes)
   const validRetryAfter = getValidRetryAfter(retryAfter);
@@ -130,7 +133,7 @@ export function createRateLimitResponse(
     validRetryAfter ? { retryAfter: validRetryAfter } : undefined
   );
 
-  return createErrorResponse(error, 429);
+  return createErrorResponse(error, 429, headers);
 }
 
 export function getRetryAfterFromError(error: APIError): number | undefined {

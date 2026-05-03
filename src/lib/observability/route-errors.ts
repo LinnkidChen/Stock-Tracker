@@ -34,6 +34,7 @@ interface ResponseOptions {
   message?: string;
   details?: Record<string, unknown>;
   statusCode?: number;
+  headers?: HeadersInit;
 }
 
 export function reportObservedError({
@@ -63,11 +64,13 @@ export function createObservedErrorResponse<T = null>({
   code,
   message,
   details,
-  statusCode
+  statusCode,
+  headers
 }: ResponseOptions): NextResponse<APIResponse<T>> {
   return createErrorResponse<T>(
     createObservedError(code, { message, details }),
-    statusCode
+    statusCode,
+    headers
   );
 }
 

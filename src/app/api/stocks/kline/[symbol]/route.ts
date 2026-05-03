@@ -4,6 +4,7 @@ import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import { getStockService } from '@/lib/services/stock-service';
 import {
   createErrorResponse,
+  createRateLimitResponse,
   createSuccessResponse,
   getStatusCodeForError,
   isAPIError
@@ -16,6 +17,7 @@ import {
   reportApiError,
   reportObservedError
 } from '@/lib/observability/route-errors';
+import { checkRateLimit, createRateLimitHeaders } from '@/lib/rate-limit';
 
 const CACHE_HEADER = 'public, s-maxage=86400, stale-while-revalidate=604800';
 
@@ -32,6 +34,11 @@ export async function GET(
       let interval = DEFAULT_KLINE_INTERVAL;
 
       try {
+        const rateLimit = await enforceKLineRateLimit(request, requestPath);
+        if (rateLimit.response) {
+          return rateLimit.response;
+        }
+
         const { symbol: rawSymbol } = await params;
         symbol = normalizeTicker(rawSymbol ?? '');
 
@@ -103,6 +110,7 @@ export async function GET(
         span?.setAttribute('kline.candles', series.candles.length);
 
         return createSuccessResponse(series, {
+          ...rateLimit.headers,
           'Cache-Control': CACHE_HEADER
         });
       } catch (error) {
@@ -146,6 +154,42 @@ export async function GET(
       }
     }
   );
+}
+
+async function enforceKLineRateLimit(request: NextRequest, path: string) {
+  try {
+    const result = await checkRateLimit(request, 'kline');
+    const headers = createRateLimitHeaders(result);
+
+    if (!result.allowed) {
+      return {
+        response: createRateLimitResponse(result.retryAfter, headers),
+        headers
+      };
+    }
+
+    return { headers };
+  } catch (error) {
+    reportObservedError({
+      code: 'RATE_LIMIT_UNAVAILABLE',
+      message: 'K-line API rate limiter unavailable',
+      error,
+      context: {
+        path,
+        operation: 'stock.kline',
+        errorDomain: 'stock-data'
+      }
+    });
+
+    return {
+      response: createObservedErrorResponse({
+        code: 'RATE_LIMIT_UNAVAILABLE',
+        message: 'Rate limit service unavailable',
+        statusCode: 503
+      }),
+      headers: {}
+    };
+  }
 }
 
 function getRequestPath(request: NextRequest): string {
