@@ -51,50 +51,29 @@ class Logger {
       });
     }
 
-    // Local file logging for errors/warnings in development
+    // Browser-side development logs can be forwarded to the local log endpoint.
+    // Server and Edge runtimes already emit structured logs to stdout above.
     if (
       process.env.NODE_ENV === 'development' &&
+      typeof window !== 'undefined' &&
       (level === 'error' || level === 'warn')
     ) {
       const stack = context?.error?.stack || new Error().stack;
 
-      if (typeof window === 'undefined') {
-        // Server-side: Write directly
-        // Dynamic import fs to avoid client-side build errors
-        import('fs')
-          .then((fs) => {
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const path = require('path');
-            const logLine = `[${timestamp}] [${level.toUpperCase()}] ${message}
-File/Line: ${stack ? stack.split('\n')[2]?.trim() : 'N/A'}
-Context: ${JSON.stringify(context)}
-Stack: ${stack}
-----------------------------------------
-`;
-            const logFilePath = path.join(process.cwd(), 'error.log');
-            fs.appendFileSync(logFilePath, logLine);
-          })
-          .catch((err) =>
-            // eslint-disable-next-line no-console
-            console.error('Failed to write log', err)
-          );
-      } else {
-        // Client-side: Send to API
-        fetch('/api/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            timestamp,
-            level,
-            message,
-            stack,
-            ...context
-          })
-        }).catch((e) =>
-          // eslint-disable-next-line no-console
-          console.error('Failed to send log to server', e)
-        );
-      }
+      fetch('/api/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timestamp,
+          level,
+          message,
+          stack,
+          ...context
+        })
+      }).catch((e) =>
+        // eslint-disable-next-line no-console
+        console.error('Failed to send log to server', e)
+      );
     }
   }
 
