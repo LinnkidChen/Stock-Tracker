@@ -2,13 +2,14 @@
  * @jest-environment jsdom
  */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { KLineChart } from '../KLineChart';
 import { useKlineSeries } from '../../hooks/useKlineSeries';
 import { StockApiResponseError } from '../../lib/stock-api-error';
 import { createKLineChart } from '../../lib/klinecharts';
 import type { KLineCandle, KLineInterval } from '@/lib/types/stock-api';
+import { normalizeChartPreferences } from '../../lib/chart-workspace';
 
 jest.mock('../../hooks/useKlineSeries');
 jest.mock('../../lib/klinecharts', () => ({
@@ -228,9 +229,9 @@ describe('KLineChart', () => {
     const latestCall = calls[calls.length - 1];
 
     expect(latestCall[1]).toHaveLength(2);
-    expect(latestCall[1].map((candle: { close: number }) => candle.close)).toEqual([
-      108, 114
-    ]);
+    expect(
+      latestCall[1].map((candle: { close: number }) => candle.close)
+    ).toEqual([108, 114]);
   });
 
   it('passes display preferences to the klinecharts adapter', async () => {
@@ -257,7 +258,76 @@ describe('KLineChart', () => {
       symbol: 'AAPL',
       interval: 'day',
       data: [],
-      preferences
+      preferences: normalizeChartPreferences(preferences)
+    });
+  });
+
+  it('renders indicator controls and persists parameter changes', async () => {
+    mockUseKlineSeries.mockReturnValue({
+      data: buildSeries('day'),
+      isLoading: false,
+      isError: false,
+      error: null,
+      noData: false,
+      refetch: jest.fn()
+    } as any);
+
+    const onPreferencesChange = jest.fn();
+    const preferences = normalizeChartPreferences({
+      indicators: {
+        sma: {
+          enabled: true,
+          period: 20
+        },
+        macd: {
+          enabled: true,
+          fastPeriod: 12,
+          slowPeriod: 26,
+          signalPeriod: 9
+        }
+      }
+    });
+
+    render(
+      <KLineChart
+        ticker='AAPL'
+        preferences={preferences}
+        onPreferencesChange={onPreferencesChange}
+      />
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'SMA indicator' })
+    ).toHaveAttribute('data-state', 'on');
+    expect(screen.getByLabelText('SMA period')).toHaveValue(20);
+    expect(screen.getByLabelText('MACD fast period')).toHaveValue(12);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'EMA indicator' })
+    );
+
+    expect(onPreferencesChange).toHaveBeenCalledWith({
+      indicators: expect.objectContaining({
+        ema: {
+          enabled: true
+        }
+      })
+    });
+
+    onPreferencesChange.mockClear();
+
+    fireEvent.change(screen.getByLabelText('SMA period'), {
+      target: {
+        value: '30'
+      }
+    });
+
+    expect(onPreferencesChange).toHaveBeenLastCalledWith({
+      indicators: {
+        sma: {
+          period: 30
+        }
+      }
     });
   });
 

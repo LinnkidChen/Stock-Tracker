@@ -29,7 +29,7 @@ import {
   IconUserEdit,
   IconUserX,
   IconX,
-  IconLayoutKanban,
+  IconChartCandle,
   IconBrandGithub,
   IconTrendingUp,
   IconWallet
@@ -44,7 +44,7 @@ export const Icons = {
   close: IconX,
   product: IconShoppingBag,
   spinner: IconLoader2,
-  kanban: IconLayoutKanban,
+  charts: IconChartCandle,
   chevronLeft: IconChevronLeft,
   chevronRight: IconChevronRight,
   trash: IconTrash,

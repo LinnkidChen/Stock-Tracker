@@ -97,7 +97,9 @@ describe('/api/stocks/providers/health API Route', () => {
     mockProvider.healthCheck.mockResolvedValue(health);
 
     const response = await GET(
-      createMockRequest('http://localhost:3000/api/stocks/providers/health')
+      createMockRequest(
+        'http://localhost:3000/api/stocks/providers/health?provider=longbridge'
+      )
     );
     const responseData: APIResponse<ProviderHealthCheck> =
       await response.json();

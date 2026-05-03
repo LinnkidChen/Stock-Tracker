@@ -1,216 +1,274 @@
 # Stock Tracker
 
-<div align="center"><strong>全面的股票投资组合分析与指标平台</strong></div>
-<div align="center">基于 Next.js 15、React 19、TradingView Lightweight Charts 与 klinecharts 构建</div>
-<br />
+Stock Tracker is a Next.js application for monitoring market quotes, charting
+selected symbols, maintaining a watchlist, and tracking current portfolio
+holdings. The current product is narrower than the long-term roadmap: it ships
+the stock dashboard, chart workspace, setup diagnostics, watchlist persistence,
+and portfolio holdings persistence, while dedicated portfolio, watchlist,
+alerts, reports, settings, and overview pages remain planned.
 
-## 概览
+## Project Status
 
-Stock Tracker 是一个全面的股票投资组合分析与指标平台，旨在为投资者提供实时市场洞察与组合表现跟踪。它提供统一的仪表盘，用于监控股票、分析技术指标并支持数据驱动的投资决策。
+### Implemented
 
-- 框架 - [Next.js 15](https://nextjs.org/13)
-- 语言 - [TypeScript](https://www.typescriptlang.org)
-- 认证 - [Clerk](https://go.clerk.com/ILdYhn7)
-- 错误追踪 - [<picture><img alt="Sentry" src="public/assets/sentry.svg">
-  </picture>](https://sentry.io/for/nextjs/?utm_source=github&utm_medium=paid-community&utm_campaign=general-fy26q2-nextjs&utm_content=github-banner-project-tryfree)
-- 样式 - [Tailwind CSS v4](https://tailwindcss.com)
-- 组件 - [Shadcn-ui](https://ui.shadcn.com)
-- Schema 校验 - [Zod](https://zod.dev)
-- 状态管理 - [Zustand](https://zustand-demo.pmnd.rs)
-- 搜索参数状态管理 - [Nuqs](https://nuqs.47ng.com/)
-- 表格 - [Tanstack Data Tables](https://ui.shadcn.com/docs/components/data-table) • [Dice table](https://www.diceui.com/docs/components/data-table)
-- 表单 - [React Hook Form](https://ui.shadcn.com/docs/components/form)
-- Command+k 面板 - [kbar](https://kbar.vercel.app/)
-- Lint - [ESLint](https://eslint.org)
-- 预提交钩子 - [Husky](https://typicode.github.io/husky/)
-- 格式化 - [Prettier](https://prettier.io)
+- Authentication routes for sign-in and sign-up, with authenticated users
+  redirected to `/dashboard/stocks`.
+- `/dashboard/stocks` with market overview, quote provider selection, ticker
+  search, watchlist card, and portfolio holdings card.
+- `/dashboard/charts` with a klinecharts-based chart workspace for a selected
+  ticker, interval, range, display preferences, and configurable SMA, EMA, RSI,
+  MACD, Bollinger Bands, and VWAP indicators.
+- `/dashboard/operations` with setup diagnostics for Clerk, Supabase, and
+  market data provider configuration.
+- Multi-provider quote and k-line API routes with Longbridge primary routing,
+  Yahoo Finance fallback, provider health metadata, and per-symbol provider
+  selection.
+- Watchlist API with Supabase persistence, symbol metadata, ordering, and tests.
+- Portfolio holdings API with Supabase persistence for current symbol quantity
+  and average cost, plus tests.
+- Shared Supabase-backed API rate limiting for quote, k-line, streaming,
+  watchlist, and portfolio endpoints.
+- Clerk-protected dashboard routes, Sentry instrumentation, React Query, Zustand
+  client state, Jest unit tests, and a small Playwright smoke test.
 
-- **实时股票仪表盘**：交互式价格图表，支持蜡烛图形态、成交量分析与市场深度
-- **技术指标**：RSI、MACD、移动平均、布林带与自定义指标
-- **组合管理**：追踪多个投资组合的实时估值与盈亏
-- **关注列表与提醒**：可配置关注列表与价格/指标提醒
-- **绩效分析**：组合指标、风险分析与市场指数对比
+### In Progress
 
-## 技术栈
+- production readiness for local and deployed Clerk, Supabase, and Longbridge
+  setup. The operations page exposes configuration gaps, but deployment-specific
+  verification is still required.
+- Portfolio management is currently limited to current holdings by symbol. Trade
+  history, lots, realized P&L, and tax workflows are not implemented.
+- Watchlist management exists inside the stock dashboard card, but does not yet
+  have a dedicated full-page workflow.
+- Charting supports k-line visualization, display preferences, and the initial
+  technical indicator library. Custom indicator authoring is still planned.
+- Dashboard UX still carries some starter-shell structure while the app becomes
+  fully stock-tracker-specific.
 
-| 页面                                                                                                                                                                   | 说明                                                                                          |
-| :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------- |
-| [Signup / Signin](https://go.clerk.com/ILdYhn7)                                                                                                                        | 使用 **Clerk** 提供安全认证与用户管理，支持无密码登录、社交登录与企业 SSO，兼顾安全性与体验。 |
-| [Dashboard (Overview)](https://shadcn-dashboard.kiranism.dev/dashboard)                                                                                                | 使用 Recharts 的卡片型分析图表。概览页采用并行路由，具备独立加载、错误处理与组件隔离渲染。    |
-| [Product](https://shadcn-dashboard.kiranism.dev/dashboard/product)                                                                                                     | 使用 Tanstack tables，支持 Nuqs 管理的服务端搜索、过滤与分页。                                |
-| [Product/new](https://shadcn-dashboard.kiranism.dev/dashboard/product/new)                                                                                             | 使用 shadcn 表单（react-hook-form + zod）。                                                   |
-| [Profile](https://shadcn-dashboard.kiranism.dev/dashboard/profile)                                                                                                     | 使用 Clerk 完整的账号管理 UI，支持个人资料与安全设置。                                        |
-| [Kanban Board](https://shadcn-dashboard.kiranism.dev/dashboard/kanban)                                                                                                 | 使用 dnd-kit + zustand 的拖拽看板，状态本地持久化。                                           |
-| [Not Found](https://shadcn-dashboard.kiranism.dev/dashboard/notfound)                                                                                                  | 根级 Not Found 页面。                                                                         |
-| [Global Error](https://sentry.io/for/nextjs/?utm_source=github&utm_medium=paid-community&utm_campaign=general-fy26q2-nextjs&utm_content=github-banner-project-tryfree) | 全局错误页面，集中捕获与展示错误。与 **Sentry** 集成以记录错误并提供调试信息。                |
+### Planned
 
-- **框架**: [Next.js 15](https://nextjs.org)（App Router）
-- **语言**: [TypeScript](https://www.typescriptlang.org) 5.7.2
-- **运行时**: Node.js 20+
-- **包管理器**: pnpm
+- Dedicated portfolio and watchlist pages.
+- Price and indicator alerts.
+- Reports, exports, and tax-oriented workflows.
+- Settings page for user preferences and alert configuration.
+- Full dashboard overview page instead of redirecting `/dashboard` to stocks.
+- Custom technical indicators and analytics.
+- Committed screenshots for the README.
 
-### UI 与可视化
+## Feature Matrix
 
-- **样式**: [Tailwind CSS v4](https://tailwindcss.com)
-- **组件**: [Shadcn-ui](https://ui.shadcn.com)（Radix UI primitives）
-- **金融图表**: [TradingView Lightweight Charts™](https://www.tradingview.com/lightweight-charts/) 与 [klinecharts](https://klinecharts.com) - 价格图表与 K 线图
-- **分析图表**: [Recharts](https://recharts.org) - KPI、分布与非金融可视化
-- **命令面板**: [kbar](https://kbar.vercel.app/)
+| Feature                   | UI                           | API     | Persistence        | Auth                            | Tests   | production readiness |
+| :------------------------ | :--------------------------- | :------ | :----------------- | :------------------------------ | :------ | :------------------- |
+| Auth shell and redirects  | Yes                          | N/A     | Clerk              | Yes                             | Partial | Partial              |
+| Stock dashboard           | Yes                          | Yes     | Local client state | Dashboard protected             | Yes     | Partial              |
+| Market quotes             | Yes                          | Yes     | N/A                | Dashboard protected, API public | Yes     | Partial              |
+| Technical chart workspace | Yes                          | Yes     | Local client state | Dashboard protected             | Yes     | Partial              |
+| Watchlist                 | Partial: dashboard card only | Yes     | Supabase           | Yes                             | Yes     | Partial              |
+| Portfolio holdings        | Partial: dashboard card only | Yes     | Supabase           | Yes                             | Yes     | Partial              |
+| Operations diagnostics    | Yes                          | N/A     | N/A                | Dashboard protected             | Yes     | Partial              |
+| Dedicated portfolio page  | Planned                      | Partial | Partial            | Planned                         | Partial | Planned              |
+| Dedicated watchlist page  | Planned                      | Partial | Partial            | Planned                         | Partial | Planned              |
+| Alerts                    | Planned                      | Planned | Planned            | Planned                         | Planned | Planned              |
+| Reports and exports       | Planned                      | Planned | Planned            | Planned                         | Planned | Planned              |
+| Settings                  | Planned                      | Planned | Planned            | Planned                         | Planned | Planned              |
 
-### 状态与数据管理
+## Route Map
 
-- **客户端状态**: [Zustand](https://zustand-demo.pmnd.rs) v5
-- **服务端状态**: 通过 provider 使用 React Query
-- **表单**: [React Hook Form](https://ui.shadcn.com/docs/components/form) + [Zod](https://zod.dev)
-- **表格**: [Tanstack Data Tables](https://ui.shadcn.com/docs/components/data-table)
-- **Search Params**: [Nuqs](https://nuqs.47ng.com/)
+### Pages
 
-### 基础设施与开发体验
+| Route                   | Status               | Description                                                                                |
+| :---------------------- | :------------------- | :----------------------------------------------------------------------------------------- |
+| `/`                     | Implemented          | Redirects unauthenticated users to sign-in and authenticated users to `/dashboard/stocks`. |
+| `/auth/sign-in`         | Implemented          | Clerk sign-in page.                                                                        |
+| `/auth/sign-up`         | Implemented          | Clerk sign-up page.                                                                        |
+| `/dashboard`            | Implemented redirect | Requires auth and redirects to `/dashboard/stocks`.                                        |
+| `/dashboard/stocks`     | Implemented          | Main stock dashboard with market overview, watchlist card, and portfolio holdings card.    |
+| `/dashboard/charts`     | Implemented          | Technical chart workspace for selected symbols.                                            |
+| `/dashboard/operations` | Implemented          | Environment and product-readiness diagnostics.                                             |
 
-- **认证**: [Clerk](https://go.clerk.com/ILdYhn7)
-- **数据库**: [Supabase](https://supabase.com) (关注列表持久化)
-- **错误追踪**: [Sentry](https://sentry.io/for/nextjs/)
-- **Lint**: [ESLint](https://eslint.org)
-- **格式化**: [Prettier](https://prettier.io)
-- **预提交钩子**: [Husky](https://typicode.github.io/husky/)
+### API Routes
 
-## 功能与页面
+| Route                          | Methods                          | Status      | Description                                               |
+| :----------------------------- | :------------------------------- | :---------- | :-------------------------------------------------------- |
+| `/api/stocks/quote/[symbol]`   | `GET`                            | Implemented | Fetches a quote through the provider registry.            |
+| `/api/stocks/kline/[symbol]`   | `GET`                            | Implemented | Fetches k-line series data through the provider registry. |
+| `/api/stocks/providers/health` | `GET`                            | Implemented | Checks provider readiness and fallback metadata.          |
+| `/api/ws/prices`               | `GET` WebSocket upgrade          | Implemented | Poll-backed price updates for subscribed symbols.         |
+| `/api/watchlist`               | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist CRUD, metadata, and ordering.     |
+| `/api/portfolio/holdings`      | `GET`, `POST`                    | Implemented | Authenticated current holdings list and creation.         |
+| `/api/portfolio/holdings/[id]` | `PATCH`, `DELETE`                | Implemented | Authenticated holdings update and deletion.               |
+| `/api/log`                     | `POST`                           | Implemented | Client log ingestion.                                     |
 
-### 股票分析功能
+## Tech Stack
 
-| 功能               | 描述                                                                                         |
-| :----------------- | :------------------------------------------------------------------------------------------- |
-| **股票仪表盘**     | 使用 TradingView Lightweight Charts 的实时价格图表，支持蜡烛图形态、成交量指标与技术分析工具 |
-| **K 线图 Tab**     | 使用 klinecharts 展示 1 年日 K 线；仅支持单一 ticker，由 Longbridge 数据源提供               |
-| **投资组合追踪**   | 监控多个组合的实时盈亏、资产配置可视化与绩效指标                                             |
-| **技术指标**       | RSI、MACD、移动平均、布林带等综合指标套件                                                    |
-| **关注列表与提醒** | 创建关注列表并设置价格提醒与指标提醒                                                         |
-| **市场概览**       | 通过交互式可视化跟踪板块表现、市场指数与热门股票                                             |
+- Framework: Next.js 16 App Router
+- Runtime: React 19, Node.js 20+
+- Language: TypeScript 5.7.2
+- Styling: Tailwind CSS v4 and shadcn/ui components
+- Authentication: Clerk
+- Persistence: Supabase with Clerk-issued JWTs
+- Stock data providers: Longbridge and Yahoo Finance fallback via the provider
+  registry
+- Charting: klinecharts
+- State management: Zustand and React Query
+- Validation: Zod and local ticker validation
+- Observability: Sentry and local structured logging
+- Testing: Jest, Testing Library, and Playwright
+- Package manager: pnpm
 
-### 核心仪表盘页面
+## Screenshots
 
-| 页面                     | 描述                                             |
-| :----------------------- | :----------------------------------------------- |
-| **Dashboard (Overview)** | 使用 Recharts 的组合总览与市场指数、关键绩效指标 |
-| **Stock Details**        | 单只股票分析页面，包含价格图表、指标与公司信息   |
-| **Portfolio Management** | 管理持仓、跟踪交易并分析组合绩效                 |
-| **Watchlists**           | 创建与管理关注列表，实时更新                     |
-| **Settings**             | 用户偏好、提醒配置与 Clerk 账号管理              |
-| **Reports**              | 生成投资组合报告并导出数据用于税务               |
+Screenshots are not currently committed. The intended screenshot set is:
 
-## 项目结构
+- Stock dashboard at `/dashboard/stocks`
+- Technical chart page at `/dashboard/charts`
+- Operations diagnostics at `/dashboard/operations`
+- Auth screen at `/auth/sign-in`
+
+## Project Structure
 
 ```plaintext
 src/
-├── app/                      # Next.js App Router
-│   ├── (auth)/              # 认证路由
-│   ├── (dashboard)/         # 仪表盘路由
-│   │   ├── dashboard/
-│   │   │   ├── stocks/      # 股票分析页面
-│   │   │   ├── portfolio/   # 组合管理
-│   │   │   └── watchlist/   # 关注列表功能
-│   └── api/                 # API 路由
-│
-├── components/              # 共享组件
-│   ├── ui/                  # shadcn/ui 组件
-│   ├── layout/              # 布局组件
-│   └── charts/              # 图表组件
-│
-├── features/                # 功能模块
-│   ├── stock-dashboard/     # 股票分析功能
-│   │   ├── components/      # 股票专用组件
-│   │   ├── hooks/          # 自定义 hooks
-│   │   ├── lib/            # 图表配置
-│   │   └── types/          # TypeScript 类型
-│   ├── portfolio/          # 投资组合管理
-│   ├── watchlist/          # 关注列表功能
-│   └── overview/           # 仪表盘概览
-│
-├── lib/                    # 核心工具
-│   ├── auth/              # Clerk 配置
-│   ├── api/               # API 客户端
-│   └── utils/             # 共享工具
-│
-├── hooks/                  # 全局自定义 hooks
-├── stores/                 # Zustand stores
-└── types/                  # 全局 TypeScript 类型
+├── app/
+│   ├── api/
+│   │   ├── portfolio/holdings/
+│   │   ├── stocks/
+│   │   ├── watchlist/
+│   │   └── ws/prices/
+│   ├── auth/
+│   └── dashboard/
+│       ├── charts/
+│       ├── operations/
+│       └── stocks/
+├── components/
+│   ├── layout/
+│   └── ui/
+├── features/
+│   ├── auth/
+│   ├── operations/
+│   └── stock-dashboard/
+├── lib/
+│   ├── diagnostics/
+│   ├── portfolio/
+│   ├── providers/
+│   ├── services/
+│   ├── supabase/
+│   └── watchlist/
+└── types/
 ```
 
-## 快速开始
+## Quick Start
 
-### 前置条件
+### Prerequisites
 
 - Node.js 20+
-- pnpm 包管理器
+- pnpm
 - Git
 
-### 安装
+### Install
 
-1. 克隆仓库:
+1. Clone the repository:
 
 ```bash
-git clone https://github.com/your-username/stock-tracker.git
-cd stock-tracker
+git clone https://github.com/LinnkidChen/Stock-Tracker.git
+cd Stock-Tracker
 ```
 
-2. 安装依赖:
+2. Install dependencies:
 
 ```bash
 pnpm install
 ```
 
-3. 配置环境变量:
+3. Create a local environment file:
 
 ```bash
 cp env.example.txt .env.local
 ```
 
-4. 在 `.env.local` 中配置：
+4. Configure environment variables as needed:
 
-   - Clerk 认证密钥（初始化可选）
-   - Sentry DSN（可选）。设置 `NEXT_PUBLIC_SENTRY_DISABLED=true` 可禁用。
-   - Longbridge API Config（行情接口必需）：`LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`, `LONGPORT_ACCESS_TOKEN`。
-   - Upstash Redis（分布式限流与 Longbridge provider budget）：`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`。缺少时限流会 fail-open。
-   - Supabase Config (用于关注列表与组合持仓持久化): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`.
-   - Supabase schema：执行 `database_schema/watchlist.sql` 与 `database_schema/portfolio.sql`。
-   - Supabase 认证集成：Clerk 中必须存在名为 `supabase` 的 JWT template，且 Supabase 必须配置为验证 Clerk 签发的 JWT。
+- Clerk: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`
+- Longbridge primary provider: `LONGPORT_APP_KEY`, `LONGPORT_APP_SECRET`,
+  `LONGPORT_ACCESS_TOKEN`, `LONGPORT_REGION`. If these are missing, auto
+  routing can still fall back to the no-credential Yahoo Finance adapter.
+- Supabase: `NEXT_PUBLIC_SUPABASE_URL`,
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
+- Upstash Redis for distributed rate limits and Longbridge provider budgets:
+  `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`. Rate limiting fails
+  open when these are missing.
+- Rate limiting: tune `RATE_LIMIT_*` and `LONGBRIDGE_*_BUDGET_*` values if the
+  defaults are not appropriate for the deployment.
+- Supabase schema: apply `database_schema/watchlist.sql` and
+  `database_schema/portfolio.sql`.
+- Supabase auth integration: Clerk must have a JWT template named `supabase`,
+  and Supabase must verify Clerk-issued JWTs.
+- Sentry: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`,
+  `NEXT_PUBLIC_SENTRY_DISABLED`
 
-5. 启动开发服务:
+5. Start the development server:
 
 ```bash
+pnpm env:check
 pnpm dev
 ```
 
-应用将运行在 http://localhost:3000
+The app runs at http://localhost:3000 by default.
 
-### Supabase 认证说明
+## Supabase Authentication
 
-关注列表与组合持仓接口依赖 Supabase Row Level Security，并假设请求里的 JWT 满足：
+Watchlist and portfolio holdings persistence depend on Supabase Row Level
+Security and Clerk-issued Supabase JWTs. The expected setup is:
 
-- JWT 来自 Clerk 的 `supabase` template
-- JWT 的 `sub` 等于 Clerk user id
-- Supabase 已配置为信任并验证 Clerk 签发的 JWT
+- Clerk has a JWT template named `supabase`.
+- Supabase is configured to verify Clerk-issued JWTs.
+- The JWT `sub` claim matches the Clerk user id.
+- `database_schema/watchlist.sql` and `database_schema/portfolio.sql` have been
+  applied to the Supabase project.
+- `database_schema/api_rate_limits.sql` has been applied to support the shared
+  API limiter used by stock, watchlist, portfolio, and streaming routes.
 
-如果缺少以上配置，`/api/watchlist` 现在会返回 `503`，并带上稳定错误码 `WATCHLIST_AUTH_MISCONFIGURED`，而不是继续回退到不被 Supabase 接受的默认 Clerk token。
-`/api/portfolio/holdings` 会返回 `PORTFOLIO_AUTH_MISCONFIGURED`。
+If this setup is missing, `/api/watchlist` returns
+`WATCHLIST_AUTH_MISCONFIGURED`, and `/api/portfolio/holdings` returns
+`PORTFOLIO_AUTH_MISCONFIGURED`.
 
-### 组合持仓
+In production, the rate limiter fails closed if `SUPABASE_SERVICE_ROLE_KEY` or
+the rate limit RPC is missing. Set `RATE_LIMIT_DISABLED=true` only for local
+debugging.
 
-股票仪表盘的 Portfolio 卡片使用当前持仓模型：每个用户每个 symbol 一条持仓，包含 `quantity` 与 `avgCost`。卡片支持新增、编辑、删除，并用实时 quote 计算 Total Value、Day P&L 与 Total P&L。税务批次与交易流水不在当前版本范围内。
+## Portfolio Model
 
-### 开发命令
+The current portfolio model stores one holding per user and symbol with:
+
+- `symbol`
+- `quantity`
+- `avgCost`
+
+The dashboard card uses current quote data to calculate total value, day P&L,
+and total P&L. Trade history, tax lots, realized P&L, and export workflows are
+outside the current implementation.
+
+## Development Commands
 
 ```bash
-pnpm dev          # 启动开发服务器
-pnpm build        # 构建生产版本
-pnpm start        # 启动生产服务器
-pnpm lint         # 运行 ESLint
-pnpm lint:fix     # 修复 lint 问题
-pnpm format       # 使用 Prettier 格式化代码
-pnpm format:check # 校验格式
-pnpm test         # 运行 Jest 单元测试
-pnpm test:e2e     # 运行 Playwright 端到端测试
-pnpm test:e2e:ui  # 打开 Playwright UI 模式
+pnpm env:check    # Validate required environment variables
+pnpm dev          # Start the development server
+pnpm build        # Build for production
+pnpm start        # Start the production server
+pnpm lint         # Run ESLint
+pnpm lint:fix     # Run ESLint fixes and format
+pnpm format       # Format with Prettier
+pnpm format:check # Check formatting
+pnpm test         # Run Jest tests
+pnpm test:e2e     # Run Playwright tests
+pnpm test:e2e:ui  # Open Playwright UI mode
 ```
 
-首次运行或 Playwright 升级后，执行 `pnpm exec playwright install chromium` 安装浏览器。Playwright 默认会在 `localhost:3100` 启动本地 Next.js 服务。若要复用已启动的服务，可设置 `PLAYWRIGHT_BASE_URL`。
+After a first install or Playwright upgrade, run:
+
+```bash
+pnpm exec playwright install chromium
+```
+
+Playwright starts a local Next.js server on `localhost:3100` by default. Set
+`PLAYWRIGHT_BASE_URL` to reuse an already-running server.
