@@ -1,0 +1,189 @@
+/**
+ * @jest-environment jsdom
+ */
+import { GET } from '../route';
+import { StockProviderFactory } from '@/lib/providers/factory';
+import { APIResponse } from '@/lib/types/stock-api';
+import {
+  ProviderHealthCheck,
+  ProviderHealthReport
+} from '@/lib/providers/types';
+import { createMockRequest } from '../../../__tests__/request-fixtures';
+
+jest.mock('next/server', () => ({
+  NextResponse: {
+    json: jest.fn().mockImplementation((data, init) => {
+      const headers = new Map<string, string>();
+
+      if (init?.headers) {
+        Object.entries(init.headers).forEach(([key, value]) => {
+          headers.set(key, value as string);
+        });
+      }
+
+      return {
+        json: () => Promise.resolve(data),
+        status: init?.status || 200,
+        headers: {
+          get: (key: string) => headers.get(key)
+        }
+      };
+    })
+  },
+  NextRequest: class NextRequestMock {}
+}));
+
+jest.mock('@sentry/nextjs', () => ({
+  startSpan: jest.fn((_context: unknown, callback: any) =>
+    callback({ setAttribute: jest.fn() })
+  ),
+  captureException: jest.fn()
+}));
+
+jest.mock('@/lib/providers/factory', () => ({
+  StockProviderFactory: {
+    getProvider: jest.fn(),
+    getProviderHealthReport: jest.fn()
+  }
+}));
+
+const mockGetProvider = StockProviderFactory.getProvider as jest.MockedFunction<
+  typeof StockProviderFactory.getProvider
+>;
+const mockGetProviderHealthReport =
+  StockProviderFactory.getProviderHealthReport as jest.MockedFunction<
+    typeof StockProviderFactory.getProviderHealthReport
+  >;
+
+const mockProvider = {
+  healthCheck: jest.fn()
+};
+
+describe('/api/stocks/providers/health API Route', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetProvider.mockReturnValue(mockProvider as any);
+  });
+
+  it('returns the auto provider health report by default', async () => {
+    const health: ProviderHealthReport = {
+      provider: 'Auto',
+      providerId: 'auto',
+      status: 'healthy',
+      checkedAt: '2024-01-01T00:00:00.000Z',
+      fallbackOrder: ['longbridge', 'yahoo'],
+      providers: [
+        {
+          provider: 'Longbridge',
+          providerId: 'longbridge',
+          status: 'healthy',
+          latencyMs: 12,
+          checkedAt: '2024-01-01T00:00:00.000Z'
+        },
+        {
+          provider: 'Yahoo Finance',
+          providerId: 'yahoo',
+          status: 'healthy',
+          latencyMs: 8,
+          checkedAt: '2024-01-01T00:00:00.000Z'
+        }
+      ],
+      metadata: []
+    };
+    mockGetProviderHealthReport.mockResolvedValue(health);
+
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/providers/health')
+    );
+    const responseData: APIResponse<ProviderHealthReport> =
+      await response.json();
+
+    expect(response.status).toBe(200);
+    expect(responseData.success).toBe(true);
+    expect(responseData.data).toEqual(health);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(mockGetProviderHealthReport).toHaveBeenCalledTimes(1);
+    expect(mockGetProvider).not.toHaveBeenCalled();
+  });
+
+  it('returns a concrete provider status when requested', async () => {
+    const health: ProviderHealthCheck = {
+      provider: 'Longbridge',
+      providerId: 'longbridge',
+      status: 'healthy',
+      latencyMs: 12,
+      checkedAt: '2024-01-01T00:00:00.000Z',
+      details: {
+        symbol: 'AAPL.US'
+      }
+    };
+    mockProvider.healthCheck.mockResolvedValue(health);
+
+    const response = await GET(
+      createMockRequest(
+        'http://localhost:3000/api/stocks/providers/health?provider=longbridge'
+      )
+    );
+    const responseData: APIResponse<ProviderHealthCheck> =
+      await response.json();
+
+    expect(response.status).toBe(200);
+    expect(responseData.data).toEqual(health);
+    expect(mockGetProvider).toHaveBeenCalledWith('longbridge');
+  });
+
+  it('returns degraded provider status', async () => {
+    const health: ProviderHealthCheck = {
+      provider: 'Longbridge',
+      status: 'degraded',
+      latencyMs: 8,
+      checkedAt: '2024-01-01T00:00:00.000Z',
+      details: {
+        code: 'NETWORK_ERROR',
+        message: 'Longbridge network request failed'
+      }
+    };
+    mockProvider.healthCheck.mockResolvedValue(health);
+
+    const response = await GET(
+      createMockRequest(
+        'http://localhost:3000/api/stocks/providers/health?provider=longbridge'
+      )
+    );
+    const responseData: APIResponse<ProviderHealthCheck> =
+      await response.json();
+
+    expect(response.status).toBe(200);
+    expect(responseData.data?.status).toBe('degraded');
+    expect(responseData.data?.details?.code).toBe('NETWORK_ERROR');
+  });
+
+  it('returns unconfigured provider status without leaking credentials', async () => {
+    process.env.LONGPORT_ACCESS_TOKEN = 'secret-token-for-health-route';
+    const health: ProviderHealthCheck = {
+      provider: 'Longbridge',
+      status: 'unconfigured',
+      latencyMs: 0,
+      checkedAt: '2024-01-01T00:00:00.000Z',
+      details: {
+        code: 'INVALID_API_KEY',
+        message: 'Longbridge credentials not configured'
+      }
+    };
+    mockProvider.healthCheck.mockResolvedValue(health);
+
+    const response = await GET(
+      createMockRequest(
+        'http://localhost:3000/api/stocks/providers/health?provider=longbridge'
+      )
+    );
+    const responseData: APIResponse<ProviderHealthCheck> =
+      await response.json();
+
+    expect(response.status).toBe(200);
+    expect(responseData.data?.status).toBe('unconfigured');
+    expect(JSON.stringify(responseData)).not.toContain(
+      'secret-token-for-health-route'
+    );
+  });
+});

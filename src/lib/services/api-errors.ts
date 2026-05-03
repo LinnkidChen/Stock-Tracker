@@ -1,6 +1,17 @@
 import { NextResponse } from 'next/server';
 import { APIResponse, APIError, APIErrorCode } from '../types/stock-api';
 
+const API_ERROR_CODES = new Set<string>([
+  'INVALID_SYMBOL',
+  'INVALID_INTERVAL',
+  'INVALID_PROVIDER',
+  'API_LIMIT_EXCEEDED',
+  'RATE_LIMIT_UNAVAILABLE',
+  'NETWORK_ERROR',
+  'INVALID_API_KEY',
+  'UNKNOWN_ERROR'
+]);
+
 /**
  * Create a standardized error response
  */
@@ -16,8 +27,12 @@ export function createErrorResponse<T = null>(
   };
 
   const status = statusCode || getStatusCodeForError(error.code);
+  const retryAfter = getRetryAfterFromError(error);
+  const headers: HeadersInit = retryAfter
+    ? { 'Retry-After': String(retryAfter) }
+    : {};
 
-  return NextResponse.json(response, { status });
+  return NextResponse.json(response, { status, headers });
 }
 
 /**
@@ -49,6 +64,7 @@ export function getStatusCodeForError(code: APIErrorCode): number {
     INVALID_INTERVAL: 400,
     INVALID_PROVIDER: 400,
     API_LIMIT_EXCEEDED: 429,
+    RATE_LIMIT_UNAVAILABLE: 503,
     INVALID_API_KEY: 401,
     NETWORK_ERROR: 502,
     UNKNOWN_ERROR: 500
@@ -82,6 +98,7 @@ export function isAPIError(error: unknown): error is APIError {
     'code' in error &&
     'message' in error &&
     typeof (error as Record<string, unknown>).code === 'string' &&
+    API_ERROR_CODES.has((error as Record<string, unknown>).code as string) &&
     typeof (error as Record<string, unknown>).message === 'string'
   );
 }
@@ -119,20 +136,21 @@ export function wrapError(
  * Create a rate limit error response
  */
 export function createRateLimitResponse(
-  retryAfter?: number
+  retryAfter?: number,
+  headers?: HeadersInit
 ): NextResponse<APIResponse<null>> {
   // Validate and cap retry time to reasonable limits (max 5 minutes)
-  const validRetryAfter =
-    retryAfter && retryAfter > 0 && retryAfter <= 300 ? retryAfter : undefined;
+  const validRetryAfter = getValidRetryAfter(retryAfter);
   const error = createAPIError(
     'API_LIMIT_EXCEEDED',
     'Rate limit exceeded. Please try again later.',
     validRetryAfter ? { retryAfter: validRetryAfter } : undefined
   );
 
-  const headers: HeadersInit = validRetryAfter
-    ? { 'Retry-After': String(validRetryAfter) }
-    : {};
+  const responseHeaders: HeadersInit = {
+    ...(headers || {}),
+    ...(validRetryAfter ? { 'Retry-After': String(validRetryAfter) } : {})
+  };
 
   return NextResponse.json(
     {
@@ -143,9 +161,32 @@ export function createRateLimitResponse(
     },
     {
       status: 429,
-      headers
+      headers: responseHeaders
     }
   );
+}
+
+export function getRetryAfterFromError(error: APIError): number | undefined {
+  return getValidRetryAfter(error.details?.retryAfter);
+}
+
+function getValidRetryAfter(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value <= 300 ? Math.ceil(value) : undefined;
+  }
+
+  if (typeof value === 'string') {
+    const numericValue = Number(value);
+    if (
+      Number.isFinite(numericValue) &&
+      numericValue > 0 &&
+      numericValue <= 300
+    ) {
+      return Math.ceil(numericValue);
+    }
+  }
+
+  return undefined;
 }
 
 /**

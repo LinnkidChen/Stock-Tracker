@@ -8,18 +8,38 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useWatchlistPrices } from '../useWatchlistPrices';
 import { useDashboardStore } from '../../store';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
+import type { UseWatchlistPricesOptions } from '../useWatchlistPrices';
 
-function TestHarness({ symbols }: { symbols: string[] }) {
-  const { pricesMap, isLoading, hasErrors, errorSymbols, refetch } =
-    useWatchlistPrices(symbols);
+function TestHarness({
+  symbols,
+  options
+}: {
+  symbols: string[];
+  options?: UseWatchlistPricesOptions;
+}) {
+  const {
+    pricesMap,
+    isLoading,
+    isRefreshing,
+    hasErrors,
+    errorSymbols,
+    staleSymbols,
+    lastRefreshedAt,
+    symbolMeta,
+    refreshAll
+  } = useWatchlistPrices(symbols, options);
 
   return (
     <div>
       <pre id='prices'>{JSON.stringify(pricesMap)}</pre>
       <div id='isLoading'>{String(isLoading)}</div>
+      <div id='isRefreshing'>{String(isRefreshing)}</div>
       <div id='hasErrors'>{String(hasErrors)}</div>
       <pre id='errorSymbols'>{JSON.stringify(errorSymbols)}</pre>
-      <button id='refetch' onClick={() => refetch()}>
+      <pre id='staleSymbols'>{JSON.stringify(staleSymbols)}</pre>
+      <pre id='symbolMeta'>{JSON.stringify(symbolMeta)}</pre>
+      <div id='lastRefreshedAt'>{lastRefreshedAt?.toISOString() ?? ''}</div>
+      <button id='refetch' onClick={() => void refreshAll()}>
         refetch
       </button>
     </div>
@@ -40,7 +60,20 @@ function renderWithClient(element: React.ReactElement) {
     );
   });
 
-  return { container, queryClient, unmount: () => root.unmount() };
+  return {
+    container,
+    queryClient,
+    rerender: (nextElement: React.ReactElement) => {
+      act(() => {
+        root.render(
+          <QueryClientProvider client={queryClient}>
+            {nextElement}
+          </QueryClientProvider>
+        );
+      });
+    },
+    unmount: () => root.unmount()
+  };
 }
 
 async function waitFor(predicate: () => boolean, timeout = 2000) {
@@ -53,6 +86,22 @@ async function waitFor(predicate: () => boolean, timeout = 2000) {
 
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 5));
+      await Promise.resolve();
+    });
+  }
+}
+
+async function waitForWithFakeTimers(predicate: () => boolean, timeout = 2000) {
+  const start = Date.now();
+
+  while (!predicate()) {
+    if (Date.now() - start > timeout) {
+      throw new Error('waitForWithFakeTimers: condition not met in time');
+    }
+
+    await act(async () => {
+      jest.advanceTimersByTime(10);
+      await Promise.resolve();
       await Promise.resolve();
     });
   }
@@ -95,19 +144,67 @@ function mockApiResponse(symbol: string, ok = true) {
   } as any;
 }
 
+class MockBrowserWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSED = 3;
+  static instances: MockBrowserWebSocket[] = [];
+
+  url: string;
+  readyState = MockBrowserWebSocket.CONNECTING;
+  sent: string[] = [];
+  onopen: (() => void) | null = null;
+  onmessage: ((event: { data: string }) => void) | null = null;
+  onclose: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  constructor(url: string) {
+    this.url = url;
+    MockBrowserWebSocket.instances.push(this);
+  }
+
+  open() {
+    this.readyState = MockBrowserWebSocket.OPEN;
+    this.onopen?.();
+  }
+
+  send(message: string) {
+    this.sent.push(message);
+  }
+
+  emit(data: unknown) {
+    this.onmessage?.({ data: JSON.stringify(data) });
+  }
+
+  close() {
+    this.readyState = MockBrowserWebSocket.CLOSED;
+    this.onclose?.();
+  }
+
+  sentMessages() {
+    return this.sent.map((message) => JSON.parse(message));
+  }
+}
+
 describe('useWatchlistPrices', () => {
   const originalFetch = global.fetch as any;
+  const originalWebSocket = global.WebSocket;
 
   beforeEach(() => {
     jest.restoreAllMocks();
     jest.clearAllTimers();
+    MockBrowserWebSocket.instances = [];
+    (global as any).WebSocket = undefined;
     useDashboardStore.setState({
-      quoteProvider: CANONICAL_QUOTE_PROVIDER
+      quoteProvider: CANONICAL_QUOTE_PROVIDER,
+      wsConnected: false
     });
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
+    global.WebSocket = originalWebSocket;
+    jest.useRealTimers();
   });
 
   test('fetches prices with the canonical provider query string', async () => {
@@ -196,6 +293,246 @@ describe('useWatchlistPrices', () => {
     await waitFor(() => (global.fetch as jest.Mock).mock.calls.length > 1);
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    unmount();
+  });
+
+  test('does not poll when auto refresh is disabled', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return mockApiResponse(symbol);
+    }) as any;
+
+    const { container, unmount } = renderWithClient(
+      <TestHarness
+        symbols={['AAPL']}
+        options={{ autoRefresh: false, refreshIntervalMs: 60_000 }}
+      />
+    );
+
+    await waitForWithFakeTimers(
+      () => container.querySelector('#isLoading')!.textContent === 'false'
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(120_000);
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    unmount();
+  });
+
+  test('polls every 60 seconds when auto refresh is enabled', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return mockApiResponse(symbol);
+    }) as any;
+
+    const { container, unmount } = renderWithClient(
+      <TestHarness symbols={['AAPL']} options={{ autoRefresh: true }} />
+    );
+
+    await waitForWithFakeTimers(
+      () => container.querySelector('#isLoading')!.textContent === 'false'
+    );
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(60_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    unmount();
+  });
+
+  test('marks symbols stale from React Query dataUpdatedAt age', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return mockApiResponse(symbol);
+    }) as any;
+
+    const { container, unmount } = renderWithClient(
+      <TestHarness symbols={['AAPL']} options={{ staleAfterMs: 60_000 }} />
+    );
+
+    await waitForWithFakeTimers(
+      () => container.querySelector('#isLoading')!.textContent === 'false'
+    );
+
+    expect(container.querySelector('#staleSymbols')!.textContent).toBe('[]');
+    expect(container.querySelector('#lastRefreshedAt')!.textContent).toContain(
+      '2026-01-01T00:00:'
+    );
+
+    jest.setSystemTime(new Date('2026-01-01T00:01:01.000Z'));
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+
+    const staleSymbols = JSON.parse(
+      container.querySelector('#staleSymbols')!.textContent || '[]'
+    );
+    const symbolMeta = JSON.parse(
+      container.querySelector('#symbolMeta')!.textContent || '{}'
+    );
+
+    expect(staleSymbols).toEqual(['AAPL']);
+    expect(symbolMeta.AAPL.isStale).toBe(true);
+
+    unmount();
+  });
+
+  test('connects to the price stream and live updates override HTTP fallback data', async () => {
+    global.WebSocket = MockBrowserWebSocket as any;
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return mockApiResponse(symbol);
+    }) as any;
+
+    const { container, unmount } = renderWithClient(
+      <TestHarness symbols={['AAPL']} />
+    );
+
+    await waitFor(() => MockBrowserWebSocket.instances.length === 1);
+    const socket = MockBrowserWebSocket.instances[0];
+
+    expect(socket.url).toBe(
+      `ws://localhost/api/ws/prices?provider=${CANONICAL_QUOTE_PROVIDER}`
+    );
+
+    act(() => {
+      socket.open();
+    });
+
+    await waitFor(() =>
+      socket
+        .sentMessages()
+        .some(
+          (message) => message.type === 'subscribe' && message.symbol === 'AAPL'
+        )
+    );
+
+    act(() => {
+      socket.emit({
+        type: 'price_update',
+        symbol: 'AAPL',
+        price: 125,
+        change: 2,
+        changePercent: 1.6,
+        volume: 1500,
+        ts: Date.parse('2024-01-02T00:00:00.000Z'),
+        lastUpdated: '2024-01-02T00:00:00.000Z'
+      });
+    });
+
+    await waitFor(() => {
+      const prices = JSON.parse(
+        container.querySelector('#prices')!.textContent || '{}'
+      );
+      return prices.AAPL?.price === 125;
+    });
+
+    expect(useDashboardStore.getState().wsConnected).toBe(true);
+
+    unmount();
+  });
+
+  test('subscribes and unsubscribes when the symbol list changes', async () => {
+    global.WebSocket = MockBrowserWebSocket as any;
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return mockApiResponse(symbol);
+    }) as any;
+
+    const { rerender, unmount } = renderWithClient(
+      <TestHarness symbols={['AAPL']} />
+    );
+
+    await waitFor(() => MockBrowserWebSocket.instances.length === 1);
+    const socket = MockBrowserWebSocket.instances[0];
+
+    act(() => {
+      socket.open();
+    });
+
+    await waitFor(() =>
+      socket
+        .sentMessages()
+        .some(
+          (message) => message.type === 'subscribe' && message.symbol === 'AAPL'
+        )
+    );
+
+    rerender(<TestHarness symbols={['MSFT']} />);
+
+    await waitFor(() => {
+      const messages = socket.sentMessages();
+      return (
+        messages.some(
+          (message) =>
+            message.type === 'unsubscribe' && message.symbol === 'AAPL'
+        ) &&
+        messages.some(
+          (message) => message.type === 'subscribe' && message.symbol === 'MSFT'
+        )
+      );
+    });
+
+    unmount();
+  });
+
+  test('keeps HTTP fallback prices when the stream closes without updates', async () => {
+    global.WebSocket = MockBrowserWebSocket as any;
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost:3000');
+      const symbol = url.pathname.split('/').pop()!;
+
+      return mockApiResponse(symbol);
+    }) as any;
+
+    const { container, unmount } = renderWithClient(
+      <TestHarness symbols={['AAPL']} />
+    );
+
+    await waitFor(() => MockBrowserWebSocket.instances.length === 1);
+    const socket = MockBrowserWebSocket.instances[0];
+
+    act(() => {
+      socket.open();
+      socket.close();
+    });
+
+    await waitFor(() => {
+      const prices = JSON.parse(
+        container.querySelector('#prices')!.textContent || '{}'
+      );
+      return prices.AAPL?.price === 100;
+    });
+
+    expect(useDashboardStore.getState().wsConnected).toBe(false);
 
     unmount();
   });

@@ -1,16 +1,5 @@
 import { NavItem } from '@/types';
 
-export type Product = {
-  photo_url: string;
-  name: string;
-  description: string;
-  created_at: string;
-  price: number;
-  id: number;
-  category: string;
-  updated_at: string;
-};
-
 // Info: Sidebar navigation and Cmd+K items. Stocks-only app.
 export const navItems: NavItem[] = [
   {
@@ -24,9 +13,17 @@ export const navItems: NavItem[] = [
   {
     title: 'Charts',
     url: '/dashboard/charts',
-    icon: 'kanban',
+    icon: 'charts',
     isActive: false,
     shortcut: ['c', 'c'],
+    items: []
+  },
+  {
+    title: 'Operations',
+    url: '/dashboard/operations',
+    icon: 'settings',
+    isActive: false,
+    shortcut: ['o', 'o'],
     items: []
   }
 ];

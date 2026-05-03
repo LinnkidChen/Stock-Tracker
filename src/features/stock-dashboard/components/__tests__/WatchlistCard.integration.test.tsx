@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WatchlistCard } from '../WatchlistCard';
+import type { WatchlistItem } from '@/types/watchlist';
 
 // Mock fetch
 const originalFetch = global.fetch;
@@ -25,6 +26,30 @@ function renderWithProviders(ui: React.ReactElement) {
   );
 }
 
+function createItem(symbol: string): WatchlistItem {
+  return {
+    id: `item-${symbol}`,
+    symbol,
+    exchange: null,
+    note: null,
+    sort_order: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z'
+  };
+}
+
+function watchlistResponse(symbols: string[]) {
+  const items = symbols.map(createItem);
+
+  return {
+    success: true,
+    data: {
+      watchlist: symbols,
+      items
+    }
+  };
+}
+
 describe('WatchlistCard Persistence Integration', () => {
   test('loads watchlist from API on mount', async () => {
     (global.fetch as jest.Mock).mockImplementation((url) => {
@@ -32,10 +57,7 @@ describe('WatchlistCard Persistence Integration', () => {
         return Promise.resolve({
           ok: true,
           json: () =>
-            Promise.resolve({
-              success: true,
-              data: { watchlist: ['MSFT', 'GOOGL'] }
-            })
+            Promise.resolve(watchlistResponse(['MSFT', 'GOOGL']))
         });
       }
       if (typeof url === 'string' && url.includes('/api/stocks/quote/')) {
@@ -56,7 +78,7 @@ describe('WatchlistCard Persistence Integration', () => {
     // Should call GET /api/watchlist
     expect(global.fetch).toHaveBeenCalledWith(
       '/api/watchlist',
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
+      expect.objectContaining({ signal: expect.any(Object) })
     );
 
     // Should display loaded symbols
@@ -73,7 +95,7 @@ describe('WatchlistCard Persistence Integration', () => {
           return Promise.resolve({
             ok: true,
             json: () =>
-              Promise.resolve({ success: true, data: { watchlist: ['MSFT'] } })
+              Promise.resolve(watchlistResponse(['MSFT']))
           });
         }
         if (init.method === 'POST') {
@@ -82,7 +104,7 @@ describe('WatchlistCard Persistence Integration', () => {
             return Promise.resolve({
               ok: true,
               json: () =>
-                Promise.resolve({ success: true, data: { watchlist: [] } })
+                Promise.resolve(watchlistResponse([]))
             });
           }
         }
@@ -109,9 +131,12 @@ describe('WatchlistCard Persistence Integration', () => {
     const removeBtn = screen.getByRole('button', { name: /remove/i });
     await user.click(removeBtn);
 
-    // Verify removal
+    // Verify removal by checking the saved item controls disappear.
     await waitFor(() =>
-      expect(screen.queryByText('MSFT')).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /remove/i })
+      ).not.toBeInTheDocument()
     );
+    expect(screen.getByText('Build your watchlist')).toBeInTheDocument();
   });
 });

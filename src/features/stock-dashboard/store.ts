@@ -5,6 +5,14 @@ import {
   type CanonicalQuoteProvider,
   migrateStoredQuoteProvider
 } from '@/lib/providers/config';
+import {
+  CHART_WORKSPACE_STORAGE_KEY,
+  DEFAULT_CHART_WORKSPACE,
+  mergeChartPreferences,
+  parseChartWorkspace,
+  type ChartPreferencesPatch,
+  type ChartWorkspace
+} from './lib/chart-workspace';
 
 const LAST_TICKERS_STORAGE_KEY = 'dashboard:lastTickers';
 const QUOTE_PROVIDER_STORAGE_KEY = 'dashboard:quoteProvider';
@@ -16,6 +24,7 @@ interface DashboardState {
   wsConnected: boolean;
   lastTickers: string[];
   quoteProvider: CanonicalQuoteProvider;
+  chartWorkspace: ChartWorkspace;
 }
 
 interface DashboardActions {
@@ -24,7 +33,22 @@ interface DashboardActions {
   setWsConnected: (connected: boolean) => void;
   addToLastTickers: (ticker: string) => void;
   setQuoteProvider: (provider: string) => void;
+  setChartWorkspace: (workspace: Partial<ChartWorkspace>) => void;
+  setChartPreferences: (preferences: ChartPreferencesPatch) => void;
   hydrateFromStorage: () => void;
+}
+
+function persistChartWorkspace(chartWorkspace: ChartWorkspace) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    localStorage.setItem(
+      CHART_WORKSPACE_STORAGE_KEY,
+      JSON.stringify(chartWorkspace)
+    );
+  } catch {
+    // Ignore unavailable storage in private browsing or quota failures.
+  }
 }
 
 export const useDashboardStore = create<DashboardState & DashboardActions>()(
@@ -34,6 +58,7 @@ export const useDashboardStore = create<DashboardState & DashboardActions>()(
     wsConnected: false,
     lastTickers: [],
     quoteProvider: CANONICAL_QUOTE_PROVIDER,
+    chartWorkspace: DEFAULT_CHART_WORKSPACE,
 
     setSelectedTicker: (ticker: string) => {
       const previousTicker = get().selectedTicker;
@@ -81,6 +106,31 @@ export const useDashboardStore = create<DashboardState & DashboardActions>()(
       }
     },
 
+    setChartWorkspace: (workspace: Partial<ChartWorkspace>) => {
+      const current = get().chartWorkspace;
+      const nextWorkspace = {
+        ...current,
+        ...workspace,
+        preferences: workspace.preferences
+          ? mergeChartPreferences(current.preferences, workspace.preferences)
+          : current.preferences
+      };
+
+      set({ chartWorkspace: nextWorkspace });
+      persistChartWorkspace(nextWorkspace);
+    },
+
+    setChartPreferences: (preferences: ChartPreferencesPatch) => {
+      const current = get().chartWorkspace;
+      const nextWorkspace = {
+        ...current,
+        preferences: mergeChartPreferences(current.preferences, preferences)
+      };
+
+      set({ chartWorkspace: nextWorkspace });
+      persistChartWorkspace(nextWorkspace);
+    },
+
     hydrateFromStorage: () => {
       if (typeof window === 'undefined') return;
 
@@ -89,6 +139,7 @@ export const useDashboardStore = create<DashboardState & DashboardActions>()(
       );
       const lastTickers = localStorage.getItem(LAST_TICKERS_STORAGE_KEY);
       const quoteProvider = localStorage.getItem(QUOTE_PROVIDER_STORAGE_KEY);
+      const chartWorkspace = localStorage.getItem(CHART_WORKSPACE_STORAGE_KEY);
 
       if (selectedTicker) {
         set({ selectedTicker });
@@ -110,6 +161,8 @@ export const useDashboardStore = create<DashboardState & DashboardActions>()(
           localStorage.setItem(QUOTE_PROVIDER_STORAGE_KEY, migratedProvider);
         }
       }
+
+      set({ chartWorkspace: parseChartWorkspace(chartWorkspace) });
     }
   })
 );

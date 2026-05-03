@@ -52,14 +52,18 @@ if (process.env.NEXT_PUBLIC_SENTRY_DISABLED !== 'true') {
     // Hides source maps from generated client bundles
     hideSourceMaps: true,
 
-    // Automatically tree-shake Sentry logger statements to reduce bundle size
-    disableLogger: true,
+    webpack: {
+      // Automatically tree-shake Sentry logger statements to reduce bundle size
+      treeshake: {
+        removeDebugLogging: true
+      },
 
-    // Enables automatic instrumentation of Vercel Cron Monitors.
-    // See the following for more information:
-    // https://docs.sentry.io/product/crons/
-    // https://vercel.com/docs/cron-jobs
-    automaticVercelMonitors: true
+      // Enables automatic instrumentation of Vercel Cron Monitors.
+      // See the following for more information:
+      // https://docs.sentry.io/product/crons/
+      // https://vercel.com/docs/cron-jobs
+      automaticVercelMonitors: true
+    }
   };
 
   module.exports = withSentryConfig(nextConfig, sentryConfig);

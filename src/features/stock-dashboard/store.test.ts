@@ -4,6 +4,10 @@
 import { act } from '@testing-library/react';
 import { useDashboardStore } from './store';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
+import {
+  CHART_WORKSPACE_STORAGE_KEY,
+  DEFAULT_CHART_WORKSPACE
+} from './lib/chart-workspace';
 
 const removedProvider = ['alpha', 'vantage'].join('');
 
@@ -16,7 +20,8 @@ describe('dashboard provider state', () => {
       loading: false,
       wsConnected: false,
       lastTickers: [],
-      quoteProvider: CANONICAL_QUOTE_PROVIDER
+      quoteProvider: CANONICAL_QUOTE_PROVIDER,
+      chartWorkspace: DEFAULT_CHART_WORKSPACE
     });
   });
 
@@ -35,7 +40,7 @@ describe('dashboard provider state', () => {
     );
   });
 
-  it('migrates removed provider values to Longbridge', () => {
+  it('migrates removed provider values to auto routing', () => {
     localStorage.setItem('dashboard:quoteProvider', removedProvider);
 
     act(() => {
@@ -61,5 +66,142 @@ describe('dashboard provider state', () => {
     expect(localStorage.getItem('dashboard:quoteProvider')).toBe(
       CANONICAL_QUOTE_PROVIDER
     );
+  });
+
+  it('hydrates a valid persisted chart workspace', () => {
+    localStorage.setItem(
+      CHART_WORKSPACE_STORAGE_KEY,
+      JSON.stringify({
+        symbol: 'msft',
+        interval: 'week',
+        range: '3m',
+        preferences: {
+          showVolume: false,
+          showGrid: true,
+          candleType: 'area'
+        }
+      })
+    );
+
+    act(() => {
+      useDashboardStore.getState().hydrateFromStorage();
+    });
+
+    expect(useDashboardStore.getState().chartWorkspace).toEqual({
+      symbol: 'MSFT',
+      interval: 'week',
+      range: '3m',
+      preferences: {
+        showVolume: false,
+        showGrid: true,
+        candleType: 'area',
+        indicators: DEFAULT_CHART_WORKSPACE.preferences.indicators
+      }
+    });
+  });
+
+  it('falls back to chart workspace defaults for malformed storage', () => {
+    localStorage.setItem(CHART_WORKSPACE_STORAGE_KEY, '{bad json');
+
+    act(() => {
+      useDashboardStore.getState().hydrateFromStorage();
+    });
+
+    expect(useDashboardStore.getState().chartWorkspace).toEqual(
+      DEFAULT_CHART_WORKSPACE
+    );
+  });
+
+  it('ignores invalid chart workspace enum values during hydration', () => {
+    localStorage.setItem(
+      CHART_WORKSPACE_STORAGE_KEY,
+      JSON.stringify({
+        symbol: '',
+        interval: 'quarter',
+        range: '10y',
+        preferences: {
+          showVolume: 'yes',
+          showGrid: false,
+          candleType: 'renko'
+        }
+      })
+    );
+
+    act(() => {
+      useDashboardStore.getState().hydrateFromStorage();
+    });
+
+    expect(useDashboardStore.getState().chartWorkspace).toEqual({
+      ...DEFAULT_CHART_WORKSPACE,
+      preferences: {
+        ...DEFAULT_CHART_WORKSPACE.preferences,
+        showGrid: false
+      }
+    });
+  });
+
+  it('persists chart workspace updates with minimal fields', () => {
+    act(() => {
+      useDashboardStore.getState().setChartWorkspace({
+        symbol: 'NVDA',
+        interval: 'month',
+        range: '6m'
+      });
+      useDashboardStore.getState().setChartPreferences({
+        showVolume: false,
+        candleType: 'ohlc'
+      });
+    });
+
+    expect(
+      JSON.parse(localStorage.getItem(CHART_WORKSPACE_STORAGE_KEY)!)
+    ).toEqual({
+      symbol: 'NVDA',
+      interval: 'month',
+      range: '6m',
+      preferences: {
+        showVolume: false,
+        showGrid: true,
+        candleType: 'ohlc',
+        indicators: DEFAULT_CHART_WORKSPACE.preferences.indicators
+      }
+    });
+  });
+
+  it('persists nested chart indicator preferences without replacing siblings', () => {
+    act(() => {
+      useDashboardStore.getState().setChartPreferences({
+        indicators: {
+          sma: {
+            enabled: true,
+            period: 50
+          }
+        }
+      });
+      useDashboardStore.getState().setChartPreferences({
+        indicators: {
+          macd: {
+            enabled: true,
+            fastPeriod: 8
+          }
+        }
+      });
+    });
+
+    expect(
+      JSON.parse(localStorage.getItem(CHART_WORKSPACE_STORAGE_KEY)!).preferences
+        .indicators
+    ).toEqual({
+      ...DEFAULT_CHART_WORKSPACE.preferences.indicators,
+      sma: {
+        enabled: true,
+        period: 50
+      },
+      macd: {
+        ...DEFAULT_CHART_WORKSPACE.preferences.indicators.macd,
+        enabled: true,
+        fastPeriod: 8
+      }
+    });
   });
 });

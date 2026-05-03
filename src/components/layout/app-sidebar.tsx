@@ -45,16 +45,12 @@ import { Icons } from '../icons';
 import { useDashboardStore } from '@/features/stock-dashboard/store';
 import { OrgSwitcher } from '../org-switcher';
 export const company = {
-  name: 'Acme Inc',
+  name: 'Stock Tracker',
   logo: IconPhotoUp,
-  plan: 'Enterprise'
+  plan: 'Personal'
 };
 
-const tenants = [
-  { id: '1', name: 'Acme Inc' },
-  { id: '2', name: 'Beta Corp' },
-  { id: '3', name: 'Gamma Ltd' }
-];
+const tenants = [{ id: 'personal', name: 'Personal Workspace' }];
 
 export default function AppSidebar() {
   const pathname = usePathname();

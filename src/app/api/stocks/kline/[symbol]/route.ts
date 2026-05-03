@@ -1,16 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import { getStockService } from '@/lib/services/stock-service';
-import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import {
-  APIResponse,
-  APIError,
-  DEFAULT_KLINE_INTERVAL,
-  isKLineInterval,
-  KLineSeries
-} from '@/lib/types/stock-api';
+  createAPIError,
+  createErrorResponse,
+  createRateLimitResponse,
+  createSuccessResponse,
+  getStatusCodeForError,
+  isAPIError
+} from '@/lib/services/api-errors';
+import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
+import { DEFAULT_KLINE_INTERVAL, isKLineInterval } from '@/lib/types/stock-api';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, createRateLimitHeaders } from '@/lib/rate-limit';
 
 const CACHE_HEADER = 'public, s-maxage=86400, stale-while-revalidate=604800';
 
@@ -24,6 +27,11 @@ export async function GET(
       const requestPath = getRequestPath(request);
 
       try {
+        const rateLimit = await enforceKLineRateLimit(request, requestPath);
+        if (rateLimit.response) {
+          return rateLimit.response;
+        }
+
         const { symbol: rawSymbol } = await params;
         const symbol = normalizeTicker(rawSymbol ?? '');
 
@@ -32,10 +40,10 @@ export async function GET(
 
         const validation = validateTicker(symbol);
         if (!validation.isValid) {
-          const error: APIError = {
-            code: 'INVALID_SYMBOL',
-            message: validation.error || 'Invalid ticker symbol'
-          };
+          const error = createAPIError(
+            'INVALID_SYMBOL',
+            validation.error || 'Invalid ticker symbol'
+          );
 
           logger.warn(`API Error: ${error.message}`, {
             symbol: rawSymbol,
@@ -43,14 +51,7 @@ export async function GET(
             path: requestPath
           });
 
-          const response: APIResponse<null> = {
-            success: false,
-            data: null,
-            error,
-            timestamp: new Date().toISOString()
-          };
-
-          return NextResponse.json(response, { status: 400 });
+          return createErrorResponse(error, 400);
         }
 
         const url = new URL(request.url);
@@ -60,10 +61,10 @@ export async function GET(
         const normalizedInterval = rawInterval?.toLowerCase();
 
         if (rawInterval && !isKLineInterval(normalizedInterval)) {
-          const error: APIError = {
-            code: 'INVALID_INTERVAL',
-            message: `Unsupported kline interval: ${rawInterval}`
-          };
+          const error = createAPIError(
+            'INVALID_INTERVAL',
+            `Unsupported kline interval: ${rawInterval}`
+          );
 
           logger.warn(`API Error: ${error.message}`, {
             symbol,
@@ -72,14 +73,7 @@ export async function GET(
             interval: rawInterval
           });
 
-          const response: APIResponse<null> = {
-            success: false,
-            data: null,
-            error,
-            timestamp: new Date().toISOString()
-          };
-
-          return NextResponse.json(response, { status: 400 });
+          return createErrorResponse(error, 400);
         }
 
         const interval = isKLineInterval(normalizedInterval)
@@ -97,18 +91,9 @@ export async function GET(
 
         span?.setAttribute('kline.candles', series.candles.length);
 
-        const response: APIResponse<KLineSeries> = {
-          success: true,
-          data: series,
-          error: null,
-          timestamp: new Date().toISOString()
-        };
-
-        return NextResponse.json(response, {
-          status: 200,
-          headers: {
-            'Cache-Control': CACHE_HEADER
-          }
+        return createSuccessResponse(series, {
+          ...rateLimit.headers,
+          'Cache-Control': CACHE_HEADER
         });
       } catch (error) {
         Sentry.captureException(error);
@@ -127,22 +112,7 @@ export async function GET(
             logger.warn(`API Warning: ${error.message}`, logContext);
           }
 
-          const response: APIResponse<null> = {
-            success: false,
-            data: null,
-            error,
-            timestamp: new Date().toISOString()
-          };
-
-          const options: { status: number; headers?: Record<string, string> } =
-            { status: statusCode };
-          if (statusCode === 429) {
-            options.headers = {
-              'Retry-After': '60'
-            };
-          }
-
-          return NextResponse.json(response, options);
+          return createErrorResponse(error);
         }
 
         logger.error('API Unexpected Error', {
@@ -150,46 +120,44 @@ export async function GET(
           error
         });
 
-        const response: APIResponse<null> = {
-          success: false,
-          data: null,
-          error: {
+        return createErrorResponse(
+          {
             code: 'UNKNOWN_ERROR',
             message: 'An unexpected error occurred'
           },
-          timestamp: new Date().toISOString()
-        };
-
-        return NextResponse.json(response, { status: 500 });
+          500
+        );
       }
     }
   );
 }
 
-function isAPIError(error: unknown): error is APIError {
-  return (
-    error !== null &&
-    typeof error === 'object' &&
-    'code' in error &&
-    'message' in error
-  );
-}
+async function enforceKLineRateLimit(request: NextRequest, path: string) {
+  try {
+    const result = await checkRateLimit(request, 'kline');
+    const headers = createRateLimitHeaders(result);
 
-function getStatusCodeForError(code: string): number {
-  switch (code) {
-    case 'INVALID_SYMBOL':
-    case 'INVALID_INTERVAL':
-    case 'INVALID_PROVIDER':
-      return 400;
-    case 'API_LIMIT_EXCEEDED':
-      return 429;
-    case 'INVALID_API_KEY':
-      return 401;
-    case 'NETWORK_ERROR':
-      return 502;
-    case 'UNKNOWN_ERROR':
-    default:
-      return 500;
+    if (!result.allowed) {
+      return {
+        response: createRateLimitResponse(result.retryAfter, headers),
+        headers
+      };
+    }
+
+    return { headers };
+  } catch (error) {
+    logger.error('K-line API rate limiter unavailable', { error, path });
+
+    return {
+      response: createErrorResponse(
+        createAPIError(
+          'RATE_LIMIT_UNAVAILABLE',
+          'Rate limit service unavailable'
+        ),
+        503
+      ),
+      headers: {}
+    };
   }
 }
 

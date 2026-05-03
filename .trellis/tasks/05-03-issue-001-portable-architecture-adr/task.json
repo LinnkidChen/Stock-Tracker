@@ -1,0 +1,43 @@
+{
+  "id": "issue-001-portable-architecture-adr",
+  "name": "issue-001-portable-architecture-adr",
+  "title": "ISSUE-001 Create ADR for portable Stock Tracker architecture",
+  "description": "Linear T-132: create ADR for portable Stock Tracker architecture.",
+  "status": "planning",
+  "dev_type": "docs",
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "tong-chen",
+  "assignee": "tong-chen",
+  "createdAt": "2026-05-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "docs/adr/001-portable-stock-tracker-architecture.md"
+  ],
+  "notes": "",
+  "meta": {
+    "linear": {
+      "issueId": "T-132",
+      "planId": "ISSUE-001",
+      "url": "https://linear.app/linnkidchen/issue/T-132/issue-001-create-adr-for-portable-stock-tracker-architecture",
+      "status": "Done",
+      "labels": [
+        "p0",
+        "architecture",
+        "migration"
+      ],
+      "project": "Stock Tracker",
+      "milestone": "Milestone 1 - Architecture and monorepo foundation",
+      "dependsOn": []
+    }
+  }
+}

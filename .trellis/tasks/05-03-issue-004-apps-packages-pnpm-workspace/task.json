@@ -1,0 +1,53 @@
+{
+  "id": "issue-004-apps-packages-pnpm-workspace",
+  "name": "issue-004-apps-packages-pnpm-workspace",
+  "title": "ISSUE-004 Convert repo to apps/packages pnpm workspace",
+  "description": "Linear T-135: convert current repository into apps/packages pnpm workspace without business logic changes.",
+  "status": "planning",
+  "dev_type": "infra",
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "tong-chen",
+  "assignee": "tong-chen",
+  "createdAt": "2026-05-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "apps/next-legacy/",
+    "packages/placeholder/",
+    "pnpm-workspace.yaml",
+    "package.json",
+    "tsconfig.base.json",
+    "eslint config",
+    "prettier config",
+    "jest config",
+    "playwright config"
+  ],
+  "notes": "",
+  "meta": {
+    "linear": {
+      "issueId": "T-135",
+      "planId": "ISSUE-004",
+      "url": "https://linear.app/linnkidchen/issue/T-135/issue-004-convert-repo-to-appspackages-pnpm-workspace",
+      "status": "Todo",
+      "labels": [
+        "infra",
+        "monorepo",
+        "p0"
+      ],
+      "project": "Stock Tracker",
+      "milestone": "Milestone 1 - Architecture and monorepo foundation",
+      "dependsOn": [
+        "ISSUE-003"
+      ]
+    }
+  }
+}

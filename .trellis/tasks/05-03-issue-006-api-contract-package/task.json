@@ -1,0 +1,45 @@
+{
+  "id": "issue-006-api-contract-package",
+  "name": "issue-006-api-contract-package",
+  "title": "ISSUE-006 Create API contract package with shared schemas",
+  "description": "Linear T-137: create packages/contracts with shared Zod schemas and inferred API types.",
+  "status": "planning",
+  "dev_type": "feature",
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "tong-chen",
+  "assignee": "tong-chen",
+  "createdAt": "2026-05-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "packages/contracts/"
+  ],
+  "notes": "",
+  "meta": {
+    "linear": {
+      "issueId": "T-137",
+      "planId": "ISSUE-006",
+      "url": "https://linear.app/linnkidchen/issue/T-137/issue-006-create-api-contract-package-with-shared-schemas",
+      "status": "In Progress",
+      "labels": [
+        "contracts",
+        "api",
+        "p0"
+      ],
+      "project": "Stock Tracker",
+      "milestone": "Milestone 1 - Architecture and monorepo foundation",
+      "dependsOn": [
+        "ISSUE-005"
+      ]
+    }
+  }
+}
