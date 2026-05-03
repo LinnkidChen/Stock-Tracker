@@ -2,10 +2,19 @@ import 'server-only';
 
 import { auth } from '@clerk/nextjs/server';
 import { SUPABASE_JWT_TEMPLATE } from '@/lib/supabase/server';
+import {
+  ERROR_TAXONOMY,
+  formatAlertThreshold
+} from '@/lib/observability/error-taxonomy';
+import type { APIErrorCode } from '@/lib/types/stock-api';
 
 export type DiagnosticStatus = 'ready' | 'warning' | 'blocked';
 
-export type DiagnosticCheckId = 'clerk' | 'supabase' | 'market-data';
+export type DiagnosticCheckId =
+  | 'clerk'
+  | 'supabase'
+  | 'market-data'
+  | 'observability';
 
 export interface SetupDiagnosticCheck {
   id: DiagnosticCheckId;
@@ -39,6 +48,15 @@ const LONGBRIDGE_ENV_KEYS = [
   'LONGPORT_APP_SECRET',
   'LONGPORT_ACCESS_TOKEN'
 ] as const;
+
+const OBSERVABILITY_ALERT_CODES: APIErrorCode[] = [
+  'NETWORK_ERROR',
+  'INVALID_API_KEY',
+  'API_LIMIT_EXCEEDED',
+  'RLS_AUTH_MISCONFIGURED',
+  'RLS_ACCESS_DENIED',
+  'INVALID_SYMBOL'
+];
 
 function hasEnvValue(key: string): boolean {
   return Boolean(process.env[key]?.trim());
@@ -269,6 +287,21 @@ function createMarketDataCheck(): SetupDiagnosticCheck {
   };
 }
 
+function createObservabilityCheck(): SetupDiagnosticCheck {
+  return {
+    id: 'observability',
+    title: 'Observability',
+    status: 'ready',
+    summary:
+      'Error taxonomy, dashboard messages, and alert thresholds are defined.',
+    details: OBSERVABILITY_ALERT_CODES.map((code) => {
+      const entry = ERROR_TAXONOMY[code];
+      return `${entry.code}: ${entry.dashboardMessage} Alert: ${formatAlertThreshold(entry.alertThreshold)}.`;
+    }),
+    remediation: null
+  };
+}
+
 function getOverallStatus(checks: SetupDiagnosticCheck[]): DiagnosticStatus {
   if (checks.some((check) => check.status === 'blocked')) {
     return 'blocked';
@@ -314,7 +347,8 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
   const checks = [
     createClerkCheck(authState),
     await createSupabaseCheck(authState),
-    createMarketDataCheck()
+    createMarketDataCheck(),
+    createObservabilityCheck()
   ];
   const status = getOverallStatus(checks);
 

@@ -3,7 +3,6 @@ import * as Sentry from '@sentry/nextjs';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import { getStockService } from '@/lib/services/stock-service';
 import {
-  createAPIError,
   createErrorResponse,
   createRateLimitResponse,
   createSuccessResponse,
@@ -12,7 +11,12 @@ import {
 } from '@/lib/services/api-errors';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { DEFAULT_KLINE_INTERVAL, isKLineInterval } from '@/lib/types/stock-api';
-import { logger } from '@/lib/logger';
+import { createObservedError } from '@/lib/observability/error-taxonomy';
+import {
+  createObservedErrorResponse,
+  reportApiError,
+  reportObservedError
+} from '@/lib/observability/route-errors';
 import { checkRateLimit, createRateLimitHeaders } from '@/lib/rate-limit';
 
 const CACHE_HEADER = 'public, s-maxage=86400, stale-while-revalidate=604800';
@@ -25,6 +29,9 @@ export async function GET(
     { op: 'http.server', name: 'GET /api/stocks/kline/[symbol]' },
     async (span) => {
       const requestPath = getRequestPath(request);
+      let provider: string = CANONICAL_QUOTE_PROVIDER;
+      let symbol = 'unknown';
+      let interval = DEFAULT_KLINE_INTERVAL;
 
       try {
         const rateLimit = await enforceKLineRateLimit(request, requestPath);
@@ -33,50 +40,61 @@ export async function GET(
         }
 
         const { symbol: rawSymbol } = await params;
-        const symbol = normalizeTicker(rawSymbol ?? '');
+        symbol = normalizeTicker(rawSymbol ?? '');
 
         span?.setAttribute('symbol', symbol);
         span?.setAttribute('path', requestPath);
 
         const validation = validateTicker(symbol);
         if (!validation.isValid) {
-          const error = createAPIError(
-            'INVALID_SYMBOL',
-            validation.error || 'Invalid ticker symbol'
-          );
+          const error = createObservedError('INVALID_SYMBOL', {
+            message: validation.error || 'Invalid ticker symbol'
+          });
 
-          logger.warn(`API Error: ${error.message}`, {
-            symbol: rawSymbol,
+          reportObservedError({
             code: error.code,
-            path: requestPath
+            message: `API Validation Error: ${error.message}`,
+            span,
+            context: {
+              symbol: rawSymbol,
+              normalizedSymbol: symbol,
+              path: requestPath,
+              operation: 'stock.kline',
+              errorDomain: 'stock-data'
+            }
           });
 
           return createErrorResponse(error, 400);
         }
 
         const url = new URL(request.url);
-        const provider =
-          url.searchParams.get('provider') || CANONICAL_QUOTE_PROVIDER;
+        provider = url.searchParams.get('provider') || CANONICAL_QUOTE_PROVIDER;
         const rawInterval = url.searchParams.get('interval');
         const normalizedInterval = rawInterval?.toLowerCase();
 
         if (rawInterval && !isKLineInterval(normalizedInterval)) {
-          const error = createAPIError(
-            'INVALID_INTERVAL',
-            `Unsupported kline interval: ${rawInterval}`
-          );
+          const error = createObservedError('INVALID_INTERVAL', {
+            message: `Unsupported kline interval: ${rawInterval}`
+          });
 
-          logger.warn(`API Error: ${error.message}`, {
-            symbol,
+          reportObservedError({
             code: error.code,
-            path: requestPath,
-            interval: rawInterval
+            message: `API Validation Error: ${error.message}`,
+            span,
+            context: {
+              symbol,
+              path: requestPath,
+              provider,
+              interval: rawInterval,
+              operation: 'stock.kline',
+              errorDomain: 'stock-data'
+            }
           });
 
           return createErrorResponse(error, 400);
         }
 
-        const interval = isKLineInterval(normalizedInterval)
+        interval = isKLineInterval(normalizedInterval)
           ? normalizedInterval
           : DEFAULT_KLINE_INTERVAL;
 
@@ -96,37 +114,43 @@ export async function GET(
           'Cache-Control': CACHE_HEADER
         });
       } catch (error) {
-        Sentry.captureException(error);
-
         if (isAPIError(error)) {
           const statusCode = getStatusCodeForError(error.code);
-          const logContext = {
-            code: error.code,
-            path: requestPath,
-            originalError: error
-          };
-
-          if (statusCode >= 500) {
-            logger.error(`API Error: ${error.message}`, logContext);
-          } else {
-            logger.warn(`API Warning: ${error.message}`, logContext);
-          }
+          reportApiError(
+            error,
+            statusCode >= 500
+              ? `API Error: ${error.message}`
+              : `API Warning: ${error.message}`,
+            span,
+            {
+              path: requestPath,
+              provider,
+              symbol,
+              interval,
+              operation: 'stock.kline',
+              errorDomain: 'stock-data'
+            }
+          );
 
           return createErrorResponse(error);
         }
 
-        logger.error('API Unexpected Error', {
-          path: requestPath,
-          error
+        reportObservedError({
+          code: 'UNKNOWN_ERROR',
+          message: 'API Unexpected Error',
+          error,
+          span,
+          context: {
+            path: requestPath,
+            provider,
+            symbol,
+            interval,
+            operation: 'stock.kline',
+            errorDomain: 'stock-data'
+          }
         });
 
-        return createErrorResponse(
-          {
-            code: 'UNKNOWN_ERROR',
-            message: 'An unexpected error occurred'
-          },
-          500
-        );
+        return createObservedErrorResponse({ code: 'UNKNOWN_ERROR' });
       }
     }
   );
@@ -146,16 +170,23 @@ async function enforceKLineRateLimit(request: NextRequest, path: string) {
 
     return { headers };
   } catch (error) {
-    logger.error('K-line API rate limiter unavailable', { error, path });
+    reportObservedError({
+      code: 'RATE_LIMIT_UNAVAILABLE',
+      message: 'K-line API rate limiter unavailable',
+      error,
+      context: {
+        path,
+        operation: 'stock.kline',
+        errorDomain: 'stock-data'
+      }
+    });
 
     return {
-      response: createErrorResponse(
-        createAPIError(
-          'RATE_LIMIT_UNAVAILABLE',
-          'Rate limit service unavailable'
-        ),
-        503
-      ),
+      response: createObservedErrorResponse({
+        code: 'RATE_LIMIT_UNAVAILABLE',
+        message: 'Rate limit service unavailable',
+        statusCode: 503
+      }),
       headers: {}
     };
   }

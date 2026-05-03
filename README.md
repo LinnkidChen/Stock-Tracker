@@ -4,8 +4,16 @@ Stock Tracker is a Next.js application for monitoring market quotes, charting
 selected symbols, maintaining a watchlist, and tracking current portfolio
 holdings. The current product is narrower than the long-term roadmap: it ships
 the stock dashboard, chart workspace, setup diagnostics, watchlist persistence,
-watchlist price alerts, and portfolio holdings persistence, while dedicated
-portfolio, watchlist, reports, settings, and overview pages remain planned.
+watchlist price alerts, portfolio holdings persistence, and a transaction
+ledger, while dedicated portfolio, watchlist, reports, settings, and overview
+pages remain planned.
+
+## Contributor and Agent Docs
+
+For repository architecture, local workflows, reliability expectations, quality
+gates, and agent guidance, start with [docs/INDEX.md](docs/INDEX.md) and
+[AGENTS.md](AGENTS.md). The README stays product-facing; `docs/` is the
+contributor and agent system of record.
 
 ## Project Status
 
@@ -26,8 +34,8 @@ portfolio, watchlist, reports, settings, and overview pages remain planned.
 - Watchlist API with Supabase persistence, symbol metadata, ordering, and tests.
 - Watchlist price alerts for above/below price, percent move, gap up/down, and
   volume spikes, with status and trigger history.
-- Portfolio holdings API with Supabase persistence for current symbol quantity
-  and average cost, plus tests.
+- Portfolio holdings and transaction ledger APIs with Supabase persistence,
+  derived current positions, and tests.
 - Shared Supabase-backed API rate limiting for quote, k-line, streaming,
   watchlist, and portfolio endpoints.
 - Clerk-protected dashboard routes, Sentry instrumentation, React Query, Zustand
@@ -38,8 +46,9 @@ portfolio, watchlist, reports, settings, and overview pages remain planned.
 - production readiness for local and deployed Clerk, Supabase, and Longbridge
   setup. The operations page exposes configuration gaps, but deployment-specific
   verification is still required.
-- Portfolio management is currently limited to current holdings by symbol. Trade
-  history, lots, realized P&L, and tax workflows are not implemented.
+- Portfolio management now records transaction history and derives current
+  holdings. Dedicated lot accounting, realized P&L, and tax workflows are not
+  implemented.
 - Watchlist management exists inside the stock dashboard card, but does not yet
   have a dedicated full-page workflow.
 - Charting supports k-line visualization, display preferences, and the initial
@@ -66,7 +75,7 @@ portfolio, watchlist, reports, settings, and overview pages remain planned.
 | Market quotes             | Yes                          | Yes     | N/A                | Dashboard protected, API public | Yes     | Partial              |
 | Technical chart workspace | Yes                          | Yes     | Local client state | Dashboard protected             | Yes     | Partial              |
 | Watchlist                 | Partial: dashboard card only | Yes     | Supabase           | Yes                             | Yes     | Partial              |
-| Portfolio holdings        | Partial: dashboard card only | Yes     | Supabase           | Yes                             | Yes     | Partial              |
+| Portfolio holdings        | Partial: dashboard card/API  | Yes     | Supabase           | Yes                             | Yes     | Partial              |
 | Operations diagnostics    | Yes                          | N/A     | N/A                | Dashboard protected             | Yes     | Partial              |
 | Dedicated portfolio page  | Planned                      | Partial | Partial            | Planned                         | Partial | Planned              |
 | Dedicated watchlist page  | Planned                      | Partial | Partial            | Planned                         | Partial | Planned              |
@@ -90,18 +99,19 @@ portfolio, watchlist, reports, settings, and overview pages remain planned.
 
 ### API Routes
 
-| Route                            | Methods                          | Status      | Description                                              |
-| :------------------------------- | :------------------------------- | :---------- | :------------------------------------------------------- |
-| `/api/stocks/quote/[symbol]`     | `GET`                            | Implemented | Fetches a quote through the provider registry.           |
+| Route                            | Methods                          | Status      | Description                                               |
+| :------------------------------- | :------------------------------- | :---------- | :-------------------------------------------------------- |
+| `/api/stocks/quote/[symbol]`     | `GET`                            | Implemented | Fetches a quote through the provider registry.            |
 | `/api/stocks/kline/[symbol]`     | `GET`                            | Implemented | Fetches k-line series data through the provider registry. |
-| `/api/stocks/providers/health`   | `GET`                            | Implemented | Checks provider readiness and fallback metadata.         |
-| `/api/ws/prices`                 | `GET` WebSocket upgrade          | Implemented | Poll-backed price updates for subscribed symbols.        |
-| `/api/watchlist`                 | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist CRUD, metadata, and ordering.    |
-| `/api/watchlist/alerts`          | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist alert CRUD and trigger history reads. |
-| `/api/watchlist/alerts/triggers` | `POST`                           | Implemented | Records authenticated watchlist alert trigger history.   |
-| `/api/portfolio/holdings`        | `GET`, `POST`                    | Implemented | Authenticated current holdings list and creation.        |
-| `/api/portfolio/holdings/[id]`   | `PATCH`, `DELETE`                | Implemented | Authenticated holdings update and deletion.              |
-| `/api/log`                       | `POST`                           | Implemented | Client log ingestion.                                    |
+| `/api/stocks/providers/health`   | `GET`                            | Implemented | Checks provider readiness and fallback metadata.          |
+| `/api/ws/prices`                 | `GET` WebSocket upgrade          | Implemented | Poll-backed price updates for subscribed symbols.         |
+| `/api/watchlist`                 | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist CRUD, metadata, and ordering.     |
+| `/api/watchlist/alerts`          | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist alert CRUD and trigger history.   |
+| `/api/watchlist/alerts/triggers` | `POST`                           | Implemented | Records authenticated watchlist alert trigger history.    |
+| `/api/portfolio/holdings`        | `GET`, `POST`                    | Implemented | Authenticated current holdings list and creation.         |
+| `/api/portfolio/holdings/[id]`   | `PATCH`, `DELETE`                | Implemented | Authenticated holdings update and deletion.               |
+| `/api/portfolio/transactions`    | `GET`, `POST`                    | Implemented | Authenticated transaction ledger list and creation.       |
+| `/api/log`                       | `POST`                           | Implemented | Client log ingestion.                                     |
 
 ## Tech Stack
 
@@ -236,15 +246,20 @@ debugging.
 
 ## Portfolio Model
 
-The current portfolio model stores one holding per user and symbol with:
+Portfolio holdings are derived from a transaction ledger with these event types:
 
-- `symbol`
-- `quantity`
-- `avgCost`
+- `buy`
+- `sell`
+- `dividend`
+- `split`
+- `fee`
+- `transfer`
 
-The dashboard card uses current quote data to calculate total value, day P&L,
-and total P&L. Trade history, tax lots, realized P&L, and export workflows are
-outside the current implementation.
+The existing `stock_portfolio_holdings` table is preserved as a migration
+snapshot/read model, and the schema seeds current holdings into transfer events
+when the ledger table is introduced. The dashboard card still consumes current
+holdings to calculate total value, day P&L, and total P&L. Tax lots, realized
+P&L, and export workflows remain outside the current implementation.
 
 ## Development Commands
 
