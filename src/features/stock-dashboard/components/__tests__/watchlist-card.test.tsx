@@ -156,8 +156,8 @@ describe('WatchlistCard initial load', () => {
       json: async () => ({
         success: false,
         error: {
-          code: 'WATCHLIST_AUTH_MISCONFIGURED',
-          message: 'Watchlist authentication is not configured on the server.'
+          code: 'RLS_AUTH_MISCONFIGURED',
+          message: 'Data persistence is temporarily unavailable.'
         }
       })
     });

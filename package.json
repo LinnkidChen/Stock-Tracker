@@ -13,6 +13,7 @@
     "build": "next build",
     "prestart": "node scripts/preflight-env.js --mode=production",
     "start": "next start",
+    "docs:check": "node scripts/check-agent-legibility.mjs",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix && pnpm format",
     "lint:strict": "eslint --max-warnings=0 src",
@@ -26,6 +27,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "audit:prod": "pnpm audit --prod --audit-level high",
+    "verify": "pnpm docs:check && pnpm lint:strict && pnpm test --runInBand && NEXT_PUBLIC_SENTRY_DISABLED=true pnpm build",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -34,7 +36,7 @@
     ]
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.39.2",
+    "@clerk/nextjs": "^6.39.3",
     "@clerk/themes": "^2.2.26",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^7.0.0",
