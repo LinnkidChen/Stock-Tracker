@@ -6,8 +6,8 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 
 export const metadata: Metadata = {
-  title: 'Next Shadcn Dashboard Starter',
-  description: 'Basic dashboard with Next.js and Shadcn'
+  title: 'Stock Tracker Dashboard',
+  description: 'Authenticated stock dashboard and operations workspace'
 };
 
 export default async function DashboardLayout({

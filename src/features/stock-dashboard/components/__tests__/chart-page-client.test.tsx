@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DEFAULT_CHART_WORKSPACE,
   type ChartPreferences,
+  type ChartPreferencesPatch,
   type ChartRange
 } from '../../lib/chart-workspace';
 import type { KLineInterval } from '@/lib/types/stock-api';
@@ -41,7 +42,7 @@ jest.mock('../KLineChart', () => ({
     preferences: ChartPreferences;
     onIntervalChange?: (interval: KLineInterval) => void;
     onRangeChange?: (range: ChartRange) => void;
-    onPreferencesChange?: (preferences: Partial<ChartPreferences>) => void;
+    onPreferencesChange?: (preferences: ChartPreferencesPatch) => void;
   }) => (
     <div>
       <div data-testid='kline-chart'>{`${ticker}:${interval}:${range}`}</div>

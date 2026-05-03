@@ -16,7 +16,7 @@ import {
 import {
   buildChartsHref,
   isChartRange,
-  type ChartPreferences,
+  type ChartPreferencesPatch,
   type ChartRange
 } from '../lib/chart-workspace';
 
@@ -153,7 +153,7 @@ export function ChartPageClient() {
     );
   };
 
-  const handlePreferencesChange = (preferences: Partial<ChartPreferences>) => {
+  const handlePreferencesChange = (preferences: ChartPreferencesPatch) => {
     setChartPreferences(preferences);
   };
 

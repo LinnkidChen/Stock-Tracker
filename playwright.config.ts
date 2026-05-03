@@ -3,9 +3,11 @@ import { defineConfig, devices } from '@playwright/test';
 const port = Number(process.env.PLAYWRIGHT_PORT ?? process.env.PORT ?? 3100);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`;
 const isCI = Boolean(process.env.CI);
-const webServerCommand = isCI
-  ? `pnpm exec next start -H 127.0.0.1 -p ${port}`
-  : `pnpm exec next dev --turbopack -H 127.0.0.1 -p ${port}`;
+const webServerCommand =
+  process.env.PLAYWRIGHT_WEB_SERVER_COMMAND ??
+  (isCI
+    ? `pnpm exec next start -H 127.0.0.1 -p ${port}`
+    : `pnpm exec next dev --turbopack -H 127.0.0.1 -p ${port}`);
 
 export default defineConfig({
   testDir: './e2e',

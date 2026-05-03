@@ -40,7 +40,7 @@ describe('dashboard provider state', () => {
     );
   });
 
-  it('migrates removed provider values to Longbridge', () => {
+  it('migrates removed provider values to auto routing', () => {
     localStorage.setItem('dashboard:quoteProvider', removedProvider);
 
     act(() => {
@@ -94,7 +94,8 @@ describe('dashboard provider state', () => {
       preferences: {
         showVolume: false,
         showGrid: true,
-        candleType: 'area'
+        candleType: 'area',
+        indicators: DEFAULT_CHART_WORKSPACE.preferences.indicators
       }
     });
   });
@@ -161,7 +162,45 @@ describe('dashboard provider state', () => {
       preferences: {
         showVolume: false,
         showGrid: true,
-        candleType: 'ohlc'
+        candleType: 'ohlc',
+        indicators: DEFAULT_CHART_WORKSPACE.preferences.indicators
+      }
+    });
+  });
+
+  it('persists nested chart indicator preferences without replacing siblings', () => {
+    act(() => {
+      useDashboardStore.getState().setChartPreferences({
+        indicators: {
+          sma: {
+            enabled: true,
+            period: 50
+          }
+        }
+      });
+      useDashboardStore.getState().setChartPreferences({
+        indicators: {
+          macd: {
+            enabled: true,
+            fastPeriod: 8
+          }
+        }
+      });
+    });
+
+    expect(
+      JSON.parse(localStorage.getItem(CHART_WORKSPACE_STORAGE_KEY)!).preferences
+        .indicators
+    ).toEqual({
+      ...DEFAULT_CHART_WORKSPACE.preferences.indicators,
+      sma: {
+        enabled: true,
+        period: 50
+      },
+      macd: {
+        ...DEFAULT_CHART_WORKSPACE.preferences.indicators.macd,
+        enabled: true,
+        fastPeriod: 8
       }
     });
   });

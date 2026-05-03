@@ -51,6 +51,17 @@ jobs:
     name: Unit coverage
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SENTRY_DISABLED: 'true'
+      E2E_AUTH_BYPASS: 'true'
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZHVtbXkuY2xlcmsuYWNjb3VudHMuZGV2JA
+      CLERK_SECRET_KEY: sk_test_ci_dummy
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: sb_publishable_ci
+      LONGPORT_APP_KEY: ci-placeholder
+      LONGPORT_APP_SECRET: ci-placeholder
+      LONGPORT_ACCESS_TOKEN: ci-placeholder
 
     steps:
       - name: Checkout
@@ -85,6 +96,17 @@ jobs:
     name: Build and smoke
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SENTRY_DISABLED: 'true'
+      E2E_AUTH_BYPASS: 'true'
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZHVtbXkuY2xlcmsuYWNjb3VudHMuZGV2JA
+      CLERK_SECRET_KEY: sk_test_ci_dummy
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: sb_publishable_ci
+      LONGPORT_APP_KEY: ci-placeholder
+      LONGPORT_APP_SECRET: ci-placeholder
+      LONGPORT_ACCESS_TOKEN: ci-placeholder
 
     steps:
       - name: Checkout
@@ -106,20 +128,24 @@ jobs:
 
       - name: Build production app
         run: pnpm build
-        env:
-          CLERK_SECRET_KEY: ''
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ''
-          NEXT_PUBLIC_SENTRY_DISABLED: 'true'
 
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run Playwright smoke tests
         run: pnpm test:e2e:smoke
-        env:
-          CLERK_SECRET_KEY: ''
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ''
-          NEXT_PUBLIC_SENTRY_DISABLED: 'true'
+
+      - name: Upload Playwright artifacts
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-artifacts
+          path: |
+            playwright-report
+            test-results
+            blob-report
+          if-no-files-found: ignore
+          retention-days: 7
 
   dependency-audit:
     name: Dependency audit

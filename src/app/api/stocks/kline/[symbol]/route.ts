@@ -5,6 +5,7 @@ import { getStockService } from '@/lib/services/stock-service';
 import {
   createAPIError,
   createErrorResponse,
+  createRateLimitResponse,
   createSuccessResponse,
   getStatusCodeForError,
   isAPIError
@@ -12,6 +13,7 @@ import {
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { DEFAULT_KLINE_INTERVAL, isKLineInterval } from '@/lib/types/stock-api';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, createRateLimitHeaders } from '@/lib/rate-limit';
 
 const CACHE_HEADER = 'public, s-maxage=86400, stale-while-revalidate=604800';
 
@@ -25,6 +27,11 @@ export async function GET(
       const requestPath = getRequestPath(request);
 
       try {
+        const rateLimit = await enforceKLineRateLimit(request, requestPath);
+        if (rateLimit.response) {
+          return rateLimit.response;
+        }
+
         const { symbol: rawSymbol } = await params;
         const symbol = normalizeTicker(rawSymbol ?? '');
 
@@ -85,6 +92,7 @@ export async function GET(
         span?.setAttribute('kline.candles', series.candles.length);
 
         return createSuccessResponse(series, {
+          ...rateLimit.headers,
           'Cache-Control': CACHE_HEADER
         });
       } catch (error) {
@@ -122,6 +130,35 @@ export async function GET(
       }
     }
   );
+}
+
+async function enforceKLineRateLimit(request: NextRequest, path: string) {
+  try {
+    const result = await checkRateLimit(request, 'kline');
+    const headers = createRateLimitHeaders(result);
+
+    if (!result.allowed) {
+      return {
+        response: createRateLimitResponse(result.retryAfter, headers),
+        headers
+      };
+    }
+
+    return { headers };
+  } catch (error) {
+    logger.error('K-line API rate limiter unavailable', { error, path });
+
+    return {
+      response: createErrorResponse(
+        createAPIError(
+          'RATE_LIMIT_UNAVAILABLE',
+          'Rate limit service unavailable'
+        ),
+        503
+      ),
+      headers: {}
+    };
+  }
 }
 
 function getRequestPath(request: NextRequest): string {

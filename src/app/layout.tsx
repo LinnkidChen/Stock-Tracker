@@ -17,8 +17,8 @@ const META_THEME_COLORS = {
 };
 
 export const metadata: Metadata = {
-  title: 'Next Shadcn',
-  description: 'Basic dashboard with Next.js and Shadcn'
+  title: 'Stock Tracker',
+  description: 'Stock dashboard, charting, watchlist, and holdings tracker'
 };
 
 export const viewport: Viewport = {

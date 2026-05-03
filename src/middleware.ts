@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextFetchEvent, NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 const isProtectedRoute = createRouteMatcher(['/dashboard(.*)']);
 const hasClerkCredentials = Boolean(
@@ -21,7 +22,18 @@ function setupRequiredMiddleware(req: NextRequest) {
   return NextResponse.next();
 }
 
-export default clerkAuthMiddleware ?? setupRequiredMiddleware;
+export default function middleware(req: NextRequest, event: NextFetchEvent) {
+  if (
+    process.env.E2E_AUTH_BYPASS === 'true' &&
+    req.nextUrl.pathname.startsWith('/e2e-')
+  ) {
+    return NextResponse.next();
+  }
+
+  return clerkAuthMiddleware
+    ? clerkAuthMiddleware(req, event)
+    : setupRequiredMiddleware(req);
+}
 
 export const config = {
   matcher: [

@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { isValidTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { logger } from '@/lib/logger';
+import {
+  checkRateLimit,
+  createRateLimitHeaders,
+  type RateLimitResult
+} from '@/lib/rate-limit';
 import { isSupabaseAuthConfigError } from '@/lib/supabase/server';
 import {
   getWatchlistItems,
@@ -109,39 +114,59 @@ function createValidationError(message: string) {
   );
 }
 
-// Very simple in-memory stores keyed by client id (ip header) for rate limiting
-const rateBuckets = new Map<string, { count: number; reset: number }>();
+async function enforceWatchlistRateLimit(req: Request, userId: string | null) {
+  try {
+    const result = await checkRateLimit(req, 'watchlist', {
+      subject: userId
+    });
 
-/**
- * Extracts client identifier from request headers for rate limiting
- */
-function getClientId(req: Request): string {
-  const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0]?.trim();
-  return ip || 'anonymous';
+    if (!result.allowed) {
+      return createWatchlistRateLimitResponse(result);
+    }
+
+    return null;
+  } catch (error) {
+    logger.error('Watchlist rate limiter unavailable', { error });
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'RATE_LIMIT_UNAVAILABLE',
+          message: 'Rate limit service unavailable'
+        }
+      },
+      { status: 503 }
+    );
+  }
 }
 
-/**
- * Implements simple rate limiting per client
- */
-function rateLimit(id: string, limit = 60, windowMs = 60_000) {
-  const now = Date.now();
-  const bucket = rateBuckets.get(id);
-  if (!bucket || now > bucket.reset) {
-    rateBuckets.set(id, { count: 1, reset: now + windowMs });
-    return { allowed: true };
-  }
-  if (bucket.count >= limit) {
-    return {
-      allowed: false,
-      retryAfter: Math.ceil((bucket.reset - now) / 1000)
-    };
-  }
-  bucket.count++;
-  return { allowed: true };
+function createWatchlistRateLimitResponse(result: RateLimitResult) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code: 'API_LIMIT_EXCEEDED',
+        message: 'Rate limit exceeded. Try again later.',
+        details: result.retryAfter
+          ? { retryAfter: result.retryAfter }
+          : undefined
+      }
+    },
+    {
+      status: 429,
+      headers: createRateLimitHeaders(result)
+    }
+  );
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const { userId } = await auth();
+  const rateLimitResponse = await enforceWatchlistRateLimit(req, userId);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   if (!userId) {
     return NextResponse.json(
       { success: false, error: { message: 'Unauthorized' } },
@@ -169,24 +194,12 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const id = getClientId(req);
-  const rl = rateLimit(id);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { message: 'Rate limit exceeded. Try again later.' }
-      },
-      {
-        status: 429,
-        headers: rl.retryAfter
-          ? { 'Retry-After': String(rl.retryAfter) }
-          : undefined
-      }
-    );
+  const { userId } = await auth();
+  const rateLimitResponse = await enforceWatchlistRateLimit(req, userId);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
   }
 
-  const { userId } = await auth();
   if (!userId) {
     return NextResponse.json(
       { success: false, error: { message: 'Unauthorized' } },
@@ -261,24 +274,12 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const id = getClientId(req);
-  const rl = rateLimit(id);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { message: 'Rate limit exceeded. Try again later.' }
-      },
-      {
-        status: 429,
-        headers: rl.retryAfter
-          ? { 'Retry-After': String(rl.retryAfter) }
-          : undefined
-      }
-    );
+  const { userId } = await auth();
+  const rateLimitResponse = await enforceWatchlistRateLimit(req, userId);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
   }
 
-  const { userId } = await auth();
   if (!userId) {
     return NextResponse.json(
       { success: false, error: { message: 'Unauthorized' } },

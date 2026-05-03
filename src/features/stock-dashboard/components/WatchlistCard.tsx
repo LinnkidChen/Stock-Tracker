@@ -673,7 +673,7 @@ export function WatchlistCard() {
       <CardContent>
         <form onSubmit={onAdd} className='mb-4 grid gap-2 sm:grid-cols-4'>
           <Input
-            placeholder='Add symbol (1-5 letters, e.g., MSFT)'
+            placeholder='Add symbol (e.g., MSFT or 0700.HK)'
             value={symbol}
             onChange={(e) => {
               setSymbol(e.target.value.toUpperCase());
