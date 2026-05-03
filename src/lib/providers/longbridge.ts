@@ -22,6 +22,7 @@ import {
   longbridgeRequestGuard,
   LongbridgeRequestGuard
 } from './longbridge-request-guard';
+import { createErrorLogContext } from '../observability/error-taxonomy';
 
 const LONG_BRIDGE_KLINE_COUNT = 1000;
 const LONG_BRIDGE_MAX_ATTEMPTS = 3;
@@ -349,19 +350,30 @@ export class LongbridgeProvider implements StockDataProvider {
         const shouldRetry = normalized.retryable && attempt < maxAttempts;
 
         if (!shouldRetry) {
-          logger.error(options.logLabel, {
-            error: normalized.error,
-            attempt,
-            maxAttempts
-          });
+          logger.error(
+            options.logLabel,
+            createErrorLogContext(normalized.error.code, {
+              error: normalized.error,
+              attempt,
+              maxAttempts,
+              provider: 'longbridge',
+              operation: options.logLabel,
+              errorDomain: 'stock-data'
+            })
+          );
           throw normalized.error;
         }
 
-        logger.warn('Longbridge transient failure; retrying', {
-          code: normalized.error.code,
-          attempt,
-          maxAttempts
-        });
+        logger.warn(
+          'Longbridge transient failure; retrying',
+          createErrorLogContext(normalized.error.code, {
+            attempt,
+            maxAttempts,
+            provider: 'longbridge',
+            operation: options.logLabel,
+            errorDomain: 'stock-data'
+          })
+        );
 
         await this.sleep(this.getRetryDelayMs(attempt, normalized.retryAfter));
       }

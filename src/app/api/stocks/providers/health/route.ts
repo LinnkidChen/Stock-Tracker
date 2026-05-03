@@ -11,7 +11,12 @@ import {
   getStatusCodeForError,
   isAPIError
 } from '@/lib/services/api-errors';
-import { logger } from '@/lib/logger';
+import { isObservedErrorCode } from '@/lib/observability/error-taxonomy';
+import {
+  createObservedErrorResponse,
+  reportApiError,
+  reportObservedError
+} from '@/lib/observability/route-errors';
 
 export async function GET(request: NextRequest) {
   return Sentry.startSpan(
@@ -35,47 +40,63 @@ export async function GET(request: NextRequest) {
 
         span?.setAttribute('provider.status', health.status);
 
+        if (health.status !== 'healthy') {
+          const detailCode = 'details' in health ? health.details?.code : null;
+          const code = isObservedErrorCode(detailCode)
+            ? detailCode
+            : 'PROVIDER_FAILURE';
+
+          reportObservedError({
+            code,
+            message: `Provider health ${health.status}: ${providerName}`,
+            span,
+            context: {
+              path: requestPath,
+              provider: providerName,
+              providerStatus: health.status,
+              operation: 'provider.health',
+              errorDomain: 'stock-data'
+            }
+          });
+        }
+
         return createSuccessResponse(health, {
           'Cache-Control': 'no-store'
         });
       } catch (error) {
-        Sentry.captureException(error);
-
         if (isAPIError(error)) {
           const statusCode = getStatusCodeForError(error.code);
-          const logContext = {
-            code: error.code,
-            path: requestPath,
-            originalError: error
-          };
-
-          if (statusCode >= 500) {
-            logger.error(
-              `Provider health API Error: ${error.message}`,
-              logContext
-            );
-          } else {
-            logger.warn(
-              `Provider health API Warning: ${error.message}`,
-              logContext
-            );
-          }
+          reportApiError(
+            error,
+            statusCode >= 500
+              ? `Provider health API Error: ${error.message}`
+              : `Provider health API Warning: ${error.message}`,
+            span,
+            {
+              path: requestPath,
+              provider: providerName,
+              operation: 'provider.health',
+              errorDomain: 'stock-data'
+            }
+          );
 
           return createErrorResponse(error);
         }
 
-        logger.error('Provider health API Unexpected Error', {
-          path: requestPath,
-          error
+        reportObservedError({
+          code: 'UNKNOWN_ERROR',
+          message: 'Provider health API Unexpected Error',
+          error,
+          span,
+          context: {
+            path: requestPath,
+            provider: providerName,
+            operation: 'provider.health',
+            errorDomain: 'stock-data'
+          }
         });
 
-        return createErrorResponse(
-          {
-            code: 'UNKNOWN_ERROR',
-            message: 'An unexpected error occurred'
-          },
-          500
-        );
+        return createObservedErrorResponse({ code: 'UNKNOWN_ERROR' });
       }
     }
   );

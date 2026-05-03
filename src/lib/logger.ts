@@ -3,6 +3,8 @@ import * as Sentry from '@sentry/nextjs';
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogContext {
+  sentryLevel?: 'fatal' | 'error' | 'warning' | 'info' | 'debug';
+  sentryTags?: Record<string, string>;
   [key: string]: any;
 }
 
@@ -30,17 +32,22 @@ class Logger {
     }
 
     // Sentry integration
+    const { sentryLevel, sentryTags, ...sentryExtra } = context ?? {};
+
     if (level === 'error' && typeof Sentry.captureException === 'function') {
       Sentry.captureException(context?.error || new Error(message), {
-        extra: context
+        extra: sentryExtra,
+        level: sentryLevel ?? 'error',
+        tags: sentryTags
       });
     } else if (
       level === 'warn' &&
       typeof Sentry.captureMessage === 'function'
     ) {
       Sentry.captureMessage(message, {
-        level: 'warning',
-        extra: context
+        level: sentryLevel ?? 'warning',
+        extra: sentryExtra,
+        tags: sentryTags
       });
     }
 
