@@ -8,6 +8,13 @@ portfolio holdings persistence, and a transaction ledger, while dedicated
 portfolio, watchlist, alerts, reports, settings, and overview pages remain
 planned.
 
+## Contributor and Agent Docs
+
+For repository architecture, local workflows, reliability expectations, quality
+gates, and agent guidance, start with [docs/INDEX.md](docs/INDEX.md) and
+[AGENTS.md](AGENTS.md). The README stays product-facing; `docs/` is the
+contributor and agent system of record.
+
 ## Project Status
 
 ### Implemented
