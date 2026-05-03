@@ -2,6 +2,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "stock-tracker",
   "main": ".open-next/worker.js",
+  "build": {
+    "command": "pnpm opennextjs-cloudflare build"
+  },
   "compatibility_date": "2026-05-03",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {
@@ -39,7 +42,6 @@
       "CLERK_SECRET_KEY",
       "NEXT_PUBLIC_SUPABASE_URL",
       "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY",
-      "SUPABASE_SERVICE_ROLE_KEY",
       "LONGPORT_APP_KEY",
       "LONGPORT_APP_SECRET",
       "LONGPORT_ACCESS_TOKEN"
