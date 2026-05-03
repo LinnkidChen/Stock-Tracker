@@ -1,4 +1,5 @@
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
+import { checkRateLimit, createRateLimitHeaders } from '@/lib/rate-limit';
 import { APIResponse, StockQuote } from '@/lib/types/stock-api';
 
 export const runtime = 'edge';
@@ -34,6 +35,11 @@ export async function GET(request: Request) {
   const upgradeHeader = request.headers.get('upgrade') || '';
   if (upgradeHeader.toLowerCase() !== 'websocket') {
     return new Response('Expected websocket', { status: 400 });
+  }
+
+  const rateLimitResponse = await enforceStreamRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
   }
 
   const pair = new (globalThis as any).WebSocketPair();
@@ -103,7 +109,12 @@ export async function GET(request: Request) {
       for (const symbol of Array.from(subs)) {
         if (!subs.has(symbol)) continue;
 
-        const result = await fetchPriceUpdate(requestUrl, symbol, provider);
+        const result = await fetchPriceUpdate(
+          requestUrl,
+          symbol,
+          provider,
+          request.headers
+        );
 
         if (result.ok) {
           safeSend(result.message);
@@ -170,10 +181,55 @@ export async function GET(request: Request) {
   return new Response(null, { status: 101, webSocket: client } as any);
 }
 
+async function enforceStreamRateLimit(request: Request) {
+  try {
+    const result = await checkRateLimit(request, 'stream');
+
+    if (!result.allowed) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            code: 'API_LIMIT_EXCEEDED',
+            message: 'Rate limit exceeded. Try again later.',
+            details: result.retryAfter
+              ? { retryAfter: result.retryAfter }
+              : undefined
+          }
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            ...createRateLimitHeaders(result)
+          }
+        }
+      );
+    }
+
+    return null;
+  } catch {
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: {
+          code: 'RATE_LIMIT_UNAVAILABLE',
+          message: 'Rate limit service unavailable'
+        }
+      }),
+      {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+}
+
 async function fetchPriceUpdate(
   requestUrl: URL,
   symbol: string,
-  provider: string
+  provider: string,
+  requestHeaders: Headers
 ): Promise<PriceFetchResult> {
   const quoteUrl = new URL(
     `/api/stocks/quote/${encodeURIComponent(symbol)}`,
@@ -182,9 +238,16 @@ async function fetchPriceUpdate(
   quoteUrl.searchParams.set('provider', provider);
 
   try {
-    const response = await fetch(quoteUrl.toString(), {
+    const fetchInit: RequestInit = {
       cache: 'no-store'
-    });
+    };
+    const rateLimitHeaders = getForwardedRateLimitHeaders(requestHeaders);
+
+    if (Object.keys(rateLimitHeaders).length > 0) {
+      fetchInit.headers = rateLimitHeaders;
+    }
+
+    const response = await fetch(quoteUrl.toString(), fetchInit);
     const apiResponse = await readAPIResponse<StockQuote>(response);
 
     if (!response.ok || !apiResponse?.success || !apiResponse.data) {
@@ -222,6 +285,28 @@ async function fetchPriceUpdate(
       message: error instanceof Error ? error.message : 'Quote stream failed'
     };
   }
+}
+
+function getForwardedRateLimitHeaders(
+  headers: Headers
+): Record<string, string> {
+  const forwardedHeaders: Record<string, string> = {};
+  const forwardedFor =
+    headers.get('x-forwarded-for') ||
+    headers.get('cf-connecting-ip') ||
+    headers.get('x-real-ip') ||
+    headers.get('x-vercel-forwarded-for');
+  const userAgent = headers.get('user-agent');
+
+  if (forwardedFor) {
+    forwardedHeaders['x-forwarded-for'] = forwardedFor;
+  }
+
+  if (userAgent) {
+    forwardedHeaders['user-agent'] = userAgent;
+  }
+
+  return forwardedHeaders;
 }
 
 async function readAPIResponse<T>(

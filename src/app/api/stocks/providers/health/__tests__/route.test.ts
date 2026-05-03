@@ -4,7 +4,10 @@
 import { GET } from '../route';
 import { StockProviderFactory } from '@/lib/providers/factory';
 import { APIResponse } from '@/lib/types/stock-api';
-import { ProviderHealthCheck } from '@/lib/providers/types';
+import {
+  ProviderHealthCheck,
+  ProviderHealthReport
+} from '@/lib/providers/types';
 import { createMockRequest } from '../../../__tests__/request-fixtures';
 
 jest.mock('next/server', () => ({
@@ -39,13 +42,18 @@ jest.mock('@sentry/nextjs', () => ({
 
 jest.mock('@/lib/providers/factory', () => ({
   StockProviderFactory: {
-    getProvider: jest.fn()
+    getProvider: jest.fn(),
+    getProviderHealthReport: jest.fn()
   }
 }));
 
 const mockGetProvider = StockProviderFactory.getProvider as jest.MockedFunction<
   typeof StockProviderFactory.getProvider
 >;
+const mockGetProviderHealthReport =
+  StockProviderFactory.getProviderHealthReport as jest.MockedFunction<
+    typeof StockProviderFactory.getProviderHealthReport
+  >;
 
 const mockProvider = {
   healthCheck: jest.fn()
@@ -57,9 +65,51 @@ describe('/api/stocks/providers/health API Route', () => {
     mockGetProvider.mockReturnValue(mockProvider as any);
   });
 
-  it('returns healthy provider status', async () => {
+  it('returns the auto provider health report by default', async () => {
+    const health: ProviderHealthReport = {
+      provider: 'Auto',
+      providerId: 'auto',
+      status: 'healthy',
+      checkedAt: '2024-01-01T00:00:00.000Z',
+      fallbackOrder: ['longbridge', 'yahoo'],
+      providers: [
+        {
+          provider: 'Longbridge',
+          providerId: 'longbridge',
+          status: 'healthy',
+          latencyMs: 12,
+          checkedAt: '2024-01-01T00:00:00.000Z'
+        },
+        {
+          provider: 'Yahoo Finance',
+          providerId: 'yahoo',
+          status: 'healthy',
+          latencyMs: 8,
+          checkedAt: '2024-01-01T00:00:00.000Z'
+        }
+      ],
+      metadata: []
+    };
+    mockGetProviderHealthReport.mockResolvedValue(health);
+
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/providers/health')
+    );
+    const responseData: APIResponse<ProviderHealthReport> =
+      await response.json();
+
+    expect(response.status).toBe(200);
+    expect(responseData.success).toBe(true);
+    expect(responseData.data).toEqual(health);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(mockGetProviderHealthReport).toHaveBeenCalledTimes(1);
+    expect(mockGetProvider).not.toHaveBeenCalled();
+  });
+
+  it('returns a concrete provider status when requested', async () => {
     const health: ProviderHealthCheck = {
       provider: 'Longbridge',
+      providerId: 'longbridge',
       status: 'healthy',
       latencyMs: 12,
       checkedAt: '2024-01-01T00:00:00.000Z',
@@ -70,15 +120,15 @@ describe('/api/stocks/providers/health API Route', () => {
     mockProvider.healthCheck.mockResolvedValue(health);
 
     const response = await GET(
-      createMockRequest('http://localhost:3000/api/stocks/providers/health')
+      createMockRequest(
+        'http://localhost:3000/api/stocks/providers/health?provider=longbridge'
+      )
     );
     const responseData: APIResponse<ProviderHealthCheck> =
       await response.json();
 
     expect(response.status).toBe(200);
-    expect(responseData.success).toBe(true);
     expect(responseData.data).toEqual(health);
-    expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(mockGetProvider).toHaveBeenCalledWith('longbridge');
   });
 
@@ -96,7 +146,9 @@ describe('/api/stocks/providers/health API Route', () => {
     mockProvider.healthCheck.mockResolvedValue(health);
 
     const response = await GET(
-      createMockRequest('http://localhost:3000/api/stocks/providers/health')
+      createMockRequest(
+        'http://localhost:3000/api/stocks/providers/health?provider=longbridge'
+      )
     );
     const responseData: APIResponse<ProviderHealthCheck> =
       await response.json();
@@ -121,7 +173,9 @@ describe('/api/stocks/providers/health API Route', () => {
     mockProvider.healthCheck.mockResolvedValue(health);
 
     const response = await GET(
-      createMockRequest('http://localhost:3000/api/stocks/providers/health')
+      createMockRequest(
+        'http://localhost:3000/api/stocks/providers/health?provider=longbridge'
+      )
     );
     const responseData: APIResponse<ProviderHealthCheck> =
       await response.json();

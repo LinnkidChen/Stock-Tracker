@@ -6,6 +6,7 @@ const API_ERROR_CODES = new Set<string>([
   'INVALID_INTERVAL',
   'INVALID_PROVIDER',
   'API_LIMIT_EXCEEDED',
+  'RATE_LIMIT_UNAVAILABLE',
   'NETWORK_ERROR',
   'INVALID_API_KEY',
   'UNKNOWN_ERROR'
@@ -63,6 +64,7 @@ export function getStatusCodeForError(code: APIErrorCode): number {
     INVALID_INTERVAL: 400,
     INVALID_PROVIDER: 400,
     API_LIMIT_EXCEEDED: 429,
+    RATE_LIMIT_UNAVAILABLE: 503,
     INVALID_API_KEY: 401,
     NETWORK_ERROR: 502,
     UNKNOWN_ERROR: 500
@@ -134,7 +136,8 @@ export function wrapError(
  * Create a rate limit error response
  */
 export function createRateLimitResponse(
-  retryAfter?: number
+  retryAfter?: number,
+  headers?: HeadersInit
 ): NextResponse<APIResponse<null>> {
   // Validate and cap retry time to reasonable limits (max 5 minutes)
   const validRetryAfter = getValidRetryAfter(retryAfter);
@@ -144,9 +147,10 @@ export function createRateLimitResponse(
     validRetryAfter ? { retryAfter: validRetryAfter } : undefined
   );
 
-  const headers: HeadersInit = validRetryAfter
-    ? { 'Retry-After': String(validRetryAfter) }
-    : {};
+  const responseHeaders: HeadersInit = {
+    ...(headers || {}),
+    ...(validRetryAfter ? { 'Retry-After': String(validRetryAfter) } : {})
+  };
 
   return NextResponse.json(
     {
@@ -157,7 +161,7 @@ export function createRateLimitResponse(
     },
     {
       status: 429,
-      headers
+      headers: responseHeaders
     }
   );
 }

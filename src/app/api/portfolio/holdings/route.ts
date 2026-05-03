@@ -17,6 +17,7 @@ import {
   PORTFOLIO_AUTH_MISCONFIGURED_MESSAGE,
   PORTFOLIO_AUTH_MISCONFIGURED_REMEDIATION
 } from '@/lib/portfolio/api-errors';
+import { enforcePortfolioRateLimit } from '@/lib/portfolio/api-rate-limit';
 
 function createErrorResponse(message: string, status: number, code?: string) {
   return NextResponse.json(
@@ -48,11 +49,16 @@ function handlePortfolioAuthMisconfiguration(message: string, error: unknown) {
   return createPortfolioAuthMisconfiguredResponse();
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   return Sentry.startSpan(
     { op: 'http.server', name: 'GET /api/portfolio/holdings' },
     async (span) => {
       const { userId } = await auth();
+      const rateLimitResponse = await enforcePortfolioRateLimit(req, userId);
+      if (rateLimitResponse) {
+        return rateLimitResponse;
+      }
+
       if (!userId) {
         return createErrorResponse('Unauthorized', 401);
       }
@@ -87,6 +93,11 @@ export async function POST(req: NextRequest) {
     { op: 'http.server', name: 'POST /api/portfolio/holdings' },
     async (span) => {
       const { userId } = await auth();
+      const rateLimitResponse = await enforcePortfolioRateLimit(req, userId);
+      if (rateLimitResponse) {
+        return rateLimitResponse;
+      }
+
       if (!userId) {
         return createErrorResponse('Unauthorized', 401);
       }
