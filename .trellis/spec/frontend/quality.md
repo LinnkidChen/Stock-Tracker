@@ -1,137 +1,81 @@
-# Pre-commit Checklist
+# Frontend Quality
 
-Complete this checklist before committing frontend code changes.
+Run the checks that match the changed surface. The project scripts are in `package.json`.
 
-## Type Safety
-
-- [ ] No `@ts-expect-error` or `@ts-ignore` comments added
-- [ ] No `any` types in new code
-- [ ] API response types are inferred or imported from backend (not redefined)
-- [ ] Cache updates in React Query are properly typed
-- [ ] When overriding mutation callbacks, explicit generics are provided
-
-## Component Development
-
-- [ ] Server Components used by default; `'use client'` only when necessary
-- [ ] Semantic HTML elements used (button, not div for clicks)
-- [ ] `next/image` used instead of `<img>` tags
-- [ ] Proper ARIA labels and accessibility attributes added
-- [ ] Props have TypeScript interfaces defined
-
-## API Integration
-
-- [ ] API calls use oRPC client (not raw fetch for internal APIs)
-- [ ] React Query hooks follow established patterns
-- [ ] Loading and error states handled
-- [ ] Optimistic updates include rollback logic
-- [ ] Real-time subscriptions cleaned up on unmount
-
-## State Management
-
-- [ ] Shareable state stored in URL with nuqs
-- [ ] Context used sparingly (not for server data)
-- [ ] URL and Context synchronized where necessary
-- [ ] No duplicate state across different systems
-
-## CSS & Layout
-
-- [ ] `items-stretch` used on main flex containers (not `items-center`)
-- [ ] Parent provides external styles; child provides internal layout
-- [ ] Mobile touch: `WebkitTapHighlightColor: "transparent"` applied
-- [ ] Touch targets are minimum 44x44px
-- [ ] Responsive breakpoints tested
-
-## Cross-Environment Testing
-
-- [ ] Tested in development mode (`pnpm dev`)
-- [ ] Tested in production mode (`pnpm build && pnpm start`)
-- [ ] No visual differences between dev and prod
-- [ ] Animations respect `prefers-reduced-motion`
-
-## Code Quality
-
-- [ ] No console.log statements left in code
-- [ ] Unused imports removed
-- [ ] Components follow single responsibility principle
-- [ ] File and function names follow conventions
-- [ ] Barrel exports updated if new files added
-
-## Documentation
-
-- [ ] Complex logic has inline comments
-- [ ] New hooks have JSDoc comments
-- [ ] API changes reflected in backend documentation
-
----
-
-## Quick Commands
+## Standard Commands
 
 ```bash
-# Type check
-pnpm type-check
-
-# Lint
 pnpm lint
-
-# Format
-pnpm format
-
-# Build (catches production-only issues)
+pnpm typecheck
+pnpm test
 pnpm build
-
-# Run all checks
-pnpm lint && pnpm type-check && pnpm build
 ```
 
-## Common Issues to Watch
+Notes:
 
-### Type Safety
+- The script is `typecheck`, not `type-check`.
+- `pnpm lint` runs `eslint src`.
+- `pnpm lint:strict` is available when warnings must fail the run.
+- `pnpm test` runs Jest.
+- `pnpm test:e2e` runs Playwright.
+
+## Component And Hook Testing
+
+Use React Testing Library and `user-event` for user-facing component behavior. Prefer queries by role, accessible name, and visible text.
+
+Example from `src/features/stock-dashboard/components/__tests__/watchlist-card.test.tsx`:
+
 ```typescript
-// Bad
-queryClient.setQueryData(['users'], (old: any) => ...)
+const user = userEvent.setup();
+renderWithProviders(<WatchlistCard />);
 
-// Good
-queryClient.setQueryData<UserListData>(['users'], (old) => ...)
+expect(await screen.findByText('Build your watchlist')).toBeInTheDocument();
+
+await user.click(screen.getByRole('button', { name: 'AAPL' }));
+
+expect(await screen.findByText('AAPL')).toBeInTheDocument();
 ```
 
-### Components
+Wrap React Query components with a fresh `QueryClient` per test:
+
 ```typescript
-// Bad
-<div onClick={handleClick}>Click me</div>
-
-// Good
-<button onClick={handleClick}>Click me</button>
+function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: 0 } }
+  });
+  const utils = render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+  );
+  return { ...utils, queryClient };
+}
 ```
 
-### Images
-```typescript
-// Bad
-<img src="/hero.jpg" alt="Hero" />
+## Mocking
 
-// Good
-import Image from 'next/image';
-<Image src="/hero.jpg" alt="Hero" width={1200} height={600} />
-```
+- Mock `global.fetch` per test suite and restore it in `afterEach`.
+- Use `jest.useRealTimers()` in cleanup when fake timers may be involved.
+- Keep response builders small and typed where practical, for example `watchlistResponse(items)` and `quoteResponse()`.
+- Use `expect.objectContaining({ signal: expect.any(Object) })` when asserting abortable fetch calls.
 
-### Layout
-```typescript
-// Bad - children won't fill height
-<div className="flex h-screen items-center">
+## Accessibility Checks
 
-// Good - children fill available height
-<div className="flex h-screen">
-```
+Before finishing UI changes:
 
-### Mobile Touch
-```typescript
-// Bad - shows tap highlight on mobile
-<button onClick={handleClick}>Tap</button>
+- Inputs have labels or `aria-label`.
+- Validation messages use `role='alert'` and are connected with `aria-describedby` where possible.
+- Buttons and links have accessible names.
+- Keyboard behavior is tested when adding shortcuts, focus management, dialogs, or autocomplete.
 
-// Good - no tap highlight
-<button
-  onClick={handleClick}
-  style={{ WebkitTapHighlightColor: 'transparent' }}
->
-  Tap
-</button>
-```
+## Error And Empty States
+
+Tests should cover user-visible failure paths for API-backed components. Existing `WatchlistCard` tests cover initial load failure, auth misconfiguration, empty state suggestions, and validation modal behavior. Follow that model for new states.
+
+## Pre-Commit Checklist
+
+- No production `any`, `@ts-ignore`, or `@ts-expect-error`.
+- No leftover `console.log`.
+- New client effects clean up timers, listeners, and subscriptions.
+- Loading, empty, error, and success states are represented for async UI.
+- New shared primitives remain feature-agnostic.
+- Tests are added or updated for changed behavior.
+- Run at least `pnpm lint` and `pnpm typecheck`; run targeted Jest tests for touched components/hooks.

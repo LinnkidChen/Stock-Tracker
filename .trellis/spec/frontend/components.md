@@ -1,454 +1,126 @@
-# Component Development Guidelines
+# Component Guidelines
 
-This document covers component development patterns including Server vs Client components, semantic HTML, and UI best practices.
+This app uses Next.js App Router, React 19, TypeScript, Tailwind, Radix/shadcn UI primitives, Clerk, and feature-local client components.
 
-## Server vs Client Components
+## Server And Client Components
 
-### Default to Server Components
+Default route files to server components. Add `'use client'` only when the component uses browser state, effects, event handlers, refs, Zustand, React Query, or browser APIs.
 
-Next.js App Router defaults to Server Components. Use them for:
+Examples:
 
-- Data fetching
-- Accessing backend resources directly
-- Keeping sensitive data on the server
-- Reducing client-side JavaScript
+- `src/app/page.tsx` is a server component that calls `auth()` from `@clerk/nextjs/server` and redirects.
+- `src/features/stock-dashboard/components/DashboardClient.tsx` is a client component because it uses `useEffect`, refs, and `useDashboardStore`.
+- `src/features/stock-dashboard/components/WatchlistCard.tsx` is a client component because it owns interactive form state, fetches from browser routes, and uses hooks.
 
-```typescript
-// app/(app)/dashboard/page.tsx (Server Component)
-import { DashboardStats } from '@/modules/dashboard/components';
-
-export default async function DashboardPage() {
-  // Can fetch data directly
-  const stats = await fetchDashboardStats();
-
-  return (
-    <main>
-      <h1>Dashboard</h1>
-      <DashboardStats data={stats} />
-    </main>
-  );
-}
-```
-
-### When to Use Client Components
-
-Add `'use client'` directive only when you need:
-
-- Event handlers (onClick, onChange, etc.)
-- useState, useEffect, or other React hooks
-- Browser-only APIs (localStorage, window)
-- Class components with lifecycle methods
+Keep server route files thin and hand off interactive surfaces to feature components:
 
 ```typescript
-'use client';
+import { auth } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
 
-import { useState } from 'react';
-
-export function Counter() {
-  const [count, setCount] = useState(0);
-
-  return (
-    <button onClick={() => setCount(count + 1)}>
-      Count: {count}
-    </button>
-  );
-}
-```
-
-### Composition Pattern
-
-Keep Server Components at the top, push Client Components down:
-
-```typescript
-// Server Component (page.tsx)
-import { ProductList } from './ProductList';
-import { FilterSidebar } from './FilterSidebar'; // Client
-
-export default async function ProductsPage() {
-  const products = await fetchProducts();
-
-  return (
-    <div className="flex">
-      <FilterSidebar /> {/* Client component for interactivity */}
-      <ProductList products={products} /> {/* Can be server or client */}
-    </div>
-  );
-}
-```
-
-### Passing Server Data to Client Components
-
-```typescript
-// Server Component
 export default async function Page() {
-  const initialData = await fetchData();
+  const { userId } = await auth();
 
-  return <InteractiveWidget initialData={initialData} />;
-}
+  if (!userId) {
+    return redirect('/auth/sign-in');
+  }
 
-// Client Component
-'use client';
-
-export function InteractiveWidget({ initialData }: { initialData: Data }) {
-  const [data, setData] = useState(initialData);
-  // Interactive logic...
+  redirect('/dashboard/stocks');
 }
 ```
 
-## Semantic HTML
+## UI Primitives
 
-### Use Proper Elements
+Use primitives from `src/components/ui` before creating new base controls. They follow the shadcn pattern:
 
-```typescript
-// Bad: div for everything
-<div onClick={handleClick}>Click me</div>
-<div>
-  <div>Item 1</div>
-  <div>Item 2</div>
-</div>
+- Radix `Slot` for `asChild` composition.
+- `class-variance-authority` for variants.
+- `cn` from `@/lib/utils` for class merging.
+- Tailwind classes inline in component definitions.
 
-// Good: semantic elements
-<button onClick={handleClick}>Click me</button>
-<ul>
-  <li>Item 1</li>
-  <li>Item 2</li>
-</ul>
-```
-
-### Button vs Div
-
-Always use `<button>` for clickable actions:
+Example from `src/components/ui/button.tsx`:
 
 ```typescript
-// Bad: Non-semantic, no keyboard support, no accessibility
-<div
-  className="cursor-pointer"
-  onClick={handleClick}
->
-  Save
-</div>
-
-// Good: Semantic, keyboard accessible, proper focus
-<button
-  type="button"
-  onClick={handleClick}
-  className="..."
->
-  Save
-</button>
-```
-
-### Form Elements
-
-```typescript
-// Bad: Missing labels, wrong elements
-<div>
-  <span>Email</span>
-  <input type="text" />
-</div>
-
-// Good: Proper form structure
-<div>
-  <label htmlFor="email">Email</label>
-  <input
-    id="email"
-    type="email"
-    aria-describedby="email-error"
-  />
-  {error && <p id="email-error" role="alert">{error}</p>}
-</div>
-```
-
-### Navigation
-
-```typescript
-// Bad
-<div onClick={() => router.push('/about')}>About</div>
-
-// Good
-<Link href="/about">About</Link>
-
-// For programmatic navigation with button appearance
-<Link href="/about" className="btn btn-primary">
-  About
-</Link>
-```
-
-## Next.js Image Component
-
-### Always Use next/image
-
-```typescript
-// Bad: Raw img tag
-<img src="/hero.jpg" alt="Hero" />
-
-// Good: Optimized Image component
-import Image from 'next/image';
-
-<Image
-  src="/hero.jpg"
-  alt="Hero image"
-  width={1200}
-  height={600}
-  priority // For above-the-fold images
-/>
-```
-
-### Responsive Images
-
-```typescript
-// Fill container
-<div className="relative h-64 w-full">
-  <Image
-    src="/banner.jpg"
-    alt="Banner"
-    fill
-    className="object-cover"
-    sizes="(max-width: 768px) 100vw, 50vw"
-  />
-</div>
-```
-
-### Remote Images
-
-Configure domains in `next.config.js`:
-
-```javascript
-// next.config.js
-module.exports = {
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'images.example.com',
-      },
-    ],
-  },
-};
-```
-
-## Command Palette (cmdk)
-
-### Basic Implementation
-
-```typescript
-'use client';
-
-import { Command } from 'cmdk';
-import { useState, useEffect } from 'react';
-
-export function CommandPalette() {
-  const [open, setOpen] = useState(false);
-
-  // Toggle with keyboard shortcut
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setOpen((open) => !open);
-      }
-    };
-
-    document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
-  }, []);
-
-  return (
-    <Command.Dialog
-      open={open}
-      onOpenChange={setOpen}
-      label="Global Command Menu"
-    >
-      <Command.Input placeholder="Type a command or search..." />
-      <Command.List>
-        <Command.Empty>No results found.</Command.Empty>
-
-        <Command.Group heading="Navigation">
-          <Command.Item onSelect={() => router.push('/dashboard')}>
-            Go to Dashboard
-          </Command.Item>
-          <Command.Item onSelect={() => router.push('/settings')}>
-            Go to Settings
-          </Command.Item>
-        </Command.Group>
-
-        <Command.Group heading="Actions">
-          <Command.Item onSelect={handleNewOrder}>
-            Create New Order
-          </Command.Item>
-        </Command.Group>
-      </Command.List>
-    </Command.Dialog>
-  );
-}
-```
-
-### With Search Results
-
-```typescript
-export function SearchCommandPalette() {
-  const [search, setSearch] = useState('');
-  const { data: results, isLoading } = useSearch(search);
-
-  return (
-    <Command.Dialog open={open} onOpenChange={setOpen}>
-      <Command.Input
-        value={search}
-        onValueChange={setSearch}
-        placeholder="Search..."
-      />
-      <Command.List>
-        {isLoading && <Command.Loading>Searching...</Command.Loading>}
-
-        <Command.Empty>No results found.</Command.Empty>
-
-        {results?.map((item) => (
-          <Command.Item
-            key={item.id}
-            value={item.title}
-            onSelect={() => handleSelect(item)}
-          >
-            {item.title}
-          </Command.Item>
-        ))}
-      </Command.List>
-    </Command.Dialog>
-  );
-}
-```
-
-## Styling with Tailwind
-
-### Component Styling Pattern
-
-```typescript
-// Use className for styling
-export function Card({
-  children,
+function Button({
   className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        'rounded-lg border bg-card p-4 shadow-sm',
-        className
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-```
-
-### Conditional Styles
-
-```typescript
-import { cn } from '@/lib/utils';
-
-export function Button({
-  variant = 'primary',
-  size = 'md',
-  className,
+  variant,
+  size,
+  asChild = false,
   ...props
-}: ButtonProps) {
+}: React.ComponentProps<'button'> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean;
+  }) {
+  const Comp = asChild ? Slot : 'button';
+
   return (
-    <button
-      className={cn(
-        'inline-flex items-center justify-center rounded-md font-medium',
-        // Variants
-        {
-          'bg-primary text-primary-foreground': variant === 'primary',
-          'bg-secondary text-secondary-foreground': variant === 'secondary',
-          'border bg-transparent': variant === 'outline',
-        },
-        // Sizes
-        {
-          'h-8 px-3 text-sm': size === 'sm',
-          'h-10 px-4': size === 'md',
-          'h-12 px-6 text-lg': size === 'lg',
-        },
-        className
-      )}
+    <Comp
+      data-slot='button'
+      className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
   );
 }
 ```
 
-### Responsive Design
+For new shared primitives, match this API shape and keep feature behavior out of the primitive.
+
+## Feature Components
+
+Feature components may include local helper functions and types when those helpers only serve the component. `WatchlistCard.tsx` is an existing large example with local normalization, grouping, sorting, optimistic item creation, and display formatting helpers.
+
+For new or heavily modified feature components:
+
+- Keep pure helpers above the component and make them easy to test or extract later.
+- Keep feature API parsing/error mapping in `features/<feature>/lib` when it is reused.
+- Use explicit prop interfaces for exported components when props are non-trivial.
+- Use `forwardRef` when a parent needs to control focus, as in `TickerInput`.
 
 ```typescript
-<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-  {items.map((item) => (
-    <Card key={item.id}>{item.content}</Card>
-  ))}
-</div>
+interface TickerInputProps {
+  onTickerSubmit?: (ticker: string) => void;
+}
+
+export const TickerInput = forwardRef<HTMLInputElement, TickerInputProps>(
+  ({ onTickerSubmit }, ref) => {
+    // component body
+  }
+);
+
+TickerInput.displayName = 'TickerInput';
 ```
 
 ## Accessibility
 
-### Focus Management
+Use semantic HTML and explicit accessibility attributes already present in the codebase:
+
+- Forms use `<form>` and buttons use `<button type='button'>` or `<Button type='submit'>`.
+- Inputs expose `aria-label`, `aria-invalid`, `aria-describedby`, and `autoComplete` where needed.
+- Error messages use `role='alert'`.
+- Interactive regions can use `role` and `aria-label`, as in `DashboardClient`.
+- Tests should prefer role/name queries for user-visible controls.
+
+Example from `TickerInput`:
 
 ```typescript
-export function Modal({ open, onClose, children }: ModalProps) {
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (open) {
-      closeButtonRef.current?.focus();
-    }
-  }, [open]);
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        {children}
-        <button ref={closeButtonRef} onClick={onClose}>
-          Close
-        </button>
-      </DialogContent>
-    </Dialog>
-  );
-}
+<Input
+  aria-invalid={!!error}
+  aria-autocomplete='list'
+  aria-label='Enter stock ticker symbol'
+  aria-describedby={error ? 'ticker-error' : undefined}
+/>
 ```
 
-### ARIA Labels
+## Styling
 
-```typescript
-<button
-  aria-label="Close dialog"
-  aria-expanded={isOpen}
-  aria-controls="dropdown-menu"
->
-  <CloseIcon />
-</button>
+- Use Tailwind classes directly; keep class composition readable.
+- Use app UI primitives for consistent spacing, variants, focus states, and disabled states.
+- Keep layout ownership local to the component that owns the surface. For example `DashboardClient` owns the page grid, while `WatchlistCard` owns watchlist grouping and card internals.
+- Prefer existing icons from `lucide-react` or installed icon libraries instead of hand-written SVG.
 
-<div
-  id="dropdown-menu"
-  role="menu"
-  aria-hidden={!isOpen}
->
-  {/* Menu items */}
-</div>
-```
+## Avoid
 
-## Best Practices
-
-1. **Server First**: Default to Server Components
-2. **Semantic HTML**: Use the right element for the job
-3. **Optimize Images**: Always use next/image
-4. **Accessibility**: Include ARIA labels and keyboard support
-5. **Type Props**: Define TypeScript interfaces for all props
-6. **Composition**: Break large components into smaller pieces
-
-## Anti-Patterns
-
-- Using `div` for buttons and links
-- Using `img` instead of `next/image`
-- Adding `'use client'` at the top of every file
-- Inline styles instead of Tailwind classes
-- Missing accessibility attributes
-- Components with too many responsibilities
+- Adding `'use client'` to route files unless the file truly needs client APIs.
+- Creating bespoke buttons, dialogs, inputs, switches, or cards instead of `src/components/ui`.
+- Using non-semantic clickable `div`s.
+- Hiding runtime errors with broad catches in components; map known failures into explicit UI states when possible.
