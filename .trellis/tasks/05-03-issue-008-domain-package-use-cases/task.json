@@ -1,0 +1,45 @@
+{
+  "id": "issue-008-domain-package-use-cases",
+  "name": "issue-008-domain-package-use-cases",
+  "title": "ISSUE-008 Create domain package for business use cases",
+  "description": "Linear T-139: create packages/domain with framework-independent ports and business use cases.",
+  "status": "planning",
+  "dev_type": "feature",
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "tong-chen",
+  "assignee": "tong-chen",
+  "createdAt": "2026-05-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "packages/domain/"
+  ],
+  "notes": "",
+  "meta": {
+    "linear": {
+      "issueId": "T-139",
+      "planId": "ISSUE-008",
+      "url": "https://linear.app/linnkidchen/issue/T-139/issue-008-create-domain-package-for-business-use-cases",
+      "status": "Todo",
+      "labels": [
+        "domain",
+        "p0",
+        "architecture"
+      ],
+      "project": "Stock Tracker",
+      "milestone": "Milestone 1 - Architecture and monorepo foundation",
+      "dependsOn": [
+        "ISSUE-006"
+      ]
+    }
+  }
+}

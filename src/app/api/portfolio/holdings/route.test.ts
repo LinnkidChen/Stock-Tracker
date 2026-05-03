@@ -9,10 +9,15 @@ import {
   DuplicatePortfolioHoldingError,
   getPortfolioHoldings
 } from '@/lib/portfolio/storage';
+import { enforcePortfolioRateLimit } from '@/lib/portfolio/api-rate-limit';
 import { GET, POST } from './route';
 
 jest.mock('@clerk/nextjs/server', () => ({
   auth: jest.fn()
+}));
+
+jest.mock('@/lib/portfolio/api-rate-limit', () => ({
+  enforcePortfolioRateLimit: jest.fn()
 }));
 
 jest.mock('@/lib/portfolio/storage', () => {
@@ -36,18 +41,22 @@ const holding = {
 
 describe('/api/portfolio/holdings', () => {
   const mockAuth = auth as jest.Mock;
+  const mockEnforceRateLimit = enforcePortfolioRateLimit as jest.Mock;
   const mockGet = getPortfolioHoldings as jest.Mock;
   const mockCreate = createPortfolioHolding as jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockEnforceRateLimit.mockResolvedValue(null);
   });
 
   describe('GET', () => {
     it('returns 401 if user is unauthenticated', async () => {
       mockAuth.mockResolvedValue({ userId: null });
 
-      const res = await GET();
+      const res = await GET(
+        new NextRequest('http://localhost/api/portfolio/holdings')
+      );
 
       expect(res.status).toBe(401);
     });
@@ -56,13 +65,39 @@ describe('/api/portfolio/holdings', () => {
       mockAuth.mockResolvedValue({ userId: 'user_123' });
       mockGet.mockResolvedValue([holding]);
 
-      const res = await GET();
+      const res = await GET(
+        new NextRequest('http://localhost/api/portfolio/holdings')
+      );
       const json = await res.json();
 
       expect(res.status).toBe(200);
       expect(json.success).toBe(true);
       expect(json.data.holdings).toEqual([holding]);
       expect(mockGet).toHaveBeenCalledWith('user_123');
+      expect(mockEnforceRateLimit).toHaveBeenCalledWith(
+        expect.any(NextRequest),
+        'user_123'
+      );
+    });
+
+    it('returns rate limit responses before loading holdings', async () => {
+      mockAuth.mockResolvedValue({ userId: 'user_123' });
+      mockEnforceRateLimit.mockResolvedValue(
+        Response.json(
+          {
+            success: false,
+            error: { code: 'API_LIMIT_EXCEEDED' }
+          },
+          { status: 429 }
+        )
+      );
+
+      const res = await GET(
+        new NextRequest('http://localhost/api/portfolio/holdings')
+      );
+
+      expect(res.status).toBe(429);
+      expect(mockGet).not.toHaveBeenCalled();
     });
 
     it('returns 503 if portfolio auth is misconfigured', async () => {
@@ -73,7 +108,9 @@ describe('/api/portfolio/holdings', () => {
         )
       );
 
-      const res = await GET();
+      const res = await GET(
+        new NextRequest('http://localhost/api/portfolio/holdings')
+      );
       const json = await res.json();
 
       expect(res.status).toBe(503);

@@ -10,7 +10,7 @@ export type DiagnosticCheckId =
   | 'clerk'
   | 'supabase'
   | 'supabase-rls'
-  | 'longbridge';
+  | 'market-data';
 
 export interface SetupDiagnosticCheck {
   id: DiagnosticCheckId;
@@ -474,30 +474,36 @@ async function createSupabaseRlsCheck(
   }
 }
 
-function createLongbridgeCheck(): SetupDiagnosticCheck {
+function createMarketDataCheck(): SetupDiagnosticCheck {
   const missingKeys = getMissingEnvKeys(LONGBRIDGE_ENV_KEYS);
   const details =
     missingKeys.length > 0
-      ? [`Missing environment variables: ${joinKeys(missingKeys)}.`]
-      : ['Required Longbridge environment variables are present.'];
+      ? [
+          `Missing Longbridge environment variables: ${joinKeys(missingKeys)}.`,
+          'Yahoo Finance fallback is available without server credentials.'
+        ]
+      : [
+          'Required Longbridge environment variables are present.',
+          'Yahoo Finance fallback is available without server credentials.'
+        ];
 
   if (missingKeys.length > 0) {
     return {
-      id: 'longbridge',
-      title: 'Longbridge',
-      status: 'blocked',
-      summary: 'Market data credentials are incomplete.',
+      id: 'market-data',
+      title: 'Market data',
+      status: 'warning',
+      summary: 'Primary market data credentials are incomplete.',
       details,
       remediation:
-        'Configure Longbridge app key, app secret, and access token on the server.'
+        'Configure Longbridge app key, app secret, and access token to restore the primary provider.'
     };
   }
 
   return {
-    id: 'longbridge',
-    title: 'Longbridge',
+    id: 'market-data',
+    title: 'Market data',
     status: 'ready',
-    summary: 'Market data credentials are configured.',
+    summary: 'Market data providers are configured.',
     details,
     remediation: null
   };
@@ -550,7 +556,7 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
     createClerkCheck(authState),
     supabaseResult.check,
     await createSupabaseRlsCheck(authState, supabaseResult),
-    createLongbridgeCheck()
+    createMarketDataCheck()
   ];
   const status = getOverallStatus(checks);
 

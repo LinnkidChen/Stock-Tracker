@@ -39,8 +39,8 @@ function buildDiagnostics(
         remediation: 'Apply Supabase RLS policies.'
       },
       {
-        id: 'longbridge',
-        title: 'Longbridge',
+        id: 'market-data',
+        title: 'Market data',
         status: 'warning',
         summary: 'Market data credentials need review.',
         details: [],
@@ -52,19 +52,19 @@ function buildDiagnostics(
 }
 
 describe('DashboardReadinessPanel', () => {
-  it('renders Supabase, RLS, and Longbridge setup guidance when checks need attention', () => {
+  it('renders Supabase, RLS, and market data setup guidance when checks need attention', () => {
     render(<DashboardReadinessPanel diagnostics={buildDiagnostics()} />);
 
     expect(screen.getByText('Finish first-run setup')).toBeInTheDocument();
     expect(screen.getByText('Supabase')).toBeInTheDocument();
     expect(screen.getByText('Supabase RLS')).toBeInTheDocument();
-    expect(screen.getByText('Longbridge')).toBeInTheDocument();
+    expect(screen.getByText('Market data')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /open operations/i })
     ).toHaveAttribute('href', '/dashboard/operations');
   });
 
-  it('does not render when Supabase and Longbridge are ready', () => {
+  it('does not render when Supabase and market data are ready', () => {
     const readyDiagnostics = buildDiagnostics({
       status: 'ready',
       checks: buildDiagnostics().checks.map((check) => ({

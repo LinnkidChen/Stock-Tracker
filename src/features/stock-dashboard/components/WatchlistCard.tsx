@@ -181,7 +181,9 @@ function createOptimisticItem(
 
 function toPricedItem(
   item: ApiWatchlistItem,
-  priceData: ReturnType<typeof useWatchlistPrices>['pricesMap'][string] | undefined
+  priceData:
+    | ReturnType<typeof useWatchlistPrices>['pricesMap'][string]
+    | undefined
 ): WatchlistItemWithPrice {
   return {
     id: item.id,
@@ -446,7 +448,9 @@ export function WatchlistCard() {
     if (!currentItem) return;
 
     const groupKey = getGroupKey(currentItem);
-    const groupItems = sortedItems.filter((item) => getGroupKey(item) === groupKey);
+    const groupItems = sortedItems.filter(
+      (item) => getGroupKey(item) === groupKey
+    );
     const currentIndex = groupItems.findIndex(
       (item) => item.symbol === symbolToMove
     );
@@ -610,7 +614,9 @@ export function WatchlistCard() {
   };
 
   function openEditDialog(item: WatchlistItemWithPrice) {
-    const sourceItem = items.find((candidate) => candidate.symbol === item.symbol);
+    const sourceItem = items.find(
+      (candidate) => candidate.symbol === item.symbol
+    );
     if (!sourceItem) return;
 
     setEditingItem(sourceItem);
@@ -667,7 +673,7 @@ export function WatchlistCard() {
       <CardContent>
         <form onSubmit={onAdd} className='mb-4 grid gap-2 sm:grid-cols-4'>
           <Input
-            placeholder='Add symbol (1-5 letters, e.g., MSFT)'
+            placeholder='Add symbol (e.g., MSFT or 0700.HK)'
             value={symbol}
             onChange={(e) => {
               setSymbol(e.target.value.toUpperCase());

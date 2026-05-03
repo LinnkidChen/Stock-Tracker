@@ -43,8 +43,8 @@ const diagnostics: SetupDiagnostics = {
         'Apply database_schema/watchlist.sql and database_schema/portfolio.sql, enable RLS, and confirm Supabase JWT verification maps Clerk sub claims to clerk_user_id policies.'
     },
     {
-      id: 'longbridge',
-      title: 'Longbridge',
+      id: 'market-data',
+      title: 'Market data',
       status: 'warning',
       summary: 'Market data credentials need review.',
       details: ['Credential verification was skipped.'],
@@ -67,7 +67,7 @@ describe('SetupDiagnosticsPanel', () => {
     expect(screen.getByText('Clerk')).toBeInTheDocument();
     expect(screen.getByText('Supabase')).toBeInTheDocument();
     expect(screen.getByText('Supabase RLS')).toBeInTheDocument();
-    expect(screen.getByText('Longbridge')).toBeInTheDocument();
+    expect(screen.getByText('Market data')).toBeInTheDocument();
     expect(
       screen.getByText('Clerk JWT template "supabase" was not found.')
     ).toBeInTheDocument();
