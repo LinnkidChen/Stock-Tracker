@@ -3,6 +3,11 @@ import 'server-only';
 import { auth } from '@clerk/nextjs/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_JWT_TEMPLATE } from '@/lib/supabase/server';
+import {
+  ERROR_TAXONOMY,
+  formatAlertThreshold
+} from '@/lib/observability/error-taxonomy';
+import type { APIErrorCode } from '@/lib/types/stock-api';
 
 export type DiagnosticStatus = 'ready' | 'warning' | 'blocked';
 
@@ -10,7 +15,8 @@ export type DiagnosticCheckId =
   | 'clerk'
   | 'supabase'
   | 'supabase-rls'
-  | 'market-data';
+  | 'market-data'
+  | 'observability';
 
 export interface SetupDiagnosticCheck {
   id: DiagnosticCheckId;
@@ -87,6 +93,15 @@ const RLS_PROBE_TARGETS: RlsProbeTarget[] = [
     label: 'portfolio holdings',
     table: 'stock_portfolio_holdings'
   }
+];
+
+const OBSERVABILITY_ALERT_CODES: APIErrorCode[] = [
+  'NETWORK_ERROR',
+  'INVALID_API_KEY',
+  'API_LIMIT_EXCEEDED',
+  'RLS_AUTH_MISCONFIGURED',
+  'RLS_ACCESS_DENIED',
+  'INVALID_SYMBOL'
 ];
 
 function hasEnvValue(key: string): boolean {
@@ -509,6 +524,21 @@ function createMarketDataCheck(): SetupDiagnosticCheck {
   };
 }
 
+function createObservabilityCheck(): SetupDiagnosticCheck {
+  return {
+    id: 'observability',
+    title: 'Observability',
+    status: 'ready',
+    summary:
+      'Error taxonomy, dashboard messages, and alert thresholds are defined.',
+    details: OBSERVABILITY_ALERT_CODES.map((code) => {
+      const entry = ERROR_TAXONOMY[code];
+      return `${entry.code}: ${entry.dashboardMessage} Alert: ${formatAlertThreshold(entry.alertThreshold)}.`;
+    }),
+    remediation: null
+  };
+}
+
 function getOverallStatus(checks: SetupDiagnosticCheck[]): DiagnosticStatus {
   if (checks.some((check) => check.status === 'blocked')) {
     return 'blocked';
@@ -556,7 +586,8 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
     createClerkCheck(authState),
     supabaseResult.check,
     await createSupabaseRlsCheck(authState, supabaseResult),
-    createMarketDataCheck()
+    createMarketDataCheck(),
+    createObservabilityCheck()
   ];
   const status = getOverallStatus(checks);
 

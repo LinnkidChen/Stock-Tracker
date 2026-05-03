@@ -36,7 +36,7 @@ import Link from 'next/link';
 import type { WatchlistItem as ApiWatchlistItem } from '@/types/watchlist';
 import { Loader2, RefreshCw } from 'lucide-react';
 
-const WATCHLIST_AUTH_MISCONFIGURED_CODE = 'WATCHLIST_AUTH_MISCONFIGURED';
+const WATCHLIST_AUTH_MISCONFIGURED_CODE = 'RLS_AUTH_MISCONFIGURED';
 const SUGGESTED_WATCHLIST_SYMBOLS = ['AAPL', 'MSFT', 'NVDA'] as const;
 
 type WatchlistLoadIssue = 'auth-config' | 'generic' | null;
