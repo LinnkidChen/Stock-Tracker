@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { isValidTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { logger } from '@/lib/logger';
+import {
+  classifyPersistenceError,
+  getErrorTaxonomy
+} from '@/lib/observability/error-taxonomy';
 import { isSupabaseAuthConfigError } from '@/lib/supabase/server';
 import {
   consumeAuthenticatedMutationRateLimit,
@@ -45,9 +49,10 @@ interface WatchlistPatchRequestBody {
   }>;
 }
 
-const WATCHLIST_AUTH_MISCONFIGURED_CODE = 'WATCHLIST_AUTH_MISCONFIGURED';
-const WATCHLIST_AUTH_MISCONFIGURED_MESSAGE =
-  'Watchlist authentication is not configured on the server.';
+const WATCHLIST_AUTH_MISCONFIGURED_CODE = 'RLS_AUTH_MISCONFIGURED';
+const WATCHLIST_AUTH_MISCONFIGURED_MESSAGE = getErrorTaxonomy(
+  WATCHLIST_AUTH_MISCONFIGURED_CODE
+).dashboardMessage;
 const WATCHLIST_AUTH_MISCONFIGURED_REMEDIATION =
   'Configure Clerk JWT template "supabase" and configure Supabase JWT verification for Clerk-issued tokens.';
 
@@ -71,6 +76,27 @@ function handleWatchlistAuthMisconfiguration(message: string, error: unknown) {
   });
 
   return createWatchlistAuthMisconfiguredResponse();
+}
+
+function handleWatchlistStorageError(message: string, error: unknown) {
+  const code = classifyPersistenceError(error);
+  const entry = getErrorTaxonomy(code);
+
+  logger.error(message, {
+    error,
+    code
+  });
+
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code,
+        message: entry.dashboardMessage
+      }
+    },
+    { status: entry.httpStatus }
+  );
 }
 
 function createWatchlistResponse(items: WatchlistItem[]) {
@@ -154,11 +180,7 @@ export async function GET() {
       );
     }
 
-    logger.error('Watchlist fetch error', { error });
-    return NextResponse.json(
-      { success: false, error: { message: 'Failed to fetch watchlist' } },
-      { status: 500 }
-    );
+    return handleWatchlistStorageError('Watchlist fetch error', error);
   }
 }
 
@@ -239,11 +261,7 @@ export async function POST(req: Request) {
       );
     }
 
-    logger.error('Watchlist update error', { error });
-    return NextResponse.json(
-      { success: false, error: { message: 'Failed to update watchlist' } },
-      { status: 500 }
-    );
+    return handleWatchlistStorageError('Watchlist update error', error);
   }
 }
 
@@ -350,10 +368,6 @@ export async function PATCH(req: Request) {
       );
     }
 
-    logger.error('Watchlist patch error', { error });
-    return NextResponse.json(
-      { success: false, error: { message: 'Failed to update watchlist' } },
-      { status: 500 }
-    );
+    return handleWatchlistStorageError('Watchlist patch error', error);
   }
 }

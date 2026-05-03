@@ -53,12 +53,13 @@ describe('getSetupDiagnostics', () => {
     process.env = originalEnv;
   });
 
-  it('returns ready checks when Clerk, Supabase, Longbridge, and Upstash are configured', async () => {
+  it('returns ready checks when Clerk, Supabase, Longbridge, Upstash, and observability are configured', async () => {
     const diagnostics = await getSetupDiagnostics();
 
     expect(diagnostics.status).toBe('ready');
-    expect(diagnostics.checks).toHaveLength(4);
+    expect(diagnostics.checks).toHaveLength(5);
     expect(diagnostics.checks.map((check) => check.status)).toEqual([
+      'ready',
       'ready',
       'ready',
       'ready',
@@ -66,6 +67,11 @@ describe('getSetupDiagnostics', () => {
     ]);
     expect(findCheck(diagnostics, 'supabase').details).toContain(
       'Clerk JWT template "supabase" returned a token.'
+    );
+    expect(findCheck(diagnostics, 'observability').details).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('RLS_AUTH_MISCONFIGURED')
+      ])
     );
   });
 

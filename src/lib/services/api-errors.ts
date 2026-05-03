@@ -1,16 +1,10 @@
 import { NextResponse } from 'next/server';
 import { APIResponse, APIError, APIErrorCode } from '../types/stock-api';
-
-const API_ERROR_CODES = new Set<string>([
-  'INVALID_SYMBOL',
-  'INVALID_INTERVAL',
-  'INVALID_PROVIDER',
-  'API_LIMIT_EXCEEDED',
-  'RATE_LIMIT_UNAVAILABLE',
-  'NETWORK_ERROR',
-  'INVALID_API_KEY',
-  'UNKNOWN_ERROR'
-]);
+import {
+  getErrorStatusCode,
+  isObservedErrorCode,
+  toDashboardError
+} from '@/lib/observability/error-taxonomy';
 
 /**
  * Create a standardized error response
@@ -20,19 +14,20 @@ export function createErrorResponse<T = null>(
   statusCode?: number,
   headers?: HeadersInit
 ): NextResponse<APIResponse<T>> {
+  const responseError = toDashboardError(error);
   const response: APIResponse<T> = {
     success: false,
     data: null as T,
-    error,
+    error: responseError,
     timestamp: new Date().toISOString()
   };
 
   const status = statusCode || getStatusCodeForError(error.code);
   const retryAfter = getRetryAfterFromError(error);
-  const responseHeaders: HeadersInit = {
-    ...(headers ?? {}),
-    ...(retryAfter ? { 'Retry-After': String(retryAfter) } : {})
-  };
+  const responseHeaders = normalizeHeaders(headers);
+  if (retryAfter) {
+    responseHeaders['Retry-After'] = String(retryAfter);
+  }
 
   return NextResponse.json(response, { status, headers: responseHeaders });
 }
@@ -61,18 +56,7 @@ export function createSuccessResponse<T>(
  * Map error codes to HTTP status codes
  */
 export function getStatusCodeForError(code: APIErrorCode): number {
-  const statusMap: Record<APIErrorCode, number> = {
-    INVALID_SYMBOL: 400,
-    INVALID_INTERVAL: 400,
-    INVALID_PROVIDER: 400,
-    API_LIMIT_EXCEEDED: 429,
-    RATE_LIMIT_UNAVAILABLE: 503,
-    INVALID_API_KEY: 401,
-    NETWORK_ERROR: 502,
-    UNKNOWN_ERROR: 500
-  };
-
-  return statusMap[code] || 500;
+  return getErrorStatusCode(code);
 }
 
 /**
@@ -100,7 +84,7 @@ export function isAPIError(error: unknown): error is APIError {
     'code' in error &&
     'message' in error &&
     typeof (error as Record<string, unknown>).code === 'string' &&
-    API_ERROR_CODES.has((error as Record<string, unknown>).code as string) &&
+    isObservedErrorCode((error as Record<string, unknown>).code) &&
     typeof (error as Record<string, unknown>).message === 'string'
   );
 }
@@ -149,23 +133,7 @@ export function createRateLimitResponse(
     validRetryAfter ? { retryAfter: validRetryAfter } : undefined
   );
 
-  const responseHeaders: HeadersInit = {
-    ...(headers || {}),
-    ...(validRetryAfter ? { 'Retry-After': String(validRetryAfter) } : {})
-  };
-
-  return NextResponse.json(
-    {
-      success: false,
-      data: null,
-      error,
-      timestamp: new Date().toISOString()
-    },
-    {
-      status: 429,
-      headers: responseHeaders
-    }
-  );
+  return createErrorResponse(error, 429, headers);
 }
 
 export function getRetryAfterFromError(error: APIError): number | undefined {
@@ -189,6 +157,30 @@ function getValidRetryAfter(value: unknown): number | undefined {
   }
 
   return undefined;
+}
+
+function normalizeHeaders(headers?: HeadersInit): Record<string, string> {
+  if (!headers) {
+    return {};
+  }
+
+  if (headers instanceof Headers) {
+    const normalized: Record<string, string> = {};
+    headers.forEach((value, key) => {
+      normalized[key] = value;
+    });
+    return normalized;
+  }
+
+  if (Array.isArray(headers)) {
+    return Object.fromEntries(
+      headers.map(([key, value]) => [key, String(value)])
+    );
+  }
+
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [key, String(value)])
+  );
 }
 
 /**

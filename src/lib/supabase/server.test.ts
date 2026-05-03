@@ -113,9 +113,19 @@ describe('createClient', () => {
     mockAuth.mockRejectedValue(authError);
 
     await expect(createClient()).rejects.toBe(authError);
-    expect(mockLogger.error).toHaveBeenCalledWith('Auth check failed', {
-      error: authError
-    });
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Auth check failed',
+      expect.objectContaining({
+        error: authError,
+        errorCode: 'UNKNOWN_ERROR',
+        errorCategory: 'unknown',
+        errorDomain: 'auth',
+        sentryTags: expect.objectContaining({
+          'app.error_code': 'UNKNOWN_ERROR',
+          'app.error_domain': 'auth'
+        })
+      })
+    );
     expect(mockCreateServerClient).not.toHaveBeenCalled();
   });
 

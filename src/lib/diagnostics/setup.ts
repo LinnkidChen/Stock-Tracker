@@ -2,10 +2,20 @@ import 'server-only';
 
 import { auth } from '@clerk/nextjs/server';
 import { SUPABASE_JWT_TEMPLATE } from '@/lib/supabase/server';
+import {
+  ERROR_TAXONOMY,
+  formatAlertThreshold
+} from '@/lib/observability/error-taxonomy';
+import type { APIErrorCode } from '@/lib/types/stock-api';
 
 export type DiagnosticStatus = 'ready' | 'warning' | 'blocked';
 
-export type DiagnosticCheckId = 'clerk' | 'supabase' | 'longbridge' | 'upstash';
+export type DiagnosticCheckId =
+  | 'clerk'
+  | 'supabase'
+  | 'longbridge'
+  | 'upstash'
+  | 'observability';
 
 export interface SetupDiagnosticCheck {
   id: DiagnosticCheckId;
@@ -44,6 +54,15 @@ const UPSTASH_ENV_KEYS = [
   'UPSTASH_REDIS_REST_URL',
   'UPSTASH_REDIS_REST_TOKEN'
 ] as const;
+
+const OBSERVABILITY_ALERT_CODES: APIErrorCode[] = [
+  'NETWORK_ERROR',
+  'INVALID_API_KEY',
+  'API_LIMIT_EXCEEDED',
+  'RLS_AUTH_MISCONFIGURED',
+  'RLS_ACCESS_DENIED',
+  'INVALID_SYMBOL'
+];
 
 function hasEnvValue(key: string): boolean {
   return Boolean(process.env[key]?.trim());
@@ -297,6 +316,21 @@ function createUpstashCheck(): SetupDiagnosticCheck {
   };
 }
 
+function createObservabilityCheck(): SetupDiagnosticCheck {
+  return {
+    id: 'observability',
+    title: 'Observability',
+    status: 'ready',
+    summary:
+      'Error taxonomy, dashboard messages, and alert thresholds are defined.',
+    details: OBSERVABILITY_ALERT_CODES.map((code) => {
+      const entry = ERROR_TAXONOMY[code];
+      return `${entry.code}: ${entry.dashboardMessage} Alert: ${formatAlertThreshold(entry.alertThreshold)}.`;
+    }),
+    remediation: null
+  };
+}
+
 function getOverallStatus(checks: SetupDiagnosticCheck[]): DiagnosticStatus {
   if (checks.some((check) => check.status === 'blocked')) {
     return 'blocked';
@@ -343,7 +377,8 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
     createClerkCheck(authState),
     await createSupabaseCheck(authState),
     createLongbridgeCheck(),
-    createUpstashCheck()
+    createUpstashCheck(),
+    createObservabilityCheck()
   ];
   const status = getOverallStatus(checks);
 

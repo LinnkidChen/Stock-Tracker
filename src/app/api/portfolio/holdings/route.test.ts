@@ -113,8 +113,29 @@ describe('/api/portfolio/holdings', () => {
 
       expect(res.status).toBe(503);
       expect(json.error).toEqual({
-        code: 'PORTFOLIO_AUTH_MISCONFIGURED',
-        message: 'Portfolio authentication is not configured on the server.'
+        code: 'RLS_AUTH_MISCONFIGURED',
+        message: 'Data persistence is temporarily unavailable.'
+      });
+    });
+
+    it('returns a canonical RLS error when storage reports a policy denial', async () => {
+      mockAuth.mockResolvedValue({ userId: 'user_123' });
+      mockGet.mockRejectedValue(
+        Object.assign(new Error('Failed to fetch portfolio holdings'), {
+          originalError: {
+            code: '42501',
+            message: 'permission denied for table stock_portfolio_holdings'
+          }
+        })
+      );
+
+      const res = await GET();
+      const json = await res.json();
+
+      expect(res.status).toBe(403);
+      expect(json.error).toEqual({
+        code: 'RLS_ACCESS_DENIED',
+        message: 'You do not have access to this data.'
       });
     });
   });
@@ -316,7 +337,7 @@ describe('/api/portfolio/holdings', () => {
       const json = await res.json();
 
       expect(res.status).toBe(409);
-      expect(json.error.code).toBe('PORTFOLIO_HOLDING_DUPLICATE');
+      expect(json.error.code).toBe('RESOURCE_DUPLICATE');
     });
 
     it('returns 500 if storage fails', async () => {

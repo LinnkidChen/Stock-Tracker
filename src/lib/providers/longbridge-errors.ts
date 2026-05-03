@@ -1,4 +1,5 @@
 import { APIError, APIErrorCode } from '../types/stock-api';
+import { isObservedErrorCode } from '../observability/error-taxonomy';
 
 const SECRET_ENV_KEYS = [
   'LONGPORT_APP_KEY',
@@ -15,16 +16,6 @@ const NETWORK_ERROR_CODES = [
   'ESOCKETTIMEDOUT',
   'ECONNABORTED'
 ];
-
-const API_ERROR_CODES = new Set<string>([
-  'INVALID_SYMBOL',
-  'INVALID_INTERVAL',
-  'INVALID_PROVIDER',
-  'API_LIMIT_EXCEEDED',
-  'NETWORK_ERROR',
-  'INVALID_API_KEY',
-  'UNKNOWN_ERROR'
-]);
 
 export interface NormalizedLongbridgeError {
   error: APIError;
@@ -351,7 +342,7 @@ function isAPIError(error: unknown): error is APIError {
 
   return (
     typeof record?.code === 'string' &&
-    API_ERROR_CODES.has(record.code) &&
+    isObservedErrorCode(record.code) &&
     typeof record?.message === 'string'
   );
 }

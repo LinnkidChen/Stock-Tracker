@@ -13,6 +13,7 @@
     "build": "next build",
     "prestart": "node scripts/preflight-env.js --mode=production",
     "start": "next start",
+    "docs:check": "node scripts/check-agent-legibility.mjs",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix && pnpm format",
     "lint:strict": "eslint --max-warnings=0 src",
@@ -24,10 +25,17 @@
     "test:e2e:smoke": "playwright test e2e/app.spec.ts --project=chromium",
     "test:e2e:ui": "playwright test --ui",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "verify": "pnpm docs:check && pnpm lint:strict && pnpm test --runInBand && NEXT_PUBLIC_SENTRY_DISABLED=true pnpm build",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "**/*.{js,jsx,tsx,ts,css,less,scss,sass}": [
+      "prettier --write --no-error-on-unmatched-pattern"
+    ]
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.39.2",
+    "@clerk/nextjs": "^6.39.3",
     "@clerk/themes": "^2.2.26",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^7.0.0",
@@ -125,8 +133,10 @@
     "@types/sort-by": "^1.2.3",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^6.11.0",
+    "husky": "^9.1.7",
     "jest": "^30.1.3",
     "jest-environment-jsdom": "^30.1.2",
+    "lint-staged": "^15.2.11",
     "prettier": "3.4.2",
     "prettier-plugin-tailwindcss": "^0.6.11",
     "ts-jest": "^29.4.1",
