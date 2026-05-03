@@ -1,328 +1,126 @@
-# Hook Development Patterns
+# Hook Guidelines
 
-This document covers React hook patterns for data fetching, mutations, and state management using React Query with oRPC.
+Hooks are either shared generic utilities in `src/hooks` or feature-specific hooks under `src/features/<feature>/hooks`.
 
-## Query Hooks
+## Placement
 
-### Basic Query Pattern
+- Put reusable UI/mechanics hooks in `src/hooks`, such as `use-debounce.tsx`, `use-media-query.ts`, `use-controllable-state.tsx`, and `use-data-table.ts`.
+- Put dashboard data and real-time hooks in `src/features/stock-dashboard/hooks`, such as `useKlineSeries.ts`, `useStockQuote.ts`, `useWatchlistPrices.ts`, and `usePriceStream.ts`.
+- Keep hook tests in `hooks/__tests__/` when testing React behavior.
 
-```typescript
-import { useQuery } from '@tanstack/react-query';
-import { orpcClient } from '@/lib/orpc';
+## React Query Hooks
 
-export function useUsers() {
-  return useQuery({
-    queryKey: ['users'],
-    queryFn: () => orpcClient.users.list(),
-  });
-}
-```
+The project uses TanStack Query for browser-side API data. Existing hooks call local Next.js API routes with `fetch`, not oRPC.
 
-### Query with Parameters
+Use stable query keys that include every input affecting the result:
 
 ```typescript
-export function useUser(userId: string) {
-  return useQuery({
-    queryKey: ['users', userId],
-    queryFn: () => orpcClient.users.get({ id: userId }),
-    enabled: !!userId, // Only fetch when userId is available
-  });
-}
-```
-
-### Query with Filters
-
-```typescript
-interface UseOrdersOptions {
-  status?: string;
-  page?: number;
-  pageSize?: number;
-}
-
-export function useOrders(options: UseOrdersOptions = {}) {
-  const { status, page = 1, pageSize = 20 } = options;
-
-  return useQuery({
-    queryKey: ['orders', { status, page, pageSize }],
-    queryFn: () => orpcClient.orders.list({ status, page, pageSize }),
-    placeholderData: (previousData) => previousData, // Keep previous data while fetching
-  });
-}
-```
-
-## Mutation Hooks
-
-### Basic Mutation Pattern
-
-```typescript
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { orpcClient } from '@/lib/orpc';
-
-export function useCreateUser() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: CreateUserInput) => orpcClient.users.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-    },
-  });
-}
-```
-
-### Mutation with Optimistic Updates
-
-```typescript
-type OrderListData = Awaited<ReturnType<typeof orpcClient.orders.list>>;
-
-export function useUpdateOrderStatus() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      orpcClient.orders.updateStatus({ id, status }),
-
-    onMutate: async ({ id, status }) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['orders'] });
-
-      // Snapshot previous value
-      const previousOrders = queryClient.getQueryData<OrderListData>(['orders']);
-
-      // Optimistically update
-      queryClient.setQueryData<OrderListData>(['orders'], (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          items: old.items.map((order) =>
-            order.id === id ? { ...order, status } : order
-          ),
-        };
-      });
-
-      return { previousOrders };
-    },
-
-    onError: (_err, _variables, context) => {
-      // Rollback on error
-      if (context?.previousOrders) {
-        queryClient.setQueryData(['orders'], context.previousOrders);
-      }
-    },
-
-    onSettled: () => {
-      // Always refetch after mutation
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-    },
-  });
-}
-```
-
-## Overriding Mutation Callbacks
-
-When overriding mutation callbacks at the call site, you MUST add explicit generics to maintain type safety:
-
-### Problem: Lost Type Safety
-
-```typescript
-// Hook definition
-export function useDeleteUser() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => orpcClient.users.delete({ id }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-    },
-  });
-}
-
-// Bad: Overriding without generics loses type safety
-const deleteUser = useDeleteUser();
-deleteUser.mutate(userId, {
-  onSuccess: (data) => {
-    // 'data' is typed as 'unknown' here!
-    console.log(data.id); // TypeScript error or runtime error
-  },
-});
-```
-
-### Solution: Explicit Generics
-
-```typescript
-// Infer types for the mutation
-type DeleteUserData = Awaited<ReturnType<typeof orpcClient.users.delete>>;
-type DeleteUserVariables = string;
-
-// Good: Add explicit generics when overriding callbacks
-deleteUser.mutate<DeleteUserData, Error, DeleteUserVariables>(userId, {
-  onSuccess: (data) => {
-    // 'data' is properly typed
-    console.log(data.id); // Works correctly
-  },
-});
-```
-
-### Alternative: Define Types in Hook
-
-```typescript
-// Export types from the hook file
-export type DeleteUserMutationData = Awaited<
-  ReturnType<typeof orpcClient.users.delete>
->;
-
-// Usage with exported types
-deleteUser.mutate(userId, {
-  onSuccess: (data: DeleteUserMutationData) => {
-    console.log(data.id);
-  },
-});
-```
-
-## Using orpcClient Directly in Hooks
-
-Inside hooks, use `orpcClient` directly instead of wrapping with `useMutation`:
-
-### DO: Direct orpcClient Usage
-
-```typescript
-export function useOrderActions() {
-  const queryClient = useQueryClient();
-
-  const updateOrder = useMutation({
-    mutationFn: (data: UpdateOrderInput) => orpcClient.orders.update(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-    },
-  });
-
-  const deleteOrder = useMutation({
-    mutationFn: (id: string) => orpcClient.orders.delete({ id }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-    },
-  });
-
-  return {
-    updateOrder: updateOrder.mutate,
-    deleteOrder: deleteOrder.mutate,
-    isUpdating: updateOrder.isPending,
-    isDeleting: deleteOrder.isPending,
-  };
-}
-```
-
-### DON'T: Nested Hooks
-
-```typescript
-// Bad: Don't create hooks that use other mutation hooks
-export function useOrderActions() {
-  // Don't do this - creates unnecessary abstraction
-  const updateMutation = useUpdateOrder();
-  const deleteMutation = useDeleteOrder();
-
-  return {
-    updateOrder: updateMutation.mutate,
-    deleteOrder: deleteMutation.mutate,
-  };
-}
-```
-
-## Compound Hooks
-
-Combine related queries and mutations into a single hook:
-
-```typescript
-export function useProduct(productId: string) {
-  const queryClient = useQueryClient();
-
+export function useKlineSeries(
+  symbol?: string,
+  interval: KLineInterval = DEFAULT_KLINE_INTERVAL,
+  provider: string = CANONICAL_QUOTE_PROVIDER
+) {
   const query = useQuery({
-    queryKey: ['products', productId],
-    queryFn: () => orpcClient.products.get({ id: productId }),
-    enabled: !!productId,
+    queryKey: ['kline-series', symbol, provider, interval],
+    queryFn: () => fetchKlineSeries(symbol!, interval, provider),
+    enabled: !!symbol,
+    staleTime: 24 * 60 * 60 * 1000,
+    refetchInterval: false as const
   });
 
-  const update = useMutation({
-    mutationFn: (data: UpdateProductInput) =>
-      orpcClient.products.update({ id: productId, ...data }),
-    onSuccess: (updatedProduct) => {
-      queryClient.setQueryData(['products', productId], updatedProduct);
-    },
-  });
+  const noData =
+    !!symbol &&
+    !query.isLoading &&
+    !query.isError &&
+    (query.data?.candles.length ?? 0) === 0;
 
-  const remove = useMutation({
-    mutationFn: () => orpcClient.products.delete({ id: productId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-    },
-  });
-
-  return {
-    product: query.data,
-    isLoading: query.isLoading,
-    error: query.error,
-    updateProduct: update.mutate,
-    deleteProduct: remove.mutate,
-    isUpdating: update.isPending,
-    isDeleting: remove.isPending,
-  };
+  return { ...query, noData };
 }
 ```
 
-## Infinite Query Pattern
+When a query depends on an optional input, use `enabled` to prevent invalid calls. The codebase currently uses `symbol!` inside `queryFn` after guarding with `enabled: !!symbol`.
+
+## Fetch Helpers
+
+Keep network details in an unexported async helper above the hook when the logic is specific to that hook.
+
+Existing conventions:
+
+- Build query strings with `URLSearchParams`.
+- Use `AbortController` and a 10s timeout for stock API requests.
+- Parse responses through feature helpers such as `readStockApiResponse`.
+- Capture known failures in Sentry where the feature already does that.
 
 ```typescript
-export function useInfiniteOrders() {
-  return useInfiniteQuery({
-    queryKey: ['orders', 'infinite'],
-    queryFn: ({ pageParam = 1 }) =>
-      orpcClient.orders.list({ page: pageParam, pageSize: 20 }),
-    getNextPageParam: (lastPage) =>
-      lastPage.hasMore ? lastPage.page + 1 : undefined,
-    initialPageParam: 1,
-  });
+async function fetchStockQuote(
+  symbol: string,
+  provider: string
+): Promise<StockQuote> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const searchParams = new URLSearchParams({ provider });
+    const response = await fetch(
+      `/api/stocks/quote/${symbol}?${searchParams}`,
+      { signal: controller.signal }
+    );
+
+    return await readStockApiResponse<StockQuote>(
+      response,
+      `Failed to fetch stock quote: ${response.statusText}`
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 ```
 
-## Dependent Queries
+## Multiple Queries
+
+Use `useQueries` for dynamic symbol lists. Normalize and de-duplicate inputs before creating query configs, as `useWatchlistPrices` does:
 
 ```typescript
-export function useUserOrders(userId: string) {
-  // First query: get user
-  const userQuery = useQuery({
-    queryKey: ['users', userId],
-    queryFn: () => orpcClient.users.get({ id: userId }),
-    enabled: !!userId,
-  });
-
-  // Second query: depends on user data
-  const ordersQuery = useQuery({
-    queryKey: ['orders', { userId }],
-    queryFn: () => orpcClient.orders.list({ userId }),
-    enabled: !!userQuery.data, // Only run when user is loaded
-  });
-
-  return {
-    user: userQuery.data,
-    orders: ordersQuery.data,
-    isLoading: userQuery.isLoading || ordersQuery.isLoading,
-  };
-}
+const uniqueSymbols = useMemo(
+  () =>
+    Array.from(
+      new Set(
+        symbols.map((symbol) => symbol.trim().toUpperCase()).filter(Boolean)
+      )
+    ),
+  [symbols]
+);
 ```
 
-## Best Practices
+Return a view model that is convenient for components. `useWatchlistPrices` returns `pricesMap`, aggregate loading/refreshing flags, stale symbols, error symbols, per-symbol metadata, and refresh functions.
 
-1. **Single Responsibility**: Each hook should have one clear purpose
-2. **Consistent Naming**: `useXxx` for hooks, `useXxxQuery` for queries, `useXxxMutation` for mutations
-3. **Error Handling**: Always consider error states in your hooks
-4. **Loading States**: Expose loading states for UI feedback
-5. **Cache Keys**: Use consistent, hierarchical query keys
-6. **Type Safety**: Always maintain proper TypeScript types
+## Effects And Cleanup
 
-## Common Pitfalls
+Every effect that registers a timer or browser listener must clean it up:
 
-- Forgetting to invalidate related queries after mutations
-- Not handling race conditions with `cancelQueries`
-- Missing `enabled` flag for conditional queries
-- Not providing explicit generics when overriding callbacks
-- Creating too many small hooks instead of compound hooks
+```typescript
+useEffect(() => {
+  const intervalId = window.setInterval(() => setNow(Date.now()), tickMs);
+  return () => window.clearInterval(intervalId);
+}, [tickMs]);
+```
+
+```typescript
+useEffect(() => {
+  window.addEventListener('click', onClick);
+  return () => window.removeEventListener('click', onClick);
+}, []);
+```
+
+## Return Types
+
+Use explicit return interfaces for hooks with composite return values. `UseWatchlistPricesResult` and `UseWatchlistPricesOptions` are the pattern to follow.
+
+Avoid `any` in hook return values and cache transformations. Use shared domain types from `src/types` or `src/lib/types`.
+
+## Avoid
+
+- Putting feature-specific API hooks in `src/hooks`.
+- Starting fetches when required inputs are missing.
+- Leaving timeouts, intervals, event listeners, or websocket subscriptions without cleanup.
+- Returning raw low-level query arrays to components when the component needs a feature-level view model.

@@ -1,278 +1,128 @@
-# Type Safety Guidelines
+# Type Safety
 
-This document covers TypeScript best practices for maintaining type safety across the frontend application.
+The repo uses TypeScript with shared domain types under `src/types` and `src/lib/types`. Keep frontend types close to the data source and avoid broad escape hatches.
 
-## Core Principles
+## Shared Type Sources
 
-1. **Import types from backend, never redefine them**
-2. **Use type inference wherever possible**
-3. **Avoid type assertions and escape hatches**
-4. **Leverage oRPC for end-to-end type safety**
+Use existing shared types before creating new local interfaces:
 
-## Importing Backend Types
+- Stock API types: `src/lib/types/stock-api.ts`
+- App/domain types: `src/types/stocks.ts`, `src/types/watchlist.ts`, `src/types/portfolio.ts`
+- Provider config types: `src/lib/providers/config.ts`
+- Feature types for chart workspace and preferences: `src/features/stock-dashboard/lib/chart-workspace.ts`
 
-### DO: Import from API Package
+Examples:
 
 ```typescript
-// Good: Import types from the API package
-import type { User, Order, Product } from '@your-app/api/modules/users/types'; // Replace with your monorepo package path
-import type { OrderStatus } from '@your-app/api/modules/orders/types'; // Replace with your monorepo package path
+import {
+  DEFAULT_KLINE_INTERVAL,
+  type KLineInterval,
+  KLineSeries
+} from '@/lib/types/stock-api';
+import type { WatchlistItem as ApiWatchlistItem } from '@/types/watchlist';
+import { WatchlistItemWithPrice } from '@/types/stocks';
 ```
 
-### DON'T: Redefine Backend Types
+## Runtime Validation
+
+Validate user input and stale browser data through helpers instead of assuming shape:
+
+- `normalizeTicker` and `validateTicker` in `src/lib/validation/ticker.ts`.
+- `parseChartWorkspace` and `mergeChartPreferences` in `src/features/stock-dashboard/lib/chart-workspace.ts`.
+- API response parsing through `readStockApiResponse`.
+
+Example:
 
 ```typescript
-// Bad: Redefining types that exist in backend
-interface User {
-  id: string;
-  name: string;
-  email: string;
+const res = validateTicker(ticker);
+if (!res.isValid) {
+  setError(res.error ?? 'Invalid symbol');
+  return;
 }
 
-// Bad: Creating parallel type definitions
-type OrderStatus = 'pending' | 'processing' | 'completed';
+const sym = normalizeTicker(ticker);
 ```
 
-## Type Inference from API Client
+## API Responses
 
-### Using `Awaited<ReturnType>` Pattern
+Use typed response helpers and explicit union shapes for ad hoc endpoint responses.
 
-Infer types directly from API client calls to ensure frontend types stay in sync with backend:
+Example from `WatchlistCard`:
 
 ```typescript
-import { orpcClient } from '@/lib/orpc';
-
-// Infer the response type from the API client
-type UsersResponse = Awaited<ReturnType<typeof orpcClient.users.list>>;
-
-// Infer a single item type from array response
-type User = UsersResponse['items'][number];
-
-// Infer input types
-type CreateUserInput = Parameters<typeof orpcClient.users.create>[0];
+type WatchlistMutationResponse =
+  | {
+      ok: true;
+    }
+  | {
+      ok: false;
+      status?: number;
+      message?: string;
+      error?: unknown;
+      code?: string;
+    };
 ```
 
-### Type Inference in Hooks
+When normalizing uncertain JSON, prefer small typed functions. The current code has one known exception in `getResponseItems(json: any)`. Do not copy that pattern into new code; use `unknown` plus guards or a schema when touching this area.
+
+## React Query And Hooks
+
+Return explicit interfaces from hooks with composed state:
 
 ```typescript
-import { useQuery } from '@tanstack/react-query';
-import { orpcClient } from '@/lib/orpc';
-
-// The return type is automatically inferred
-export function useUsers() {
-  return useQuery({
-    queryKey: ['users'],
-    queryFn: () => orpcClient.users.list(),
-  });
-}
-
-// For complex transformations, use explicit inference
-type UserListData = Awaited<ReturnType<typeof orpcClient.users.list>>;
-
-export function useFormattedUsers() {
-  return useQuery({
-    queryKey: ['users', 'formatted'],
-    queryFn: async () => {
-      const data = await orpcClient.users.list();
-      return transformUsers(data);
-    },
-  });
-}
-```
-
-## Forbidden Patterns
-
-### NO @ts-expect-error for Custom Fields
-
-Never use type suppression to access fields that don't exist in the type:
-
-```typescript
-// Bad: Suppressing type errors
-// @ts-expect-error - customField exists at runtime
-const value = user.customField;
-
-// Bad: Using any to bypass type checking
-const value = (user as any).customField;
-```
-
-**Solution**: If a field exists at runtime but not in types, update the backend type definition.
-
-### NO `any` Type in Cache Updates
-
-React Query cache updates must maintain type safety:
-
-```typescript
-// Bad: Using any in cache updates
-queryClient.setQueryData(['users'], (old: any) => {
-  return old.map((user: any) => /* ... */);
-});
-
-// Good: Properly typed cache updates
-queryClient.setQueryData<UserListData>(['users'], (old) => {
-  if (!old) return old;
-  return {
-    ...old,
-    items: old.items.map((user) => /* ... */),
-  };
-});
-```
-
-### NO Type Assertions Without Validation
-
-```typescript
-// Bad: Blind type assertion
-const user = data as User;
-
-// Good: Runtime validation with Zod
-import { userSchema } from '@your-app/api/modules/users/types'; // Replace with your monorepo package path
-const user = userSchema.parse(data);
-
-// Good: Type guard
-function isUser(data: unknown): data is User {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    'id' in data &&
-    'email' in data
-  );
+export interface UseWatchlistPricesResult {
+  pricesMap: WatchlistPricesMap;
+  isLoading: boolean;
+  isRefreshing: boolean;
+  hasErrors: boolean;
+  errorSymbols: string[];
+  staleSymbols: string[];
+  lastRefreshedAt: Date | null;
+  refreshAll: () => Promise<void>;
+  refetch: () => Promise<void>;
 }
 ```
 
-## View Model Types
+For optional query inputs, guard execution with `enabled` and keep the non-null assertion localized inside the `queryFn`.
 
-When the frontend needs additional computed properties, create view models that extend backend types:
+## Props And Component APIs
 
-```typescript
-// types/index.ts
-import type { Order } from '@your-app/api/modules/orders/types'; // Replace with your monorepo package path
-
-// Extend backend type with frontend-specific computed properties
-export interface OrderViewModel extends Order {
-  formattedTotal: string;
-  statusLabel: string;
-  isEditable: boolean;
-}
-
-// Transform function
-export function toOrderViewModel(order: Order): OrderViewModel {
-  return {
-    ...order,
-    formattedTotal: formatCurrency(order.total),
-    statusLabel: getStatusLabel(order.status),
-    isEditable: order.status === 'draft',
-  };
-}
-```
-
-## Generic Type Patterns
-
-### API Response Wrapper
+Use explicit prop interfaces when the component is exported and accepts custom props:
 
 ```typescript
-// Generic paginated response type
-type PaginatedResponse<T> = {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-};
-
-// Usage with inference
-type UserListResponse = PaginatedResponse<User>;
+interface TickerInputProps {
+  onTickerSubmit?: (ticker: string) => void;
+}
 ```
 
-### Hook Return Types
+Inline prop types are acceptable for tiny one-off components, as in `DashboardClient`:
 
 ```typescript
-// Explicit return type for complex hooks
-interface UseOrderActionsReturn {
-  updateOrder: (id: string, data: UpdateOrderInput) => Promise<void>;
-  deleteOrder: (id: string) => Promise<void>;
-  isUpdating: boolean;
-  isDeleting: boolean;
-}
-
-export function useOrderActions(): UseOrderActionsReturn {
-  // Implementation
+export function DashboardClient({
+  diagnostics
+}: {
+  diagnostics?: SetupDiagnostics;
+}) {
+  // ...
 }
 ```
 
-## Working with External Data
+## Tests
 
-### API Responses
+Tests may use casts around mocked browser globals or fetch where the testing library/Jest types make the mock cumbersome. Keep those casts in test files only.
+
+Example pattern:
 
 ```typescript
-// Always validate external data
-import { z } from 'zod';
-
-const externalDataSchema = z.object({
-  id: z.string(),
-  value: z.number(),
-});
-
-async function fetchExternalData() {
-  const response = await fetch('/api/external');
-  const data = await response.json();
-  return externalDataSchema.parse(data);
-}
+const originalFetch = global.fetch as any;
+global.fetch = jest.fn() as any;
 ```
 
-### Local Storage
+New production code should not add `any`, `@ts-ignore`, or `@ts-expect-error`.
 
-```typescript
-// Type-safe local storage wrapper
-function getStoredValue<T>(key: string, schema: z.ZodType<T>): T | null {
-  const stored = localStorage.getItem(key);
-  if (!stored) return null;
+## Avoid
 
-  try {
-    return schema.parse(JSON.parse(stored));
-  } catch {
-    return null;
-  }
-}
-```
-
-## TypeScript Configuration
-
-Ensure strict mode is enabled in `tsconfig.json`:
-
-```json
-{
-  "compilerOptions": {
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noImplicitReturns": true,
-    "noUncheckedIndexedAccess": true
-  }
-}
-```
-
-## Common Type Utilities
-
-```typescript
-// Extract array element type
-type ArrayElement<T> = T extends (infer E)[] ? E : never;
-
-// Make specific properties optional
-type PartialBy<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
-
-// Make specific properties required
-type RequiredBy<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
-
-// Non-nullable
-type NonNullableFields<T> = {
-  [K in keyof T]: NonNullable<T[K]>;
-};
-```
-
-## Checklist
-
-Before committing, verify:
-
-- [ ] No `@ts-expect-error` or `@ts-ignore` comments added
-- [ ] No `any` types in new code
-- [ ] All API response types are inferred or imported from backend
-- [ ] Cache updates are properly typed
-- [ ] External data is validated with Zod schemas
+- Redefining a domain type that already exists in `src/types` or `src/lib/types`.
+- Using `any` in production code for API JSON, React Query cache data, or component props.
+- Blind type assertions for data from browser storage, APIs, or user input.
+- Letting tests drive production types toward weaker shapes.

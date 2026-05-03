@@ -1,24 +1,37 @@
-# Bootstrap: Fill Project Development Guidelines
+# Bootstrap Task: Fill Project Development Guidelines
 
-## Purpose
+**You (the AI) are running this task. The developer does not read this file.**
 
-Welcome to Trellis! This is your first task.
+The developer just ran `trellis init` on this project for the first time.
+`.trellis/` now exists with empty spec scaffolding, and this bootstrap task
+exists under `.trellis/tasks/`. When they want to work on it, they should start
+this task from a session that provides Trellis session identity.
 
-AI agents use `.trellis/spec/` to understand YOUR project's coding conventions.
-**Starting from scratch = AI writes generic code that doesn't match your project style.**
+**Your job**: help them populate `.trellis/spec/` with the team's real
+coding conventions. Every future AI session — this project's
+`trellis-implement` and `trellis-check` sub-agents — auto-loads spec files
+listed in per-task jsonl manifests. Empty spec = sub-agents write generic
+code. Real spec = sub-agents match the team's actual patterns.
 
-Filling these guidelines is a one-time setup that pays off for every future AI session.
+Don't dump instructions. Open with a short greeting, figure out if the repo
+has any existing convention docs (CLAUDE.md, .cursorrules, etc.), and drive
+the rest conversationally.
 
 ---
 
-## Your Task
+## Status (update the checkboxes as you complete each item)
 
-Fill in the guideline files based on your **existing codebase**.
+- [x] Fill frontend guidelines
+- [x] Add code examples
+
+---
+
+## Spec files to populate
 
 
-### Frontend Guidelines
+### Frontend guidelines
 
-| File | What to Document |
+| File | What to document |
 |------|------------------|
 | `.trellis/spec/frontend/directory-structure.md` | Component/page/hook organization |
 | `.trellis/spec/frontend/component-guidelines.md` | Component patterns, props conventions |
@@ -28,18 +41,20 @@ Fill in the guideline files based on your **existing codebase**.
 | `.trellis/spec/frontend/quality-guidelines.md` | Linting, testing, accessibility |
 
 
-### Thinking Guides (Optional)
+### Thinking guides (already populated)
 
-The `.trellis/spec/guides/` directory contains thinking guides that are already
-filled with general best practices. You can customize them for your project if needed.
+`.trellis/spec/guides/` contains general thinking guides pre-filled with
+best practices. Customize only if something clearly doesn't fit this project.
 
 ---
 
-## How to Fill Guidelines
+## How to fill the spec
 
-### Step 0: Import from Existing Specs (Recommended)
+### Step 1: Import from existing convention files first (preferred)
 
-Many projects already have coding conventions documented. **Check these first** before writing from scratch:
+Search the repo for existing convention docs. If any exist, read them and
+extract the relevant rules into the matching `.trellis/spec/` files —
+usually much faster than documenting from scratch.
 
 | File / Directory | Tool |
 |------|------|
@@ -56,47 +71,57 @@ Many projects already have coding conventions documented. **Check these first** 
 | `CONTRIBUTING.md` | General project conventions |
 | `.editorconfig` | Editor formatting rules |
 
-If any of these exist, read them first and extract the relevant coding conventions into the corresponding `.trellis/spec/` files. This saves significant effort compared to writing everything from scratch.
+### Step 2: Analyze the codebase for anything not covered by existing docs
 
-### Step 1: Analyze the Codebase
+Scan real code to discover patterns. Before writing each spec file:
+- Find 2-3 real examples of each pattern in the codebase.
+- Reference real file paths (not hypothetical ones).
+- Document anti-patterns the team clearly avoids.
 
-Ask AI to help discover patterns from actual code:
+### Step 3: Document reality, not ideals
 
-- "Read all existing config files (CLAUDE.md, .cursorrules, etc.) and extract coding conventions into .trellis/spec/"
-- "Analyze my codebase and document the patterns you see"
-- "Find error handling / component / API patterns and document them"
+**Critical**: write what the code *actually does*, not what it should do.
+Sub-agents match the spec, so aspirational patterns that don't exist in the
+codebase will cause sub-agents to write code that looks out of place.
 
-### Step 2: Document Reality, Not Ideals
-
-Write what your codebase **actually does**, not what you wish it did.
-AI needs to match existing patterns, not introduce new ones.
-
-- **Look at existing code** - Find 2-3 examples of each pattern
-- **Include file paths** - Reference real files as examples
-- **List anti-patterns** - What does your team avoid?
+If the team has known tech debt, document the current state — improvement
+is a separate conversation, not a bootstrap concern.
 
 ---
 
-## Completion Checklist
+## Quick explainer of the runtime (share when they ask "why do we need spec at all")
 
-- [ ] Guidelines filled for your project type
-- [ ] At least 2-3 real code examples in each guideline
-- [ ] Anti-patterns documented
+- Every AI coding task spawns two sub-agents: `trellis-implement` (writes
+  code) and `trellis-check` (verifies quality).
+- Each task has `implement.jsonl` / `check.jsonl` manifests listing which
+  spec files to load.
+- The platform hook auto-injects those spec files + the task's `prd.md`
+  into every sub-agent prompt, so the sub-agent codes/reviews per team
+  conventions without anyone pasting them manually.
+- Source of truth: `.trellis/spec/`. That's why filling it well now pays
+  off forever.
 
-When done:
+---
+
+## Completion
+
+When the developer confirms the checklist items above are done with real
+examples (not placeholders), guide them to run:
 
 ```bash
 python3 ./.trellis/scripts/task.py finish
 python3 ./.trellis/scripts/task.py archive 00-bootstrap-guidelines
 ```
 
+After archive, every new developer who joins this project will get a
+`00-join-<slug>` onboarding task instead of this bootstrap task.
+
 ---
 
-## Why This Matters
+## Suggested opening line
 
-After completing this task:
-
-1. AI will write code that matches your project style
-2. Relevant `/trellis:before-*-dev` commands will inject real context
-3. `/trellis:check-*` commands will validate against your actual standards
-4. Future developers (human or AI) will onboard faster
+"Welcome to Trellis! Your init just set me up to help you fill the project
+spec — a one-time setup so every future AI session follows the team's
+conventions instead of writing generic code. Before we start, do you have
+any existing convention docs (CLAUDE.md, .cursorrules, CONTRIBUTING.md,
+etc.) I can pull from, or should I scan the codebase from scratch?"

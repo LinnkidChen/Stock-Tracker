@@ -1,189 +1,93 @@
 # Directory Structure
 
-This document describes the module organization and folder conventions for the frontend application.
+This project is a single Next.js app rooted in `src/`. Document the structure that exists today; do not introduce a parallel `modules/` tree.
 
-## Overview
+## Current Layout
 
-```
-app/                          # Next.js App Router
-├── (marketing)/              # Public marketing pages (i18n)
-│   └── [locale]/             # Locale-based routing
-└── (app)/                    # Protected application routes
-    └── app/                  # Main application routes
-modules/                      # Feature modules
-├── [feature]/                # Feature module
-│   ├── components/           # UI components
-│   ├── hooks/                # Custom hooks
-│   ├── context/              # React Context
-│   ├── lib/                  # Utilities and data transforms
-│   └── types/                # Frontend view model types
-├── shared/                   # Shared components across features
-└── ui/                       # UI component library
-middleware.ts                 # Authentication & routing middleware
+```text
+src/app/                         Next.js App Router pages, layouts, API routes
+src/components/                  Shared app components and layout shell
+src/components/ui/               shadcn/Radix primitives wrapped for this app
+src/features/<feature>/          Feature-specific UI, hooks, store, lib, tests
+src/hooks/                       Shared generic hooks
+src/lib/                         Cross-feature services, providers, validation, utilities
+src/types/                       Shared app/domain types
+src/config/                      Shared UI/data-table configuration
+src/constants/                   Shared constants and mock data
 ```
 
-## Module Structure
+Real examples:
 
-### Feature Module Pattern
+- `src/app/page.tsx` is a small server route gate that uses Clerk auth and redirects to `/dashboard/stocks`.
+- `src/features/stock-dashboard/components/DashboardClient.tsx` owns the interactive stock dashboard surface.
+- `src/features/stock-dashboard/hooks/useWatchlistPrices.ts` keeps feature data-fetching logic near the dashboard feature.
+- `src/components/ui/button.tsx` is a reusable shadcn-style primitive, not feature code.
+- `src/lib/providers/registry.ts` and `src/lib/providers/factory.ts` hold provider selection outside React components.
 
-Each feature module should follow this structure:
+## Feature Modules
 
-```
-modules/dashboard/
-├── components/
-│   ├── DashboardHeader.tsx
-│   ├── StatsCard.tsx
-│   ├── ActivityFeed.tsx
-│   └── index.ts              # Barrel export
-├── hooks/
-│   ├── useDashboardStats.ts
-│   ├── useActivityFeed.ts
-│   └── index.ts
-├── context/
-│   ├── DashboardContext.tsx
-│   └── index.ts
-├── lib/
-│   ├── formatters.ts         # Data formatting utilities
-│   ├── transformers.ts       # API response transformers
-│   └── constants.ts          # Feature-specific constants
-├── types/
-│   └── index.ts              # View model types
-└── index.ts                  # Public API of the module
+Use `src/features/<feature>/` for cohesive product areas. Existing feature folders use this shape:
+
+```text
+src/features/stock-dashboard/
+  components/
+  hooks/
+  lib/
+  utils/
+  store.ts
 ```
 
-### Component Organization
-
-```
-components/
-├── [ComponentName].tsx       # Main component file
-├── [ComponentName].test.tsx  # Unit tests (if applicable)
-└── index.ts                  # Barrel export
-```
-
-### Hooks Organization
-
-```
-hooks/
-├── useFeatureData.ts         # Data fetching hooks
-├── useFeatureActions.ts      # Mutation hooks
-├── useFeatureState.ts        # Local state hooks
-└── index.ts
-```
-
-## Shared Modules
-
-### `modules/shared/`
-
-Components and utilities shared across multiple features:
-
-```
-shared/
-├── components/
-│   ├── Layout/               # Layout components
-│   ├── Navigation/           # Navigation components
-│   ├── DataTable/            # Reusable data tables
-│   └── Forms/                # Form components
-├── hooks/
-│   ├── useUser.ts            # Current user hook
-│   ├── useOrganization.ts    # Organization context
-│   └── usePermissions.ts     # Permission checks
-└── lib/
-    ├── api.ts                # API client configuration
-    └── utils.ts              # Shared utilities
-```
-
-### `modules/ui/`
-
-Low-level UI components (design system):
-
-```
-ui/
-├── Button/
-├── Input/
-├── Select/
-├── Dialog/
-├── Toast/
-└── ...
-```
-
-## Naming Conventions
-
-### Files
-
-| Type | Convention | Example |
-|------|------------|---------|
-| Components | PascalCase | `UserProfile.tsx` |
-| Hooks | camelCase with `use` prefix | `useUserProfile.ts` |
-| Context | PascalCase with `Context` suffix | `UserContext.tsx` |
-| Utilities | camelCase | `formatDate.ts` |
-| Constants | camelCase or SCREAMING_SNAKE_CASE | `constants.ts` |
-| Types | PascalCase | `types.ts` or `UserTypes.ts` |
-
-### Exports
-
-Use barrel exports (`index.ts`) for clean imports:
+Feature components import sibling feature logic with relative paths and shared code through `@/` aliases:
 
 ```typescript
-// modules/dashboard/components/index.ts
-export { DashboardHeader } from './DashboardHeader';
-export { StatsCard } from './StatsCard';
-export { ActivityFeed } from './ActivityFeed';
+import { useDashboardStore } from '../store';
+import { useWatchlistPrices } from '../hooks/useWatchlistPrices';
+import { normalizeTicker } from '@/lib/validation/ticker';
+import { Button } from '@/components/ui/button';
 ```
 
-```typescript
-// Usage
-import { DashboardHeader, StatsCard } from '@/modules/dashboard/components';
-```
+Keep API parsing, feature error mapping, chart setup, and feature-specific transformations in `features/<feature>/lib` or `features/<feature>/utils`. Examples include `src/features/stock-dashboard/lib/stock-api-error.ts`, `src/features/stock-dashboard/lib/chart-workspace.ts`, and `src/features/stock-dashboard/utils/price-formatters.ts`.
 
-## Route-Module Mapping
+## Shared Components
 
-Routes in `app/(app)/` should map to modules in `modules/`:
+Use `src/components/` for components that are reused outside one feature:
 
-```
-app/(app)/
-├── dashboard/
-│   └── page.tsx          -> modules/dashboard/
-├── users/
-│   ├── page.tsx          -> modules/users/
-│   └── [id]/
-│       └── page.tsx      -> modules/users/ (detail view)
-├── settings/
-│   └── page.tsx          -> modules/settings/
-└── orders/
-    ├── page.tsx          -> modules/orders/
-    └── [id]/
-        └── page.tsx      -> modules/orders/ (detail view)
-```
+- `src/components/layout/*` for the application shell.
+- `src/components/nav-*.tsx`, `src/components/breadcrumbs.tsx`, and `src/components/search-input.tsx` for shared navigation.
+- `src/components/ui/*` for low-level UI primitives based on Radix, CVA, and Tailwind.
 
-## Import Path Aliases
+Do not put stock-dashboard-only components under `src/components/`; keep them in `src/features/stock-dashboard/components/`.
 
-Configure in `tsconfig.json`:
+## Tests
 
-```json
-{
-  "compilerOptions": {
-    "paths": {
-      "@/*": ["./src/*"],
-      "@/modules/*": ["./modules/*"],
-      "@/components/*": ["./components/*"],
-      "@/lib/*": ["./lib/*"]
-    }
-  }
-}
-```
+The repo colocates most unit tests next to the code they cover:
 
-## Best Practices
+- `src/features/stock-dashboard/components/__tests__/watchlist-card.test.tsx`
+- `src/features/stock-dashboard/hooks/__tests__/useKlineSeries.test.tsx`
+- `src/lib/services/__tests__/stock-service.test.ts`
+- `src/lib/watchlist/storage.test.ts`
 
-1. **Colocation**: Keep related files close together
-2. **Single Responsibility**: Each module should have one clear purpose
-3. **Explicit Dependencies**: Import what you need, avoid implicit globals
-4. **Barrel Exports**: Use `index.ts` for public APIs
-5. **Private by Default**: Only export what needs to be shared
+Use `__tests__/` for groups of component/hook tests and `.test.ts` next to small library modules where that pattern already exists.
 
-## Anti-Patterns to Avoid
+## Naming
 
-- Deeply nested folder structures (max 3-4 levels)
-- Circular dependencies between modules
-- Mixing feature code with shared utilities
-- Importing internal module files directly (use barrel exports)
-- Creating "utils" folders that become dumping grounds
+- React component files are PascalCase: `WatchlistCard.tsx`, `TickerInput.tsx`.
+- Shared hooks use `use` prefix and camelCase: `useDebouncedCallback.ts`, `useWatchlistPrices.ts`.
+- Feature utility files are kebab-case when they contain a cohesive domain helper: `stock-api-error.ts`, `chart-workspace.ts`.
+- Tests mirror the subject name: `watchlist-card.test.tsx`, `technical-indicators.test.ts`.
+- UI primitive files in `src/components/ui` are lower-case/kebab-case: `dropdown-menu.tsx`, `data-table.tsx`.
+
+## Import Boundaries
+
+- Prefer `@/` imports for shared code under `src/`.
+- Prefer relative imports inside a feature when importing sibling components, hooks, lib, utils, or store.
+- Shared code under `src/lib` must not import feature components.
+- `src/components/ui` primitives should remain generic and should not import feature code.
+- Barrel exports are used selectively. `src/features/stock-dashboard/components/index.ts` exists, but many local feature imports still use direct sibling paths. Follow the nearby pattern instead of adding barrels everywhere.
+
+## Avoid
+
+- Creating a new top-level `modules/` directory.
+- Moving feature code into generic shared folders before there is real reuse.
+- Importing feature-specific code from `src/components/ui`.
+- Adding deep abstraction layers around simple `src/app` route files.
