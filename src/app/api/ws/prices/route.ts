@@ -2,8 +2,6 @@ import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
 import { checkRateLimit, createRateLimitHeaders } from '@/lib/rate-limit';
 import { APIResponse, StockQuote } from '@/lib/types/stock-api';
 
-export const runtime = 'edge';
-
 const POLL_INTERVAL_MS = 5000;
 
 type PriceUpdateMessage = {
