@@ -7,6 +7,7 @@
 | Guideline                 | Location     | When to Read                 |
 | ------------------------- | ------------ | ---------------------------- |
 | **Shared Code Standards** | `../shared/` | Always - applies to all code |
+| **Agent Methodology** | `../agent-methodology/index.md` | Planning, TDD, debugging, verification, and review gates |
 
 ---
 
