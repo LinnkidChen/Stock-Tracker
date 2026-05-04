@@ -3,6 +3,12 @@ body {
 }
 
 :root {
+  --font-inter: Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-instrument: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mullish: Mulish, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  --font-noto-mono: 'Noto Sans Mono', 'SFMono-Regular', Consolas,
+    'Liberation Mono', Menlo, monospace;
   --font-sans: var(--font-inter);
   --header-height: calc(var(--spacing) * 12 + 1px);
 }

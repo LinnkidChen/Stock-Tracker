@@ -4,9 +4,9 @@ Stock Tracker is a Next.js application for monitoring market quotes, charting
 selected symbols, maintaining a watchlist, and tracking current portfolio
 holdings. The current product is narrower than the long-term roadmap: it ships
 the stock dashboard, chart workspace, setup diagnostics, watchlist persistence,
-portfolio holdings persistence, and a transaction ledger, while dedicated
-portfolio, watchlist, alerts, reports, settings, and overview pages remain
-planned.
+watchlist price alerts, portfolio holdings persistence, and a transaction
+ledger, while dedicated portfolio, watchlist, reports, settings, and overview
+pages remain planned.
 
 ## Contributor and Agent Docs
 
@@ -26,12 +26,14 @@ contributor and agent system of record.
 - `/dashboard/charts` with a klinecharts-based chart workspace for a selected
   ticker, interval, range, display preferences, and configurable SMA, EMA, RSI,
   MACD, Bollinger Bands, and VWAP indicators.
-- `/dashboard/operations` with setup diagnostics for Clerk, Supabase, and
-  market data provider configuration.
+- `/dashboard/operations` with setup diagnostics for Clerk, Supabase, Supabase
+  RLS access, and market data provider configuration.
 - Multi-provider quote and k-line API routes with Longbridge primary routing,
   Yahoo Finance fallback, provider health metadata, and per-symbol provider
   selection.
 - Watchlist API with Supabase persistence, symbol metadata, ordering, and tests.
+- Watchlist price alerts for above/below price, percent move, gap up/down, and
+  volume spikes, with status and trigger history.
 - Portfolio holdings and transaction ledger APIs with Supabase persistence,
   derived current positions, and tests.
 - Shared Supabase-backed API rate limiting for quote, k-line, streaming,
@@ -57,7 +59,7 @@ contributor and agent system of record.
 ### Planned
 
 - Dedicated portfolio and watchlist pages.
-- Price and indicator alerts.
+- Indicator alerts.
 - Reports, exports, and tax-oriented workflows.
 - Settings page for user preferences and alert configuration.
 - Full dashboard overview page instead of redirecting `/dashboard` to stocks.
@@ -77,7 +79,7 @@ contributor and agent system of record.
 | Operations diagnostics    | Yes                          | N/A     | N/A                | Dashboard protected             | Yes     | Partial              |
 | Dedicated portfolio page  | Planned                      | Partial | Partial            | Planned                         | Partial | Planned              |
 | Dedicated watchlist page  | Planned                      | Partial | Partial            | Planned                         | Partial | Planned              |
-| Alerts                    | Planned                      | Planned | Planned            | Planned                         | Planned | Planned              |
+| Alerts                    | Partial: watchlist card only | Yes     | Supabase           | Yes                             | Yes     | Partial              |
 | Reports and exports       | Planned                      | Planned | Planned            | Planned                         | Planned | Planned              |
 | Settings                  | Planned                      | Planned | Planned            | Planned                         | Planned | Planned              |
 
@@ -97,17 +99,19 @@ contributor and agent system of record.
 
 ### API Routes
 
-| Route                          | Methods                          | Status      | Description                                               |
-| :----------------------------- | :------------------------------- | :---------- | :-------------------------------------------------------- |
-| `/api/stocks/quote/[symbol]`   | `GET`                            | Implemented | Fetches a quote through the provider registry.            |
-| `/api/stocks/kline/[symbol]`   | `GET`                            | Implemented | Fetches k-line series data through the provider registry. |
-| `/api/stocks/providers/health` | `GET`                            | Implemented | Checks provider readiness and fallback metadata.          |
-| `/api/ws/prices`               | `GET` WebSocket upgrade          | Implemented | Poll-backed price updates for subscribed symbols.         |
-| `/api/watchlist`               | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist CRUD, metadata, and ordering.     |
-| `/api/portfolio/holdings`      | `GET`, `POST`                    | Implemented | Authenticated current holdings list and creation.         |
-| `/api/portfolio/holdings/[id]` | `PATCH`, `DELETE`                | Implemented | Authenticated holdings update and deletion.               |
-| `/api/portfolio/transactions`  | `GET`, `POST`                    | Implemented | Authenticated transaction ledger list and creation.       |
-| `/api/log`                     | `POST`                           | Implemented | Client log ingestion.                                     |
+| Route                            | Methods                          | Status      | Description                                               |
+| :------------------------------- | :------------------------------- | :---------- | :-------------------------------------------------------- |
+| `/api/stocks/quote/[symbol]`     | `GET`                            | Implemented | Fetches a quote through the provider registry.            |
+| `/api/stocks/kline/[symbol]`     | `GET`                            | Implemented | Fetches k-line series data through the provider registry. |
+| `/api/stocks/providers/health`   | `GET`                            | Implemented | Checks provider readiness and fallback metadata.          |
+| `/api/ws/prices`                 | `GET` WebSocket upgrade          | Implemented | Poll-backed price updates for subscribed symbols.         |
+| `/api/watchlist`                 | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist CRUD, metadata, and ordering.     |
+| `/api/watchlist/alerts`          | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist alert CRUD and trigger history.   |
+| `/api/watchlist/alerts/triggers` | `POST`                           | Implemented | Records authenticated watchlist alert trigger history.    |
+| `/api/portfolio/holdings`        | `GET`, `POST`                    | Implemented | Authenticated current holdings list and creation.         |
+| `/api/portfolio/holdings/[id]`   | `PATCH`, `DELETE`                | Implemented | Authenticated holdings update and deletion.               |
+| `/api/portfolio/transactions`    | `GET`, `POST`                    | Implemented | Authenticated transaction ledger list and creation.       |
+| `/api/log`                       | `POST`                           | Implemented | Client log ingestion.                                     |
 
 ## Tech Stack
 
@@ -221,7 +225,7 @@ The app runs at http://localhost:3000 by default.
 
 ## Supabase Authentication
 
-Watchlist and portfolio holdings persistence depend on Supabase Row Level
+Watchlist, watchlist alert, and portfolio holdings persistence depend on Supabase Row Level
 Security and Clerk-issued Supabase JWTs. The expected setup is:
 
 - Clerk has a JWT template named `supabase`.
@@ -235,6 +239,11 @@ Security and Clerk-issued Supabase JWTs. The expected setup is:
 If this setup is missing, `/api/watchlist` returns
 `WATCHLIST_AUTH_MISCONFIGURED`, and `/api/portfolio/holdings` returns
 `PORTFOLIO_AUTH_MISCONFIGURED`.
+
+Use `/dashboard/operations` after signing in to run the setup checklist. It
+validates Clerk keys, Supabase URL/key configuration, Clerk's `supabase` JWT
+template, and read-only RLS access to the watchlist and portfolio tables without
+exposing secret values.
 
 In production, the rate limiter fails closed if `SUPABASE_SERVICE_ROLE_KEY` or
 the rate limit RPC is missing. Set `RATE_LIMIT_DISABLED=true` only for local

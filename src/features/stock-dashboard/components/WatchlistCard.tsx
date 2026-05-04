@@ -26,6 +26,7 @@ import * as Sentry from '@sentry/nextjs';
 import { AddTickerError, getAddTickerError } from '../lib/add-ticker-error';
 import { useWatchlistPrices } from '../hooks/useWatchlistPrices';
 import { WatchlistItemDisplay } from './WatchlistItemDisplay';
+import { WatchlistAlertsPanel } from './WatchlistAlertsPanel';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import { WatchlistItemWithPrice } from '@/types/stocks';
 import { TickerErrorModal } from './TickerErrorModal';
@@ -196,6 +197,10 @@ function toPricedItem(
     currentPrice: priceData?.price,
     change: priceData?.change,
     changePercent: priceData?.changePercent,
+    volume: priceData?.volume,
+    open: priceData?.open,
+    previousClose: priceData?.previousClose,
+    avgVolume: priceData?.avgVolume,
     lastUpdated: priceData?.lastUpdated
   };
 }
@@ -793,6 +798,7 @@ export function WatchlistCard() {
                 </div>
               </section>
             ))}
+            <WatchlistAlertsPanel symbols={symbols} pricesMap={pricesMap} />
           </div>
         )}
         {addError ? (

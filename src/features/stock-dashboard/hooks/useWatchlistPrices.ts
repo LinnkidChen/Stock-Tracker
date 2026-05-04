@@ -165,6 +165,10 @@ export function useWatchlistPrices(
         price: result.data.price,
         change: result.data.change,
         changePercent: result.data.changePercent,
+        volume: result.data.volume,
+        open: result.data.open,
+        previousClose: result.data.previousClose,
+        avgVolume: result.data.avgVolume,
         lastUpdated: new Date(result.data.lastUpdated)
       };
     }
