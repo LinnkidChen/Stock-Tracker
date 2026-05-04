@@ -13,7 +13,6 @@ const baseConfig: NextConfig = {
     ]
   },
   transpilePackages: ['geist'],
-  serverExternalPackages: ['longport'],
   experimental: {},
   // @ts-ignore
   turbopack: {
@@ -70,3 +69,7 @@ if (process.env.NEXT_PUBLIC_SENTRY_DISABLED !== 'true') {
 } else {
   module.exports = nextConfig;
 }
+
+import('@opennextjs/cloudflare').then((cloudflare) =>
+  cloudflare.initOpenNextCloudflareForDev()
+);

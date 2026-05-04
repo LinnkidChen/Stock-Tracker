@@ -78,6 +78,10 @@ export interface WatchlistItemWithPrice extends WatchlistItem {
   currentPrice?: number;
   change?: number;
   changePercent?: number;
+  volume?: number;
+  open?: number;
+  previousClose?: number;
+  avgVolume?: number | null;
   lastUpdated?: Date;
 }
 
@@ -86,6 +90,10 @@ export interface WatchlistPricesMap {
     price: number;
     change: number;
     changePercent: number;
+    volume?: number;
+    open?: number;
+    previousClose?: number;
+    avgVolume?: number | null;
     lastUpdated: Date;
   };
 }

@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stock-tracker",
+  "main": ".open-next/worker.js",
+  "build": {
+    "command": "pnpm opennextjs-cloudflare build"
+  },
+  "compatibility_date": "2026-05-03",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "stock-tracker"
+    }
+  ],
+  "vars": {
+    "NEXTJS_ENV": "production",
+    "E2E_AUTH_BYPASS": "false",
+    "LONGPORT_REGION": "hk",
+    "RATE_LIMIT_DISABLED": "false",
+    "RATE_LIMIT_QUOTE_LIMIT": "120",
+    "RATE_LIMIT_QUOTE_WINDOW_SECONDS": "60",
+    "RATE_LIMIT_KLINE_LIMIT": "60",
+    "RATE_LIMIT_KLINE_WINDOW_SECONDS": "60",
+    "RATE_LIMIT_WATCHLIST_LIMIT": "60",
+    "RATE_LIMIT_WATCHLIST_WINDOW_SECONDS": "60",
+    "RATE_LIMIT_PORTFOLIO_LIMIT": "60",
+    "RATE_LIMIT_PORTFOLIO_WINDOW_SECONDS": "60",
+    "RATE_LIMIT_STREAM_LIMIT": "20",
+    "RATE_LIMIT_STREAM_WINDOW_SECONDS": "60"
+  }
+}
