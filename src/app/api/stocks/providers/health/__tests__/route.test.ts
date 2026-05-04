@@ -158,6 +158,25 @@ describe('/api/stocks/providers/health API Route', () => {
     expect(responseData.data?.details?.code).toBe('NETWORK_ERROR');
   });
 
+  it('checks the requested provider when query param is present', async () => {
+    const health: ProviderHealthCheck = {
+      provider: 'Longbridge',
+      status: 'healthy',
+      latencyMs: 10,
+      checkedAt: '2024-01-01T00:00:00.000Z'
+    };
+    mockProvider.healthCheck.mockResolvedValue(health);
+
+    const response = await GET(
+      createMockRequest(
+        'http://localhost:3000/api/stocks/providers/health?provider=mock'
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockGetProvider).toHaveBeenCalledWith('mock');
+  });
+
   it('returns unconfigured provider status without leaking credentials', async () => {
     process.env.LONGPORT_ACCESS_TOKEN = 'secret-token-for-health-route';
     const health: ProviderHealthCheck = {
@@ -185,5 +204,80 @@ describe('/api/stocks/providers/health API Route', () => {
     expect(JSON.stringify(responseData)).not.toContain(
       'secret-token-for-health-route'
     );
+  });
+
+  it('returns API errors from provider lookup failures', async () => {
+    mockGetProvider.mockImplementation(() => {
+      throw {
+        code: 'INVALID_PROVIDER',
+        message: 'Provider is not supported'
+      };
+    });
+
+    const response = await GET(
+      createMockRequest(
+        'http://localhost:3000/api/stocks/providers/health?provider=longbridge'
+      )
+    );
+    const responseData: APIResponse<null> = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(responseData.success).toBe(false);
+    expect(responseData.error).toEqual({
+      code: 'INVALID_PROVIDER',
+      message: 'Provider is not supported'
+    });
+  });
+
+  it('returns 5xx API errors from provider health failures', async () => {
+    mockProvider.healthCheck.mockRejectedValue({
+      code: 'NETWORK_ERROR',
+      message: 'Longbridge network request failed'
+    });
+
+    const response = await GET(
+      createMockRequest(
+        'http://localhost:3000/api/stocks/providers/health?provider=longbridge'
+      )
+    );
+    const responseData: APIResponse<null> = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(responseData.success).toBe(false);
+    expect(responseData.error?.code).toBe('NETWORK_ERROR');
+  });
+
+  it('wraps unexpected provider errors', async () => {
+    mockProvider.healthCheck.mockRejectedValue(new Error('boom'));
+
+    const response = await GET(
+      createMockRequest(
+        'http://localhost:3000/api/stocks/providers/health?provider=longbridge'
+      )
+    );
+    const responseData: APIResponse<null> = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(responseData.success).toBe(false);
+    expect(responseData.error).toEqual({
+      code: 'UNKNOWN_ERROR',
+      message: 'An unexpected error occurred'
+    });
+  });
+
+  it('handles malformed request URLs while reporting provider errors', async () => {
+    mockProvider.healthCheck.mockRejectedValue({
+      code: 'NETWORK_ERROR',
+      message: 'Longbridge network request failed'
+    });
+
+    const response = await GET({
+      url: 'not a url',
+      nextUrl: {
+        searchParams: new URLSearchParams('provider=longbridge')
+      }
+    } as any);
+
+    expect(response.status).toBe(502);
   });
 });

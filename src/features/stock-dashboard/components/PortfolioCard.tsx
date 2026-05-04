@@ -34,7 +34,10 @@ import {
 } from '@/components/ui/tooltip';
 import { logger } from '@/lib/logger';
 import { normalizeTicker, validateTicker } from '@/lib/validation/ticker';
-import type { PortfolioHolding, PortfolioHoldingInput } from '@/types/portfolio';
+import type {
+  PortfolioHolding,
+  PortfolioHoldingInput
+} from '@/types/portfolio';
 import { useWatchlistPrices } from '../hooks/useWatchlistPrices';
 import { LoadingSkeleton } from './LoadingSkeleton';
 
@@ -101,9 +104,9 @@ function getErrorMessage(payload: any, fallback: string) {
   return payload?.error?.message || payload?.message || fallback;
 }
 
-function parseHoldingForm(values: HoldingFormValues):
-  | { ok: true; input: PortfolioHoldingInput }
-  | { ok: false; message: string } {
+function parseHoldingForm(
+  values: HoldingFormValues
+): { ok: true; input: PortfolioHoldingInput } | { ok: false; message: string } {
   const tickerValidation = validateTicker(values.symbol);
   if (!tickerValidation.isValid) {
     return {
@@ -334,8 +337,9 @@ export function PortfolioCard() {
   const [loadError, setLoadError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
-  const [editingHolding, setEditingHolding] =
-    useState<PortfolioHolding | null>(null);
+  const [editingHolding, setEditingHolding] = useState<PortfolioHolding | null>(
+    null
+  );
   const [formBusy, setFormBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PortfolioHolding | null>(
@@ -505,9 +509,7 @@ export function PortfolioCard() {
           );
           setFormOpen(false);
           setEditingHolding(null);
-          toast.success(
-            editingHolding ? 'Position updated' : 'Position added'
-          );
+          toast.success(editingHolding ? 'Position updated' : 'Position added');
         } catch (error) {
           logger.error('Portfolio holding save failed', { error });
           setFormError('Failed to save portfolio position');

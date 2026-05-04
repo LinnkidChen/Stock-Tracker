@@ -15,10 +15,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality-gate:
-    name: Quality gate
+  static-quality:
+    name: Static quality
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Run strict lint
+        run: pnpm lint:strict
+
+      - name: Run type check
+        run: pnpm typecheck
+
+  unit-coverage:
+    name: Unit coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       NEXT_PUBLIC_SENTRY_DISABLED: 'true'
@@ -49,23 +81,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run strict lint
-        run: pnpm lint:strict
-
-      - name: Run TypeScript check
-        run: pnpm typecheck
-
-      - name: Build application
-        run: pnpm build
-
-      - name: Run Jest coverage
+      - name: Run tests with coverage
         run: pnpm test:coverage --ci --runInBand
-
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run Playwright smoke tests
-        run: pnpm test:e2e:smoke
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -74,6 +91,49 @@ jobs:
           name: coverage-report
           path: coverage
           if-no-files-found: ignore
+
+  build-and-smoke:
+    name: Build and smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SENTRY_DISABLED: 'true'
+      E2E_AUTH_BYPASS: 'true'
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZHVtbXkuY2xlcmsuYWNjb3VudHMuZGV2JA
+      CLERK_SECRET_KEY: sk_test_ci_dummy
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: sb_publishable_ci
+      LONGPORT_APP_KEY: ci-placeholder
+      LONGPORT_APP_SECRET: ci-placeholder
+      LONGPORT_ACCESS_TOKEN: ci-placeholder
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build production app
+        run: pnpm build
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright smoke tests
+        run: pnpm test:e2e:smoke
 
       - name: Upload Playwright artifacts
         uses: actions/upload-artifact@v4
@@ -86,3 +146,29 @@ jobs:
             blob-report
           if-no-files-found: ignore
           retention-days: 7
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit production dependencies
+        run: pnpm audit:prod

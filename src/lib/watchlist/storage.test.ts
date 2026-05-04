@@ -36,8 +36,10 @@ function createQuery(result: unknown) {
     delete: jest.fn(() => query),
     update: jest.fn(() => query),
     upsert: jest.fn(() => Promise.resolve(result)),
-    then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
-      Promise.resolve(result).then(resolve, reject)
+    then: (
+      resolve: (value: unknown) => unknown,
+      reject: (reason: unknown) => unknown
+    ) => Promise.resolve(result).then(resolve, reject)
   };
 
   return query;

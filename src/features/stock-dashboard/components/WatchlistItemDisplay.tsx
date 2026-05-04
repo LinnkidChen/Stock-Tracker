@@ -89,7 +89,9 @@ export function WatchlistItemDisplay({
       <div className='min-w-0 flex-1 space-y-1'>
         <div className='flex min-w-0 flex-wrap items-center gap-2'>
           <div className='text-base font-medium'>{item.symbol}</div>
-          {item.exchange ? <Badge variant='outline'>{item.exchange}</Badge> : null}
+          {item.exchange ? (
+            <Badge variant='outline'>{item.exchange}</Badge>
+          ) : null}
           {isStale ? <Badge variant='secondary'>Stale</Badge> : null}
           {item.note ? (
             <div className='text-muted-foreground max-w-full truncate text-xs'>

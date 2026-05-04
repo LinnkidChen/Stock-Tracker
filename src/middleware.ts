@@ -3,10 +3,24 @@ import type { NextFetchEvent, NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 const isProtectedRoute = createRouteMatcher(['/dashboard(.*)']);
+const hasClerkCredentials = Boolean(
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim() &&
+    process.env.CLERK_SECRET_KEY?.trim()
+);
 
-const clerkAuthMiddleware = clerkMiddleware(async (auth, req: NextRequest) => {
-  if (isProtectedRoute(req)) await auth.protect();
-});
+const clerkAuthMiddleware = hasClerkCredentials
+  ? clerkMiddleware(async (auth, req: NextRequest) => {
+      if (isProtectedRoute(req)) await auth.protect();
+    })
+  : undefined;
+
+function setupRequiredMiddleware(req: NextRequest) {
+  if (isProtectedRoute(req)) {
+    return NextResponse.redirect(new URL('/auth/sign-in', req.url));
+  }
+
+  return NextResponse.next();
+}
 
 export default function middleware(req: NextRequest, event: NextFetchEvent) {
   if (
@@ -16,7 +30,9 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
     return NextResponse.next();
   }
 
-  return clerkAuthMiddleware(req, event);
+  return clerkAuthMiddleware
+    ? clerkAuthMiddleware(req, event)
+    : setupRequiredMiddleware(req);
 }
 
 export const config = {

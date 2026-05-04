@@ -1,6 +1,7 @@
 import Providers from '@/components/layout/providers';
 import { Toaster } from '@/components/ui/sonner';
 import { fontVariables } from '@/lib/font';
+import { getClerkCredentialSetup } from '@/lib/onboarding/auth-setup';
 import ThemeProvider from '@/components/layout/ThemeToggle/theme-provider';
 import { cn } from '@/lib/utils';
 import type { Metadata, Viewport } from 'next';
@@ -32,6 +33,7 @@ export default async function RootLayout({
   const cookieStore = await cookies();
   const activeThemeValue = cookieStore.get('active_theme')?.value;
   const isScaled = activeThemeValue?.endsWith('-scaled');
+  const clerkSetup = getClerkCredentialSetup();
 
   return (
     <html lang='en' suppressHydrationWarning>
@@ -65,7 +67,10 @@ export default async function RootLayout({
             disableTransitionOnChange
             enableColorScheme
           >
-            <Providers activeThemeValue={activeThemeValue as string}>
+            <Providers
+              activeThemeValue={activeThemeValue as string}
+              isAuthConfigured={clerkSetup.isConfigured}
+            >
               <Toaster />
               {children}
             </Providers>
