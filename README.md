@@ -99,19 +99,19 @@ contributor and agent system of record.
 
 ### API Routes
 
-| Route                            | Methods                          | Status      | Description                                               |
-| :------------------------------- | :------------------------------- | :---------- | :-------------------------------------------------------- |
-| `/api/stocks/quote/[symbol]`     | `GET`                            | Implemented | Fetches a quote through the provider registry.            |
-| `/api/stocks/kline/[symbol]`     | `GET`                            | Implemented | Fetches k-line series data through the provider registry. |
-| `/api/stocks/providers/health`   | `GET`                            | Implemented | Checks provider readiness and fallback metadata.          |
-| `/api/ws/prices`                 | `GET` WebSocket upgrade          | Implemented | Poll-backed price updates for subscribed symbols.         |
-| `/api/watchlist`                 | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist CRUD, metadata, and ordering.     |
-| `/api/watchlist/alerts`          | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist alert CRUD and trigger history.   |
-| `/api/watchlist/alerts/triggers` | `POST`                           | Implemented | Records authenticated watchlist alert trigger history.    |
-| `/api/portfolio/holdings`        | `GET`, `POST`                    | Implemented | Authenticated current holdings list and creation.         |
-| `/api/portfolio/holdings/[id]`   | `PATCH`, `DELETE`                | Implemented | Authenticated holdings update and deletion.               |
-| `/api/portfolio/transactions`    | `GET`, `POST`                    | Implemented | Authenticated transaction ledger list and creation.       |
-| `/api/log`                       | `POST`                           | Implemented | Client log ingestion.                                     |
+| Route                              | Methods                          | Status      | Description                                               |
+| :--------------------------------- | :------------------------------- | :---------- | :-------------------------------------------------------- |
+| `/api/stocks/quote/[symbol]`       | `GET`                            | Implemented | Fetches a quote through the provider registry.            |
+| `/api/stocks/kline/[symbol]`       | `GET`                            | Implemented | Fetches k-line series data through the provider registry. |
+| `/api/stocks/providers/health`     | `GET`                            | Implemented | Checks provider readiness and fallback metadata.          |
+| `/api/ws/prices`                   | `GET` WebSocket upgrade          | Implemented | Poll-backed price updates for subscribed symbols.         |
+| `/api/watchlist`                   | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist CRUD, metadata, and ordering.     |
+| `/api/watchlist/alerts`            | `GET`, `POST`, `PATCH`, `DELETE` | Implemented | Authenticated watchlist alert CRUD and trigger history.   |
+| `/api/watchlist/alerts/triggers`   | `POST`                           | Implemented | Records authenticated watchlist alert trigger history.    |
+| `/api/portfolio/holdings`          | `GET`                            | Implemented | Authenticated current holdings derived from transactions. |
+| `/api/portfolio/transactions`      | `GET`, `POST`                    | Implemented | Authenticated transaction ledger list and creation.       |
+| `/api/portfolio/transactions/[id]` | `PATCH`, `DELETE`                | Implemented | Authenticated transaction update and deletion.            |
+| `/api/log`                         | `POST`                           | Implemented | Client log ingestion.                                     |
 
 ## Tech Stack
 
@@ -251,20 +251,18 @@ debugging.
 
 ## Portfolio Model
 
-Portfolio holdings are derived from a transaction ledger with these event types:
+Portfolio holdings now use the transaction ledger as the source of truth.
+`stock_portfolio_transactions` supports `opening_balance`, `buy`, `sell`,
+`dividend`, `deposit`, `withdrawal`, and `fee`; all v1 summaries are calculated
+in USD. `/api/portfolio/holdings` returns holdings and summary values derived
+from the ledger with the average cost method. Writes should go through
+`/api/portfolio/transactions`. The legacy `stock_portfolio_holdings` table is
+migrated idempotently through `opening_balance` transactions.
 
-- `buy`
-- `sell`
-- `dividend`
-- `split`
-- `fee`
-- `transfer`
-
-The existing `stock_portfolio_holdings` table is preserved as a migration
-snapshot/read model, and the schema seeds current holdings into transfer events
-when the ledger table is introduced. The dashboard card still consumes current
-holdings to calculate total value, day P&L, and total P&L. Tax lots, realized
-P&L, and export workflows remain outside the current implementation.
+`/dashboard/portfolio` provides transaction entry, editing, deletion, holdings,
+and P&L views. The stock dashboard Portfolio card shows only the summary and
+links to the dedicated page. Tax lots, FIFO/specific-lot accounting, and FX
+conversion remain outside the current version scope.
 
 ## Development Commands
 

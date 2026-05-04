@@ -4,12 +4,13 @@ import { auth } from '@clerk/nextjs/server';
 import { logger } from '@/lib/logger';
 import { isSupabaseAuthConfigError } from '@/lib/supabase/server';
 import {
-  addPortfolioTransaction,
+  editPortfolioTransaction,
   InvalidPortfolioTransactionError,
   NegativePortfolioHoldingError,
-  getPortfolioSnapshot
+  PortfolioTransactionNotFoundError,
+  removePortfolioTransaction
 } from '@/lib/portfolio/service';
-import { validatePortfolioTransactionBody } from '@/lib/portfolio/validation';
+import { validatePortfolioTransactionPatchBody } from '@/lib/portfolio/validation';
 import {
   PORTFOLIO_AUTH_MISCONFIGURED_CODE,
   PORTFOLIO_AUTH_MISCONFIGURED_MESSAGE,
@@ -55,38 +56,66 @@ function handleTransactionError(error: unknown) {
     );
   }
 
+  if (error instanceof PortfolioTransactionNotFoundError) {
+    return createErrorResponse('Portfolio transaction not found', 404);
+  }
+
   if (isSupabaseAuthConfigError(error)) {
     return handlePortfolioAuthMisconfiguration(
-      'Portfolio transactions unavailable due to auth misconfiguration',
+      'Portfolio transaction unavailable due to auth misconfiguration',
       error
     );
   }
 
-  logger.error('Portfolio transaction error', { error });
+  logger.error('Portfolio transaction mutation error', { error });
   return createErrorResponse('Failed to process portfolio transaction', 500);
 }
 
-export async function GET() {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   return Sentry.startSpan(
-    { op: 'http.server', name: 'GET /api/portfolio/transactions' },
+    { op: 'http.server', name: 'PATCH /api/portfolio/transactions/[id]' },
     async (span) => {
       const { userId } = await auth();
       if (!userId) {
         return createErrorResponse('Unauthorized', 401);
       }
 
+      const { id } = await params;
+      span?.setAttribute?.('portfolio.transaction_id', id);
+
+      let body: unknown;
       try {
-        const snapshot = await getPortfolioSnapshot(userId);
-        span?.setAttribute?.(
-          'portfolio.transactions_count',
-          snapshot.transactions.length
+        body = await req.json();
+      } catch {
+        return createErrorResponse('Invalid JSON body', 400);
+      }
+
+      const validation = validatePortfolioTransactionPatchBody(
+        body as Record<string, unknown>
+      );
+      if (!validation.ok) {
+        return createErrorResponse(validation.message, 400);
+      }
+
+      try {
+        const result = await editPortfolioTransaction(
+          userId,
+          id,
+          validation.input
         );
 
         return NextResponse.json({
           success: true,
           data: {
-            transactions: snapshot.transactions,
-            summary: snapshot.summary
+            transaction:
+              result.snapshot.transactions.find(
+                (transaction) => transaction.id === result.transaction?.id
+              ) ?? result.transaction,
+            holdings: result.snapshot.holdings,
+            summary: result.snapshot.summary
           }
         });
       } catch (error) {
@@ -96,51 +125,32 @@ export async function GET() {
   );
 }
 
-export async function POST(req: NextRequest) {
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   return Sentry.startSpan(
-    { op: 'http.server', name: 'POST /api/portfolio/transactions' },
+    { op: 'http.server', name: 'DELETE /api/portfolio/transactions/[id]' },
     async (span) => {
       const { userId } = await auth();
       if (!userId) {
         return createErrorResponse('Unauthorized', 401);
       }
 
-      let body: unknown;
-      try {
-        body = await req.json();
-      } catch {
-        return createErrorResponse('Invalid JSON body', 400);
-      }
-
-      const validation = validatePortfolioTransactionBody(
-        body as Record<string, unknown>
-      );
-      if (!validation.ok) {
-        return createErrorResponse(validation.message, 400);
-      }
-
-      span?.setAttribute?.('portfolio.transaction_type', validation.input.type);
-      if (validation.input.symbol) {
-        span?.setAttribute?.('portfolio.symbol', validation.input.symbol);
-      }
+      const { id } = await params;
+      span?.setAttribute?.('portfolio.transaction_id', id);
 
       try {
-        const result = await addPortfolioTransaction(userId, validation.input);
+        const result = await removePortfolioTransaction(userId, id);
 
-        return NextResponse.json(
-          {
-            success: true,
-            data: {
-              transaction:
-                result.snapshot.transactions.find(
-                  (transaction) => transaction.id === result.transaction?.id
-                ) ?? result.transaction,
-              holdings: result.snapshot.holdings,
-              summary: result.snapshot.summary
-            }
-          },
-          { status: 201 }
-        );
+        return NextResponse.json({
+          success: true,
+          data: {
+            id,
+            holdings: result.snapshot.holdings,
+            summary: result.snapshot.summary
+          }
+        });
       } catch (error) {
         return handleTransactionError(error);
       }

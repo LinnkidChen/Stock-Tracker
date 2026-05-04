@@ -1,62 +1,64 @@
 import { normalizeTicker, validateTicker } from '@/lib/validation/ticker';
 import type {
-  PortfolioHoldingInput,
+  PortfolioCurrency,
   PortfolioTransactionInput,
   PortfolioTransactionType
 } from '@/types/portfolio';
 
-export interface PortfolioHoldingRequestBody {
-  symbol?: unknown;
-  quantity?: unknown;
-  avgCost?: unknown;
-}
-
 export interface PortfolioTransactionRequestBody {
-  symbol?: unknown;
   type?: unknown;
+  symbol?: unknown;
   quantity?: unknown;
   price?: unknown;
   amount?: unknown;
-  fee?: unknown;
-  splitRatioFrom?: unknown;
-  splitRatioTo?: unknown;
-  occurredAt?: unknown;
+  feeAmount?: unknown;
+  currency?: unknown;
+  transactionDate?: unknown;
   note?: unknown;
 }
-
-export type PortfolioHoldingValidationResult =
-  | { ok: true; input: PortfolioHoldingInput }
-  | { ok: true; input: Partial<PortfolioHoldingInput> }
-  | { ok: false; message: string };
 
 export type PortfolioTransactionValidationResult =
   | { ok: true; input: PortfolioTransactionInput }
   | { ok: false; message: string };
 
-const TRANSACTION_TYPES = [
+export type PortfolioTransactionPatchValidationResult =
+  | { ok: true; input: Partial<PortfolioTransactionInput> }
+  | { ok: false; message: string };
+
+const TRANSACTION_TYPES: PortfolioTransactionType[] = [
+  'opening_balance',
   'buy',
   'sell',
   'dividend',
-  'split',
-  'fee',
-  'transfer'
-] as const;
+  'deposit',
+  'withdrawal',
+  'fee'
+];
 
 function isMissing(value: unknown): boolean {
   return value === undefined || value === null || value === '';
 }
 
-function parseNumberField(
+function isTransactionType(value: unknown): value is PortfolioTransactionType {
+  return typeof value === 'string' && TRANSACTION_TYPES.includes(value as any);
+}
+
+function parseNullableNumber(
   value: unknown,
   fieldName: string,
-  options: { required: boolean; min: number; minMessage: string }
-): { ok: true; value?: number } | { ok: false; message: string } {
+  options: {
+    required?: boolean;
+    min: number;
+    minMessage: string;
+    allowZero?: boolean;
+  }
+): { ok: true; value: number | null } | { ok: false; message: string } {
   if (isMissing(value)) {
     if (options.required) {
       return { ok: false, message: `${fieldName} is required` };
     }
 
-    return { ok: true };
+    return { ok: true, value: null };
   }
 
   const parsed = Number(value);
@@ -64,297 +66,294 @@ function parseNumberField(
     return { ok: false, message: `${fieldName} must be a finite number` };
   }
 
-  if (parsed < options.min || (options.min === 0 && fieldName === 'quantity')) {
+  if (
+    parsed < options.min ||
+    (!options.allowZero && options.min === 0 && parsed === 0)
+  ) {
     return { ok: false, message: options.minMessage };
   }
 
   return { ok: true, value: parsed };
 }
 
-function parseTransactionType(
-  value: unknown
-):
-  | { ok: true; value: PortfolioTransactionType }
-  | { ok: false; message: string } {
-  if (typeof value !== 'string') {
-    return { ok: false, message: 'Transaction type is required' };
-  }
-
-  const normalized = value.toLowerCase();
-  if (!TRANSACTION_TYPES.includes(normalized as PortfolioTransactionType)) {
-    return { ok: false, message: 'Invalid transaction type' };
-  }
-
-  return { ok: true, value: normalized as PortfolioTransactionType };
-}
-
-function parseOptionalNote(
-  value: unknown
-): { ok: true; value?: string | null } | { ok: false; message: string } {
-  if (value === undefined) {
-    return { ok: true };
-  }
-  if (value === null) {
-    return { ok: true, value: null };
-  }
-  if (typeof value !== 'string') {
-    return { ok: false, message: 'note must be a string' };
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return { ok: true, value: null };
-  }
-  if (trimmed.length > 500) {
-    return { ok: false, message: 'note must be 500 characters or less' };
-  }
-
-  return { ok: true, value: trimmed };
-}
-
-function parseOptionalDate(
-  value: unknown
-): { ok: true; value?: string } | { ok: false; message: string } {
-  if (isMissing(value)) {
-    return { ok: true };
-  }
-  if (typeof value !== 'string') {
-    return { ok: false, message: 'occurredAt must be an ISO date string' };
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return { ok: false, message: 'occurredAt must be a valid date' };
-  }
-
-  return { ok: true, value: date.toISOString() };
-}
-
-function parseFiniteNumber(
+function parseNonNegativeNumber(
   value: unknown,
-  fieldName: string,
-  required: boolean
-): { ok: true; value?: number } | { ok: false; message: string } {
-  if (isMissing(value)) {
-    if (required) {
-      return { ok: false, message: `${fieldName} is required` };
-    }
-
-    return { ok: true };
-  }
+  fieldName: string
+): { ok: true; value: number } | { ok: false; message: string } {
+  if (isMissing(value)) return { ok: true, value: 0 };
 
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
     return { ok: false, message: `${fieldName} must be a finite number` };
   }
+  if (parsed < 0) {
+    return {
+      ok: false,
+      message: `${fieldName} must be greater than or equal to 0`
+    };
+  }
 
   return { ok: true, value: parsed };
 }
 
-export function validatePortfolioHoldingBody(
-  body: PortfolioHoldingRequestBody,
-  options: { partial: false }
-): { ok: true; input: PortfolioHoldingInput } | { ok: false; message: string };
-export function validatePortfolioHoldingBody(
-  body: PortfolioHoldingRequestBody,
-  options: { partial: true }
-):
-  | { ok: true; input: Partial<PortfolioHoldingInput> }
-  | { ok: false; message: string };
-export function validatePortfolioHoldingBody(
-  body: PortfolioHoldingRequestBody,
-  options: { partial: boolean }
-): PortfolioHoldingValidationResult {
-  const input: Partial<PortfolioHoldingInput> = {};
-
-  if (!options.partial || !isMissing(body.symbol)) {
-    if (typeof body.symbol !== 'string') {
+function parseSymbol(
+  value: unknown,
+  options: { required: boolean }
+): { ok: true; value: string | null } | { ok: false; message: string } {
+  if (isMissing(value)) {
+    if (options.required) {
       return { ok: false, message: 'Ticker symbol is required' };
     }
 
-    const validation = validateTicker(body.symbol);
-    if (!validation.isValid) {
-      return {
-        ok: false,
-        message: validation.error || 'Invalid ticker symbol'
-      };
-    }
-
-    input.symbol = normalizeTicker(body.symbol);
+    return { ok: true, value: null };
   }
 
-  const quantity = parseNumberField(body.quantity, 'quantity', {
-    required: !options.partial,
-    min: Number.MIN_VALUE,
-    minMessage: 'quantity must be greater than 0'
-  });
-  if (!quantity.ok) {
-    return quantity;
-  }
-  if (quantity.value !== undefined) {
-    input.quantity = quantity.value;
+  if (typeof value !== 'string') {
+    return { ok: false, message: 'Ticker symbol is required' };
   }
 
-  const avgCost = parseNumberField(body.avgCost, 'avgCost', {
-    required: !options.partial,
+  const validation = validateTicker(value);
+  if (!validation.isValid) {
+    return {
+      ok: false,
+      message: validation.error || 'Invalid ticker symbol'
+    };
+  }
+
+  return { ok: true, value: normalizeTicker(value) };
+}
+
+function parseCurrency(value: unknown): PortfolioCurrency | null {
+  if (isMissing(value)) return 'USD';
+  if (value === 'USD') return 'USD';
+  return null;
+}
+
+function parseTransactionDate(value: unknown): string | null {
+  if (isMissing(value)) return new Date().toISOString();
+  if (typeof value !== 'string') return null;
+
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return null;
+
+  return new Date(timestamp).toISOString();
+}
+
+function parseNote(value: unknown): string | null | false {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') return false;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 500) return false;
+
+  return trimmed;
+}
+
+export function normalizePortfolioTransactionInput(
+  input: PortfolioTransactionInput
+): PortfolioTransactionValidationResult {
+  const type = input.type;
+  const currency = parseCurrency(input.currency);
+  if (!currency) {
+    return { ok: false, message: 'currency must be USD' };
+  }
+
+  const note = parseNote(input.note);
+  if (note === false) {
+    return { ok: false, message: 'Note must be 500 characters or less' };
+  }
+
+  const transactionDate = parseTransactionDate(input.transactionDate);
+  if (!transactionDate) {
+    return { ok: false, message: 'transactionDate must be a valid date' };
+  }
+
+  if (type === 'opening_balance' || type === 'buy' || type === 'sell') {
+    const symbol = parseSymbol(input.symbol, { required: true });
+    if (!symbol.ok) return symbol;
+
+    const quantity = parseNullableNumber(input.quantity, 'quantity', {
+      required: true,
+      min: 0,
+      minMessage: 'quantity must be greater than 0'
+    });
+    if (!quantity.ok) return quantity;
+
+    const price = parseNullableNumber(input.price, 'price', {
+      required: true,
+      min: 0,
+      minMessage: 'price must be greater than or equal to 0',
+      allowZero: true
+    });
+    if (!price.ok) return price;
+
+    const feeAmount = parseNonNegativeNumber(input.feeAmount, 'feeAmount');
+    if (!feeAmount.ok) return feeAmount;
+
+    return {
+      ok: true,
+      input: {
+        type,
+        symbol: symbol.value,
+        quantity: quantity.value,
+        price: price.value,
+        amount: null,
+        feeAmount: feeAmount.value,
+        currency,
+        transactionDate,
+        note
+      }
+    };
+  }
+
+  if (type === 'dividend') {
+    const symbol = parseSymbol(input.symbol, { required: true });
+    if (!symbol.ok) return symbol;
+
+    const amount = parseNullableNumber(input.amount, 'amount', {
+      required: true,
+      min: 0,
+      minMessage: 'amount must be greater than 0'
+    });
+    if (!amount.ok) return amount;
+
+    return {
+      ok: true,
+      input: {
+        type,
+        symbol: symbol.value,
+        quantity: null,
+        price: null,
+        amount: amount.value,
+        feeAmount: 0,
+        currency,
+        transactionDate,
+        note
+      }
+    };
+  }
+
+  const amount = parseNullableNumber(input.amount, 'amount', {
+    required: true,
     min: 0,
-    minMessage: 'avgCost must be greater than or equal to 0'
+    minMessage: 'amount must be greater than 0'
   });
-  if (!avgCost.ok) {
-    return avgCost;
-  }
-  if (avgCost.value !== undefined) {
-    input.avgCost = avgCost.value;
-  }
-
-  if (options.partial && Object.keys(input).length === 0) {
-    return { ok: false, message: 'At least one field is required' };
-  }
+  if (!amount.ok) return amount;
 
   return {
     ok: true,
-    input: input as PortfolioHoldingInput
+    input: {
+      type,
+      symbol: null,
+      quantity: null,
+      price: null,
+      amount: amount.value,
+      feeAmount: 0,
+      currency,
+      transactionDate,
+      note
+    }
   };
 }
 
 export function validatePortfolioTransactionBody(
   body: PortfolioTransactionRequestBody
 ): PortfolioTransactionValidationResult {
-  if (typeof body.symbol !== 'string') {
-    return { ok: false, message: 'Ticker symbol is required' };
+  if (!isTransactionType(body.type)) {
+    return { ok: false, message: 'type must be a valid transaction type' };
   }
 
-  const tickerValidation = validateTicker(body.symbol);
-  if (!tickerValidation.isValid) {
-    return {
-      ok: false,
-      message: tickerValidation.error || 'Invalid ticker symbol'
-    };
+  const currency = parseCurrency(body.currency);
+  if (!currency) {
+    return { ok: false, message: 'currency must be USD' };
   }
 
-  const type = parseTransactionType(body.type);
-  if (!type.ok) {
-    return type;
+  const date = parseTransactionDate(body.transactionDate);
+  if (!date) {
+    return { ok: false, message: 'transactionDate must be a valid date' };
   }
 
-  const input: PortfolioTransactionInput = {
-    symbol: normalizeTicker(body.symbol),
-    type: type.value
-  };
-
-  const occurredAt = parseOptionalDate(body.occurredAt);
-  if (!occurredAt.ok) {
-    return occurredAt;
-  }
-  if (occurredAt.value !== undefined) {
-    input.occurredAt = occurredAt.value;
-  }
-
-  const note = parseOptionalNote(body.note);
-  if (!note.ok) {
-    return note;
-  }
-  if (note.value !== undefined) {
-    input.note = note.value;
-  }
-
-  const fee = parseNumberField(body.fee, 'fee', {
-    required: false,
-    min: 0,
-    minMessage: 'fee must be greater than or equal to 0'
+  return normalizePortfolioTransactionInput({
+    type: body.type,
+    symbol: isMissing(body.symbol) ? null : (body.symbol as any),
+    quantity: isMissing(body.quantity) ? null : Number(body.quantity),
+    price: isMissing(body.price) ? null : Number(body.price),
+    amount: isMissing(body.amount) ? null : Number(body.amount),
+    feeAmount: isMissing(body.feeAmount) ? 0 : Number(body.feeAmount),
+    currency,
+    transactionDate: date,
+    note: isMissing(body.note) ? null : (body.note as any)
   });
-  if (!fee.ok) {
-    return fee;
-  }
-  if (fee.value !== undefined) {
-    input.fee = fee.value;
-  }
+}
 
-  if (type.value === 'buy' || type.value === 'sell') {
-    const quantity = parseNumberField(body.quantity, 'quantity', {
-      required: true,
-      min: Number.MIN_VALUE,
-      minMessage: 'quantity must be greater than 0'
-    });
-    if (!quantity.ok) {
-      return quantity;
+export function validatePortfolioTransactionPatchBody(
+  body: PortfolioTransactionRequestBody
+): PortfolioTransactionPatchValidationResult {
+  const input: Partial<PortfolioTransactionInput> = {};
+
+  if (body.type !== undefined) {
+    if (!isTransactionType(body.type)) {
+      return { ok: false, message: 'type must be a valid transaction type' };
     }
-
-    const price = parseNumberField(body.price, 'price', {
-      required: true,
-      min: 0,
-      minMessage: 'price must be greater than or equal to 0'
-    });
-    if (!price.ok) {
-      return price;
-    }
-
-    input.quantity = quantity.value;
-    input.price = price.value;
-    return { ok: true, input };
+    input.type = body.type;
   }
 
-  if (type.value === 'transfer') {
-    const quantity = parseFiniteNumber(body.quantity, 'quantity', true);
-    if (!quantity.ok) {
-      return quantity;
+  if (body.symbol !== undefined) {
+    if (body.symbol === null || body.symbol === '') {
+      input.symbol = null;
+    } else {
+      const symbol = parseSymbol(body.symbol, { required: true });
+      if (!symbol.ok) return symbol;
+      input.symbol = symbol.value;
     }
-    if (quantity.value === 0) {
-      return { ok: false, message: 'quantity must not be 0 for transfer' };
-    }
-
-    const price = parseNumberField(body.price, 'price', {
-      required: true,
-      min: 0,
-      minMessage: 'price must be greater than or equal to 0'
-    });
-    if (!price.ok) {
-      return price;
-    }
-
-    input.quantity = quantity.value;
-    input.price = price.value;
-    return { ok: true, input };
   }
 
-  if (type.value === 'dividend' || type.value === 'fee') {
-    const amount = parseNumberField(body.amount, 'amount', {
-      required: true,
-      min: Number.MIN_VALUE,
-      minMessage: 'amount must be greater than 0'
-    });
-    if (!amount.ok) {
-      return amount;
+  for (const field of ['quantity', 'price', 'amount'] as const) {
+    if (body[field] === undefined) continue;
+    if (body[field] === null || body[field] === '') {
+      input[field] = null;
+      continue;
     }
 
-    input.amount = amount.value;
-    return { ok: true, input };
-  }
-
-  const splitRatioFrom = parseNumberField(
-    body.splitRatioFrom,
-    'splitRatioFrom',
-    {
-      required: true,
-      min: Number.MIN_VALUE,
-      minMessage: 'splitRatioFrom must be greater than 0'
+    const parsed = Number(body[field]);
+    if (!Number.isFinite(parsed)) {
+      return { ok: false, message: `${field} must be a finite number` };
     }
-  );
-  if (!splitRatioFrom.ok) {
-    return splitRatioFrom;
+    input[field] = parsed;
   }
 
-  const splitRatioTo = parseNumberField(body.splitRatioTo, 'splitRatioTo', {
-    required: true,
-    min: Number.MIN_VALUE,
-    minMessage: 'splitRatioTo must be greater than 0'
-  });
-  if (!splitRatioTo.ok) {
-    return splitRatioTo;
+  if (body.feeAmount !== undefined) {
+    const feeAmount = parseNonNegativeNumber(body.feeAmount, 'feeAmount');
+    if (!feeAmount.ok) return feeAmount;
+    input.feeAmount = feeAmount.value;
   }
 
-  input.splitRatioFrom = splitRatioFrom.value;
-  input.splitRatioTo = splitRatioTo.value;
+  if (body.currency !== undefined) {
+    const currency = parseCurrency(body.currency);
+    if (!currency) return { ok: false, message: 'currency must be USD' };
+    input.currency = currency;
+  }
+
+  if (body.transactionDate !== undefined) {
+    const transactionDate = parseTransactionDate(body.transactionDate);
+    if (!transactionDate) {
+      return { ok: false, message: 'transactionDate must be a valid date' };
+    }
+    input.transactionDate = transactionDate;
+  }
+
+  if (body.note !== undefined) {
+    const note = parseNote(body.note);
+    if (note === false) {
+      return { ok: false, message: 'Note must be 500 characters or less' };
+    }
+    input.note = note;
+  }
+
+  if (Object.keys(input).length === 0) {
+    return { ok: false, message: 'At least one field is required' };
+  }
 
   return { ok: true, input };
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { MarketOverview } from './MarketOverview';
-import { WatchlistCard } from './WatchlistCard';
+import { WatchlistSummaryCard } from './WatchlistSummaryCard';
 import { PortfolioCard } from './PortfolioCard';
 import { TickerInput } from './TickerInput';
 import type { SetupDiagnostics } from '@/lib/diagnostics/setup';
@@ -58,7 +58,7 @@ export function DashboardClient({
       <MarketOverview />
 
       <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
-        <WatchlistCard />
+        <WatchlistSummaryCard />
         <PortfolioCard />
       </div>
 

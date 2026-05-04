@@ -11,6 +11,22 @@ export const navItems: NavItem[] = [
     items: []
   },
   {
+    title: 'Portfolio',
+    url: '/dashboard/portfolio',
+    icon: 'portfolio',
+    isActive: false,
+    shortcut: ['p', 'p'],
+    items: []
+  },
+  {
+    title: 'Watchlist',
+    url: '/dashboard/watchlist',
+    icon: 'watchlist',
+    isActive: false,
+    shortcut: ['w', 'w'],
+    items: []
+  },
+  {
     title: 'Charts',
     url: '/dashboard/charts',
     icon: 'charts',
