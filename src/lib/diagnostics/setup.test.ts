@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { auth } from '@clerk/nextjs/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { getSetupDiagnostics } from './setup';
 
 jest.mock('server-only', () => ({}));
@@ -10,7 +11,12 @@ jest.mock('@clerk/nextjs/server', () => ({
   auth: jest.fn()
 }));
 
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn()
+}));
+
 const mockAuth = auth as jest.Mock;
+const mockCreateSupabaseClient = createSupabaseClient as jest.Mock;
 const originalEnv = process.env;
 
 function configureReadyEnv() {
@@ -38,11 +44,35 @@ function findCheck(
   return check;
 }
 
+function createRlsQuery(result: { error: unknown }) {
+  const query: any = {
+    select: jest.fn(() => query),
+    eq: jest.fn(() => query),
+    limit: jest.fn(() => Promise.resolve(result))
+  };
+
+  return query;
+}
+
+function mockRlsProbeClient(
+  results: Array<{ error: unknown }> = [{ error: null }, { error: null }]
+) {
+  const from = jest.fn();
+  const queries = results.map(createRlsQuery);
+
+  queries.forEach((query) => from.mockReturnValueOnce(query));
+  from.mockReturnValue(queries[queries.length - 1]);
+  mockCreateSupabaseClient.mockReturnValue({ from });
+
+  return { from, queries };
+}
+
 describe('getSetupDiagnostics', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env = { ...originalEnv };
     configureReadyEnv();
+    mockRlsProbeClient();
     mockAuth.mockResolvedValue({
       userId: 'user_123',
       getToken: jest.fn().mockResolvedValue('supabase-jwt')
@@ -53,12 +83,13 @@ describe('getSetupDiagnostics', () => {
     process.env = originalEnv;
   });
 
-  it('returns ready checks when Clerk, Supabase, Longbridge, Upstash, and observability are configured', async () => {
+  it('returns ready checks when Clerk, Supabase, RLS, market data, Upstash, and observability are configured', async () => {
     const diagnostics = await getSetupDiagnostics();
 
     expect(diagnostics.status).toBe('ready');
-    expect(diagnostics.checks).toHaveLength(5);
+    expect(diagnostics.checks).toHaveLength(6);
     expect(diagnostics.checks.map((check) => check.status)).toEqual([
+      'ready',
       'ready',
       'ready',
       'ready',
@@ -67,6 +98,20 @@ describe('getSetupDiagnostics', () => {
     ]);
     expect(findCheck(diagnostics, 'supabase').details).toContain(
       'Clerk JWT template "supabase" returned a token.'
+    );
+    expect(findCheck(diagnostics, 'supabase-rls').details).toContain(
+      'Read-only RLS probe succeeded for watchlist items.'
+    );
+    expect(mockCreateSupabaseClient).toHaveBeenCalledWith(
+      'https://example.supabase.co',
+      'supabase_publishable_secret',
+      expect.objectContaining({
+        global: {
+          headers: {
+            Authorization: 'Bearer supabase-jwt'
+          }
+        }
+      })
     );
     expect(findCheck(diagnostics, 'observability').details).toEqual(
       expect.arrayContaining([
@@ -87,7 +132,8 @@ describe('getSetupDiagnostics', () => {
     expect(diagnostics.status).toBe('blocked');
     expect(findCheck(diagnostics, 'clerk').status).toBe('blocked');
     expect(findCheck(diagnostics, 'supabase').status).toBe('blocked');
-    expect(findCheck(diagnostics, 'longbridge').status).toBe('blocked');
+    expect(findCheck(diagnostics, 'supabase-rls').status).toBe('blocked');
+    expect(findCheck(diagnostics, 'market-data').status).toBe('warning');
     expect(findCheck(diagnostics, 'upstash').status).toBe('warning');
     expect(JSON.stringify(diagnostics)).toContain(
       'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'
@@ -110,6 +156,7 @@ describe('getSetupDiagnostics', () => {
     expect(supabase.details).toContain(
       'Using legacy Supabase anon key environment variable.'
     );
+    expect(findCheck(diagnostics, 'supabase-rls').status).toBe('ready');
     expect(JSON.stringify(diagnostics)).not.toContain('legacy_anon_secret');
   });
 
@@ -122,6 +169,9 @@ describe('getSetupDiagnostics', () => {
     expect(supabase.status).toBe('blocked');
     expect(supabase.details).toContain(
       'NEXT_PUBLIC_SUPABASE_URL must be a valid absolute URL.'
+    );
+    expect(findCheck(diagnostics, 'supabase-rls').details).toContain(
+      'Valid Supabase URL and publishable key configuration are required before RLS access can be checked.'
     );
   });
 
@@ -143,6 +193,7 @@ describe('getSetupDiagnostics', () => {
     expect(supabase.details).toContain(
       'Clerk JWT template "supabase" was not found.'
     );
+    expect(findCheck(diagnostics, 'supabase-rls').status).toBe('blocked');
   });
 
   it('blocks Supabase when the Clerk JWT template returns an empty token', async () => {
@@ -156,6 +207,7 @@ describe('getSetupDiagnostics', () => {
     expect(supabase.details).toContain(
       'Clerk JWT template "supabase" returned no token.'
     );
+    expect(findCheck(diagnostics, 'supabase-rls').status).toBe('blocked');
   });
 
   it('warns when an unexpected Clerk token verification error occurs', async () => {
@@ -167,20 +219,49 @@ describe('getSetupDiagnostics', () => {
     const supabase = findCheck(diagnostics, 'supabase');
     expect(diagnostics.status).toBe('warning');
     expect(supabase.status).toBe('warning');
+    expect(findCheck(diagnostics, 'supabase-rls').status).toBe('warning');
     expect(supabase.details).toContain(
       'Clerk JWT template "supabase" could not be verified.'
     );
   });
 
-  it('blocks Longbridge when any credential variable is missing', async () => {
+  it('blocks Supabase RLS when a table access probe fails', async () => {
+    mockRlsProbeClient([
+      { error: null },
+      {
+        error: {
+          code: '42501',
+          message: 'permission denied for table stock_portfolio_holdings'
+        }
+      }
+    ]);
+
+    const diagnostics = await getSetupDiagnostics();
+
+    const rls = findCheck(diagnostics, 'supabase-rls');
+    expect(diagnostics.status).toBe('blocked');
+    expect(rls.status).toBe('blocked');
+    expect(rls.details).toContain(
+      'Read-only RLS probe succeeded for watchlist items.'
+    );
+    expect(rls.details).toContain(
+      'Read-only RLS probe failed for portfolio holdings: permission denied for table stock_portfolio_holdings; code 42501.'
+    );
+  });
+
+  it('warns when primary Longbridge credentials are missing', async () => {
     delete process.env.LONGPORT_ACCESS_TOKEN;
 
     const diagnostics = await getSetupDiagnostics();
 
-    const longbridge = findCheck(diagnostics, 'longbridge');
-    expect(longbridge.status).toBe('blocked');
-    expect(longbridge.details).toContain(
-      'Missing environment variables: LONGPORT_ACCESS_TOKEN.'
+    const marketData = findCheck(diagnostics, 'market-data');
+    expect(diagnostics.status).toBe('warning');
+    expect(marketData.status).toBe('warning');
+    expect(marketData.details).toContain(
+      'Missing Longbridge environment variables: LONGPORT_ACCESS_TOKEN.'
+    );
+    expect(marketData.details).toContain(
+      'Yahoo Finance fallback is available without server credentials.'
     );
     expect(JSON.stringify(diagnostics)).not.toContain('longbridge_app_secret');
   });
@@ -200,5 +281,6 @@ describe('getSetupDiagnostics', () => {
     expect(upstash.details).toContain(
       'Missing environment variables: UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN.'
     );
+    expect(JSON.stringify(diagnostics)).not.toContain('upstash_token');
   });
 });

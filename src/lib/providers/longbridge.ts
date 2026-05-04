@@ -15,14 +15,6 @@ import {
 } from './types';
 import { LONGBRIDGE_QUOTE_PROVIDER } from './config';
 import {
-  Config,
-  QuoteContext,
-  Candlestick,
-  Period,
-  AdjustType,
-  TradeSessions
-} from 'longport';
-import {
   normalizeLongbridgeError,
   sanitizeLongbridgeAPIError
 } from './longbridge-errors';
@@ -41,6 +33,48 @@ const LONG_BRIDGE_RETRY_BASE_DELAY_MS = 250;
 const LONG_BRIDGE_RETRY_MAX_DELAY_MS = 2000;
 const LONG_BRIDGE_HEALTH_CACHE_TTL_MS = 30_000;
 const LONG_BRIDGE_HEALTH_SYMBOL = 'AAPL.US';
+
+interface LongportModule {
+  Config: {
+    fromEnv(): unknown;
+  };
+  QuoteContext: {
+    new: (config: unknown) => Promise<LongportQuoteContext>;
+  };
+}
+
+interface LongportQuoteContext {
+  quote(symbols: string[]): Promise<LongportQuote[]>;
+  candlesticks(
+    symbol: string,
+    period: number,
+    count: number,
+    adjustType: number,
+    tradeSessions: number
+  ): Promise<LongportCandlestick[]>;
+}
+
+interface LongportQuote {
+  symbol: string;
+  timestamp?: Date | null;
+  lastDone: unknown;
+  prevClose: unknown;
+  volume: unknown;
+  high: unknown;
+  low: unknown;
+  open: unknown;
+}
+
+interface LongportCandlestick {
+  timestamp: Date;
+  open: unknown;
+  high: unknown;
+  low: unknown;
+  close: unknown;
+  volume: unknown;
+}
+
+let longportModulePromise: Promise<LongportModule> | undefined;
 
 export const LONGBRIDGE_PROVIDER_CAPABILITIES: ProviderCapabilities = {
   quotes: true,
@@ -110,6 +144,7 @@ export class LongbridgeProvider implements StockDataProvider {
 
     return this.executeWithResilience(
       async () => {
+        const { Config, QuoteContext } = await loadLongport();
         const config = Config.fromEnv();
         const context = await QuoteContext.new(config);
 
@@ -169,6 +204,7 @@ export class LongbridgeProvider implements StockDataProvider {
 
     return this.executeWithResilience(
       async () => {
+        const { Config, QuoteContext } = await loadLongport();
         const config = Config.fromEnv();
         const context = await QuoteContext.new(config);
 
@@ -176,14 +212,12 @@ export class LongbridgeProvider implements StockDataProvider {
 
         // Fetch candles using numeric values to avoid isolatedModules const enum issues.
         const period = LONG_BRIDGE_PERIOD_MAP[interval];
-        // AdjustType.ForwardAdjust = 1
-        // TradeSessions.All = 1
         const candlesData = await context.candlesticks(
           longbridgeSymbol,
-          period as unknown as Period,
+          period,
           LONG_BRIDGE_KLINE_COUNT,
-          1 as unknown as AdjustType,
-          1 as unknown as TradeSessions
+          1,
+          1
         );
 
         return this.transformCandlesticksToSeries(
@@ -254,6 +288,7 @@ export class LongbridgeProvider implements StockDataProvider {
 
       await this.executeWithResilience(
         async () => {
+          const { Config, QuoteContext } = await loadLongport();
           const config = Config.fromEnv();
           const context = await QuoteContext.new(config);
           const quote = await context.quote([this.healthSymbol]);
@@ -389,7 +424,7 @@ export class LongbridgeProvider implements StockDataProvider {
   }
 
   private transformCandlesticksToSeries(
-    candlesData: Candlestick[],
+    candlesData: LongportCandlestick[],
     symbol: string,
     interval: KLineInterval
   ): KLineSeries {
@@ -429,7 +464,7 @@ export class LongbridgeProvider implements StockDataProvider {
     };
   }
 
-  private isAPIError(error: any): error is APIError {
+  private isAPIError(error: unknown): error is APIError {
     const apiErrorCodes = [
       'INVALID_SYMBOL',
       'INVALID_INTERVAL',
@@ -441,10 +476,42 @@ export class LongbridgeProvider implements StockDataProvider {
     ];
 
     return (
-      error &&
+      error !== null &&
       typeof error === 'object' &&
+      'code' in error &&
+      typeof error.code === 'string' &&
       apiErrorCodes.includes(error.code) &&
       'message' in error
     );
   }
+}
+
+async function loadLongport(): Promise<LongportModule> {
+  if (isCloudflareWorkersRuntime()) {
+    throw {
+      code: 'INVALID_PROVIDER',
+      message:
+        'Longbridge native SDK is not available in Cloudflare Workers. Use the auto provider or Yahoo Finance on Cloudflare.',
+      details: {
+        provider: LONGBRIDGE_QUOTE_PROVIDER,
+        runtime: 'cloudflare-workers'
+      }
+    } as APIError;
+  }
+
+  if (!longportModulePromise) {
+    const packageName = ['long', 'port'].join('');
+    longportModulePromise = import(packageName).then(
+      (module: unknown) => module as LongportModule
+    );
+  }
+
+  return longportModulePromise;
+}
+
+function isCloudflareWorkersRuntime(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    navigator.userAgent === 'Cloudflare-Workers'
+  );
 }
