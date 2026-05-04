@@ -22,7 +22,10 @@ import {
   longbridgeRequestGuard,
   LongbridgeRequestGuard
 } from './longbridge-request-guard';
-import { createErrorLogContext } from '../observability/error-taxonomy';
+import {
+  consumeLongbridgeProviderBudget,
+  toRateLimitError
+} from '../rate-limit';
 
 const LONG_BRIDGE_KLINE_COUNT = 1000;
 const LONG_BRIDGE_MAX_ATTEMPTS = 3;
@@ -137,6 +140,7 @@ export class LongbridgeProvider implements StockDataProvider {
 
   async getQuote(symbol: string): Promise<StockQuote> {
     this.ensureConfigured();
+    await this.ensureProviderBudget('quote');
 
     return this.executeWithResilience(
       async () => {
@@ -196,6 +200,7 @@ export class LongbridgeProvider implements StockDataProvider {
     interval: KLineInterval = DEFAULT_KLINE_INTERVAL
   ): Promise<KLineSeries> {
     this.ensureConfigured();
+    await this.ensureProviderBudget('kline');
 
     return this.executeWithResilience(
       async () => {
@@ -279,6 +284,8 @@ export class LongbridgeProvider implements StockDataProvider {
     }
 
     try {
+      await this.ensureProviderBudget('health');
+
       await this.executeWithResilience(
         async () => {
           const { Config, QuoteContext } = await loadLongport();
@@ -350,30 +357,19 @@ export class LongbridgeProvider implements StockDataProvider {
         const shouldRetry = normalized.retryable && attempt < maxAttempts;
 
         if (!shouldRetry) {
-          logger.error(
-            options.logLabel,
-            createErrorLogContext(normalized.error.code, {
-              error: normalized.error,
-              attempt,
-              maxAttempts,
-              provider: 'longbridge',
-              operation: options.logLabel,
-              errorDomain: 'stock-data'
-            })
-          );
+          logger.error(options.logLabel, {
+            error: normalized.error,
+            attempt,
+            maxAttempts
+          });
           throw normalized.error;
         }
 
-        logger.warn(
-          'Longbridge transient failure; retrying',
-          createErrorLogContext(normalized.error.code, {
-            attempt,
-            maxAttempts,
-            provider: 'longbridge',
-            operation: options.logLabel,
-            errorDomain: 'stock-data'
-          })
-        );
+        logger.warn('Longbridge transient failure; retrying', {
+          code: normalized.error.code,
+          attempt,
+          maxAttempts
+        });
 
         await this.sleep(this.getRetryDelayMs(attempt, normalized.retryAfter));
       }
@@ -394,6 +390,16 @@ export class LongbridgeProvider implements StockDataProvider {
       LONG_BRIDGE_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1),
       LONG_BRIDGE_RETRY_MAX_DELAY_MS
     );
+  }
+
+  private async ensureProviderBudget(
+    kind: 'quote' | 'kline' | 'health'
+  ): Promise<void> {
+    const budget = await consumeLongbridgeProviderBudget(kind);
+
+    if (!budget.allowed) {
+      throw budget.error ?? toRateLimitError(budget);
+    }
   }
 
   private ensureConfigured(): void {

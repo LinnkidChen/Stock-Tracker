@@ -1,22 +1,22 @@
 import { NextRequest } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { CANONICAL_QUOTE_PROVIDER } from '@/lib/providers/config';
+import { getOptionalRateLimitUserId } from '@/lib/rate-limit-auth';
 import { getStockService } from '@/lib/services/stock-service';
 import {
+  createAPIError,
   createErrorResponse,
-  createRateLimitResponse,
   createSuccessResponse,
   getStatusCodeForError,
   isAPIError
 } from '@/lib/services/api-errors';
-import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
-import { createObservedError } from '@/lib/observability/error-taxonomy';
 import {
-  createObservedErrorResponse,
-  reportApiError,
-  reportObservedError
-} from '@/lib/observability/route-errors';
-import { checkRateLimit, createRateLimitHeaders } from '@/lib/rate-limit';
+  consumeStockReadRateLimit,
+  recordRateLimitTelemetry,
+  toRateLimitError
+} from '@/lib/rate-limit';
+import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -26,17 +26,25 @@ export async function GET(
     { op: 'http.server', name: 'GET /api/stocks/quote/[symbol]' },
     async (span) => {
       const requestPath = getRequestPath(request);
-      let provider: string = CANONICAL_QUOTE_PROVIDER;
-      let symbol = 'unknown';
 
       try {
-        const rateLimit = await enforceQuoteRateLimit(request, requestPath);
-        if (rateLimit.response) {
-          return rateLimit.response;
+        const rateLimitUserId = await getOptionalRateLimitUserId(requestPath);
+        const rateLimit = await consumeStockReadRateLimit(
+          request,
+          rateLimitUserId
+        );
+        recordRateLimitTelemetry(span, rateLimit);
+
+        if (!rateLimit.allowed) {
+          return createErrorResponse(
+            rateLimit.error ?? toRateLimitError(rateLimit),
+            429,
+            rateLimit.headers
+          );
         }
 
         const { symbol: rawSymbol } = await params;
-        symbol = normalizeTicker(rawSymbol);
+        const symbol = normalizeTicker(rawSymbol);
 
         span?.setAttribute('symbol', symbol);
         span?.setAttribute('path', requestPath);
@@ -44,21 +52,15 @@ export async function GET(
         // Validate the ticker symbol
         const validation = validateTicker(symbol);
         if (!validation.isValid) {
-          const error = createObservedError('INVALID_SYMBOL', {
-            message: validation.error || 'Invalid ticker symbol'
-          });
+          const error = createAPIError(
+            'INVALID_SYMBOL',
+            validation.error || 'Invalid ticker symbol'
+          );
 
-          reportObservedError({
+          logger.warn(`API Error: ${error.message}`, {
+            symbol: rawSymbol,
             code: error.code,
-            message: `API Validation Error: ${error.message}`,
-            span,
-            context: {
-              symbol: rawSymbol,
-              normalizedSymbol: symbol,
-              path: requestPath,
-              operation: 'stock.quote',
-              errorDomain: 'stock-data'
-            }
+            path: requestPath
           });
 
           return createErrorResponse(error, 400);
@@ -66,93 +68,53 @@ export async function GET(
 
         // Get the stock quote
         const url = new URL(request.url);
-        provider = url.searchParams.get('provider') || CANONICAL_QUOTE_PROVIDER;
+        const provider =
+          url.searchParams.get('provider') || CANONICAL_QUOTE_PROVIDER;
         span?.setAttribute('provider', provider);
         const stockService = getStockService();
         const quote = await stockService.getQuote(symbol, provider);
 
         return createSuccessResponse(quote, {
-          ...rateLimit.headers,
           'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30'
         });
       } catch (error) {
+        Sentry.captureException(error);
+
         // Handle APIError
         if (isAPIError(error)) {
           // Log based on severity (client error vs server error)
           const statusCode = getStatusCodeForError(error.code);
-          reportApiError(
-            error,
-            statusCode >= 500
-              ? `API Error: ${error.message}`
-              : `API Warning: ${error.message}`,
-            span,
-            {
-              path: requestPath,
-              provider,
-              symbol,
-              operation: 'stock.quote',
-              errorDomain: 'stock-data'
-            }
-          );
+          const logContext = {
+            code: error.code,
+            path: requestPath,
+            originalError: error
+          };
+
+          if (statusCode >= 500) {
+            logger.error(`API Error: ${error.message}`, logContext);
+          } else {
+            logger.warn(`API Warning: ${error.message}`, logContext);
+          }
 
           return createErrorResponse(error);
         }
 
         // Handle unexpected errors
-        reportObservedError({
-          code: 'UNKNOWN_ERROR',
-          message: 'API Unexpected Error',
-          error,
-          span,
-          context: {
-            path: requestPath,
-            provider,
-            symbol,
-            operation: 'stock.quote',
-            errorDomain: 'stock-data'
-          }
+        logger.error('API Unexpected Error', {
+          path: requestPath,
+          error
         });
 
-        return createObservedErrorResponse({ code: 'UNKNOWN_ERROR' });
+        return createErrorResponse(
+          {
+            code: 'UNKNOWN_ERROR',
+            message: 'An unexpected error occurred'
+          },
+          500
+        );
       }
     }
   );
-}
-
-async function enforceQuoteRateLimit(request: NextRequest, path: string) {
-  try {
-    const result = await checkRateLimit(request, 'quote');
-    const headers = createRateLimitHeaders(result);
-
-    if (!result.allowed) {
-      return {
-        response: createRateLimitResponse(result.retryAfter, headers),
-        headers
-      };
-    }
-
-    return { headers };
-  } catch (error) {
-    reportObservedError({
-      code: 'RATE_LIMIT_UNAVAILABLE',
-      message: 'Quote API rate limiter unavailable',
-      error,
-      context: {
-        path,
-        operation: 'stock.quote',
-        errorDomain: 'stock-data'
-      }
-    });
-
-    return {
-      response: createObservedErrorResponse({
-        code: 'RATE_LIMIT_UNAVAILABLE',
-        message: 'Rate limit service unavailable',
-        statusCode: 503
-      }),
-      headers: {}
-    };
-  }
 }
 
 function getRequestPath(request: NextRequest): string {

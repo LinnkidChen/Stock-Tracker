@@ -2,8 +2,9 @@
  * @jest-environment jsdom
  */
 import { GET } from '../route';
-import { checkRateLimit } from '@/lib/rate-limit';
 import { getStockService } from '@/lib/services/stock-service';
+import { getOptionalRateLimitUserId } from '@/lib/rate-limit-auth';
+import { consumeStockReadRateLimit } from '@/lib/rate-limit';
 import { validateTicker, normalizeTicker } from '@/lib/validation/ticker';
 import { APIResponse, KLineSeries } from '@/lib/types/stock-api';
 import {
@@ -47,29 +48,28 @@ jest.mock('@sentry/nextjs', () => ({
   captureException: jest.fn()
 }));
 
-jest.mock('@/lib/rate-limit', () => ({
-  checkRateLimit: jest.fn(),
-  createRateLimitHeaders: jest.fn((result) =>
-    result.retryAfter
-      ? {
-          'Retry-After': String(result.retryAfter),
-          'X-RateLimit-Limit': String(result.limit),
-          'X-RateLimit-Remaining': String(result.remaining),
-          'X-RateLimit-Reset': String(Math.ceil(result.resetAt / 1000))
-        }
-      : {}
-  )
-}));
-
 jest.mock('@/lib/services/stock-service');
+jest.mock('@/lib/rate-limit-auth', () => ({
+  getOptionalRateLimitUserId: jest.fn()
+}));
+jest.mock('@/lib/rate-limit', () => ({
+  consumeStockReadRateLimit: jest.fn(),
+  recordRateLimitTelemetry: jest.fn(),
+  toRateLimitError: jest.fn((result) => result.error)
+}));
 jest.mock('@/lib/validation/ticker');
 
-const mockCheckRateLimit = checkRateLimit as jest.MockedFunction<
-  typeof checkRateLimit
->;
 const mockGetStockService = getStockService as jest.MockedFunction<
   typeof getStockService
 >;
+const mockGetOptionalRateLimitUserId =
+  getOptionalRateLimitUserId as jest.MockedFunction<
+    typeof getOptionalRateLimitUserId
+  >;
+const mockConsumeStockReadRateLimit =
+  consumeStockReadRateLimit as jest.MockedFunction<
+    typeof consumeStockReadRateLimit
+  >;
 const mockValidateTicker = validateTicker as jest.MockedFunction<
   typeof validateTicker
 >;
@@ -104,15 +104,16 @@ const mockSeries: KLineSeries = {
 describe('/api/stocks/kline/[symbol] API Route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCheckRateLimit.mockResolvedValue({
-      allowed: true,
-      limit: 60,
-      windowSeconds: 60,
-      remaining: 59,
-      resetAt: Date.now() + 60_000,
-      source: 'supabase'
-    });
     mockGetStockService.mockReturnValue(mockStockServiceInstance as any);
+    mockGetOptionalRateLimitUserId.mockResolvedValue(null);
+    mockConsumeStockReadRateLimit.mockResolvedValue({
+      allowed: true,
+      degraded: false,
+      policy: 'anonymousStockReads',
+      scope: 'stock-read',
+      subject: { type: 'ip', id: '127.0.0.1' },
+      source: 'upstash'
+    });
     mockNormalizeTicker.mockImplementation((value: string) =>
       value.trim().toUpperCase()
     );
@@ -147,18 +148,35 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
     expect(response.headers.get('Cache-Control')).toBe(
       'public, s-maxage=86400, stale-while-revalidate=604800'
     );
-    expect(mockCheckRateLimit).toHaveBeenCalledWith(expect.anything(), 'kline');
+    expect(mockConsumeStockReadRateLimit).toHaveBeenCalledWith(
+      expect.anything(),
+      null
+    );
   });
 
-  it('returns 429 when the shared limiter rejects the kline request', async () => {
-    mockCheckRateLimit.mockResolvedValue({
+  it('returns a structured 429 when the stock read limiter denies the request', async () => {
+    mockConsumeStockReadRateLimit.mockResolvedValueOnce({
       allowed: false,
-      limit: 60,
-      windowSeconds: 60,
+      degraded: false,
+      policy: 'anonymousStockReads',
+      scope: 'stock-read',
+      subject: { type: 'ip', id: '127.0.0.1' },
+      source: 'upstash',
+      limit: 120,
       remaining: 0,
-      resetAt: Date.now() + 9_000,
-      retryAfter: 9,
-      source: 'supabase'
+      reset: 6000,
+      retryAfter: 5,
+      headers: {
+        'Retry-After': '5',
+        'RateLimit-Limit': '120',
+        'RateLimit-Remaining': '0',
+        'RateLimit-Reset': '6'
+      },
+      error: {
+        code: 'API_LIMIT_EXCEEDED',
+        message: 'Rate limit exceeded. Please try again later.',
+        details: { retryAfter: 5 }
+      }
     });
 
     const response = await GET(
@@ -170,8 +188,8 @@ describe('/api/stocks/kline/[symbol] API Route', () => {
     const responseData: APIResponse<null> = await response.json();
 
     expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('5');
     expect(responseData.error?.code).toBe('API_LIMIT_EXCEEDED');
-    expect(response.headers.get('Retry-After')).toBe('9');
     expect(mockStockServiceInstance.getKLineSeries).not.toHaveBeenCalled();
   });
 

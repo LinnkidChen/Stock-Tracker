@@ -207,10 +207,16 @@ cp env.example.txt .env.local
   `LONGPORT_ACCESS_TOKEN`, `LONGPORT_REGION`. If these are missing, auto
   routing can still fall back to the no-credential Yahoo Finance adapter.
 - Supabase: `NEXT_PUBLIC_SUPABASE_URL`,
-  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`,
-  `SUPABASE_SERVICE_ROLE_KEY`
-- Rate limiting: apply `database_schema/api_rate_limits.sql`, then tune
-  `RATE_LIMIT_*` values if the defaults are not appropriate for the deployment.
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
+- Upstash Redis for distributed rate limits and Longbridge provider budgets:
+  `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`. Rate limiting fails
+  open when these are missing.
+- Rate limiting: tune `RATE_LIMIT_*` and `LONGBRIDGE_*_BUDGET_*` values if the
+  defaults are not appropriate for the deployment.
+- Supabase schema: apply `database_schema/watchlist.sql` and
+  `database_schema/portfolio.sql`.
+- Supabase auth integration: Clerk must have a JWT template named `supabase`,
+  and Supabase must verify Clerk-issued JWTs.
 - Sentry: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`,
   `NEXT_PUBLIC_SENTRY_DISABLED`
 

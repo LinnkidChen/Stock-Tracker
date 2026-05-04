@@ -13,7 +13,10 @@ import {
   validatePortfolioHoldingBody
 } from '@/lib/portfolio/validation';
 import { PORTFOLIO_AUTH_MISCONFIGURED_REMEDIATION } from '@/lib/portfolio/api-errors';
-import { enforcePortfolioRateLimit } from '@/lib/portfolio/api-rate-limit';
+import {
+  enforcePortfolioMutationAttemptLimit,
+  enforcePortfolioRateLimit
+} from '@/lib/portfolio/api-rate-limit';
 import {
   reportAndCreateObservedErrorResponse,
   toPersistenceErrorCode
@@ -108,17 +111,30 @@ export async function PATCH(
   return Sentry.startSpan(
     { op: 'http.server', name: 'PATCH /api/portfolio/holdings/[id]' },
     async (span) => {
-      const { userId } = await auth();
-      const rateLimitResponse = await enforcePortfolioRateLimit(req, userId);
-      if (rateLimitResponse) {
-        return rateLimitResponse;
+      const attemptLimitResponse = await enforcePortfolioMutationAttemptLimit(
+        req,
+        span
+      );
+      if (attemptLimitResponse) {
+        return attemptLimitResponse;
       }
+
+      const { userId } = await auth();
 
       if (!userId) {
         return createUnauthenticatedError(span, {
           path: '/api/portfolio/holdings/[id]',
           operation: 'portfolio.update'
         });
+      }
+
+      const rateLimitResponse = await enforcePortfolioRateLimit(
+        req,
+        userId,
+        span
+      );
+      if (rateLimitResponse) {
+        return rateLimitResponse;
       }
 
       const { id } = await params;
@@ -221,17 +237,30 @@ export async function DELETE(
   return Sentry.startSpan(
     { op: 'http.server', name: 'DELETE /api/portfolio/holdings/[id]' },
     async (span) => {
-      const { userId } = await auth();
-      const rateLimitResponse = await enforcePortfolioRateLimit(req, userId);
-      if (rateLimitResponse) {
-        return rateLimitResponse;
+      const attemptLimitResponse = await enforcePortfolioMutationAttemptLimit(
+        req,
+        span
+      );
+      if (attemptLimitResponse) {
+        return attemptLimitResponse;
       }
+
+      const { userId } = await auth();
 
       if (!userId) {
         return createUnauthenticatedError(span, {
           path: '/api/portfolio/holdings/[id]',
           operation: 'portfolio.delete'
         });
+      }
+
+      const rateLimitResponse = await enforcePortfolioRateLimit(
+        req,
+        userId,
+        span
+      );
+      if (rateLimitResponse) {
+        return rateLimitResponse;
       }
 
       const { id } = await params;

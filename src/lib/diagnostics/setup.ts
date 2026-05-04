@@ -16,6 +16,7 @@ export type DiagnosticCheckId =
   | 'supabase'
   | 'supabase-rls'
   | 'market-data'
+  | 'upstash'
   | 'observability';
 
 export interface SetupDiagnosticCheck {
@@ -82,6 +83,11 @@ const LONGBRIDGE_ENV_KEYS = [
   'LONGPORT_APP_KEY',
   'LONGPORT_APP_SECRET',
   'LONGPORT_ACCESS_TOKEN'
+] as const;
+
+const UPSTASH_ENV_KEYS = [
+  'UPSTASH_REDIS_REST_URL',
+  'UPSTASH_REDIS_REST_TOKEN'
 ] as const;
 
 const RLS_PROBE_TARGETS: RlsProbeTarget[] = [
@@ -524,6 +530,35 @@ function createMarketDataCheck(): SetupDiagnosticCheck {
   };
 }
 
+function createUpstashCheck(): SetupDiagnosticCheck {
+  const missingKeys = getMissingEnvKeys(UPSTASH_ENV_KEYS);
+  const details =
+    missingKeys.length > 0
+      ? [`Missing environment variables: ${joinKeys(missingKeys)}.`]
+      : ['Required Upstash Redis environment variables are present.'];
+
+  if (missingKeys.length > 0) {
+    return {
+      id: 'upstash',
+      title: 'Upstash Redis',
+      status: 'warning',
+      summary: 'Distributed API rate limiting is running in fail-open mode.',
+      details,
+      remediation:
+        'Configure Upstash Redis REST URL and token to enforce shared rate limits across instances.'
+    };
+  }
+
+  return {
+    id: 'upstash',
+    title: 'Upstash Redis',
+    status: 'ready',
+    summary: 'Distributed rate limiting configuration is ready.',
+    details,
+    remediation: null
+  };
+}
+
 function createObservabilityCheck(): SetupDiagnosticCheck {
   return {
     id: 'observability',
@@ -587,6 +622,7 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
     supabaseResult.check,
     await createSupabaseRlsCheck(authState, supabaseResult),
     createMarketDataCheck(),
+    createUpstashCheck(),
     createObservabilityCheck()
   ];
   const status = getOverallStatus(checks);

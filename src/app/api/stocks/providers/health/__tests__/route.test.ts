@@ -2,12 +2,11 @@
  * @jest-environment jsdom
  */
 import { GET } from '../route';
+import { getOptionalRateLimitUserId } from '@/lib/rate-limit-auth';
+import { consumeStockReadRateLimit } from '@/lib/rate-limit';
 import { StockProviderFactory } from '@/lib/providers/factory';
 import { APIResponse } from '@/lib/types/stock-api';
-import {
-  ProviderHealthCheck,
-  ProviderHealthReport
-} from '@/lib/providers/types';
+import { ProviderHealthCheck } from '@/lib/providers/types';
 import { createMockRequest } from '../../../__tests__/request-fixtures';
 
 jest.mock('next/server', () => ({
@@ -42,17 +41,28 @@ jest.mock('@sentry/nextjs', () => ({
 
 jest.mock('@/lib/providers/factory', () => ({
   StockProviderFactory: {
-    getProvider: jest.fn(),
-    getProviderHealthReport: jest.fn()
+    getProvider: jest.fn()
   }
+}));
+jest.mock('@/lib/rate-limit-auth', () => ({
+  getOptionalRateLimitUserId: jest.fn()
+}));
+jest.mock('@/lib/rate-limit', () => ({
+  consumeStockReadRateLimit: jest.fn(),
+  recordRateLimitTelemetry: jest.fn(),
+  toRateLimitError: jest.fn((result) => result.error)
 }));
 
 const mockGetProvider = StockProviderFactory.getProvider as jest.MockedFunction<
   typeof StockProviderFactory.getProvider
 >;
-const mockGetProviderHealthReport =
-  StockProviderFactory.getProviderHealthReport as jest.MockedFunction<
-    typeof StockProviderFactory.getProviderHealthReport
+const mockGetOptionalRateLimitUserId =
+  getOptionalRateLimitUserId as jest.MockedFunction<
+    typeof getOptionalRateLimitUserId
+  >;
+const mockConsumeStockReadRateLimit =
+  consumeStockReadRateLimit as jest.MockedFunction<
+    typeof consumeStockReadRateLimit
   >;
 
 const mockProvider = {
@@ -63,53 +73,20 @@ describe('/api/stocks/providers/health API Route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetProvider.mockReturnValue(mockProvider as any);
+    mockGetOptionalRateLimitUserId.mockResolvedValue(null);
+    mockConsumeStockReadRateLimit.mockResolvedValue({
+      allowed: true,
+      degraded: false,
+      policy: 'anonymousStockReads',
+      scope: 'stock-read',
+      subject: { type: 'ip', id: '127.0.0.1' },
+      source: 'upstash'
+    });
   });
 
-  it('returns the auto provider health report by default', async () => {
-    const health: ProviderHealthReport = {
-      provider: 'Auto',
-      providerId: 'auto',
-      status: 'healthy',
-      checkedAt: '2024-01-01T00:00:00.000Z',
-      fallbackOrder: ['longbridge', 'yahoo'],
-      providers: [
-        {
-          provider: 'Longbridge',
-          providerId: 'longbridge',
-          status: 'healthy',
-          latencyMs: 12,
-          checkedAt: '2024-01-01T00:00:00.000Z'
-        },
-        {
-          provider: 'Yahoo Finance',
-          providerId: 'yahoo',
-          status: 'healthy',
-          latencyMs: 8,
-          checkedAt: '2024-01-01T00:00:00.000Z'
-        }
-      ],
-      metadata: []
-    };
-    mockGetProviderHealthReport.mockResolvedValue(health);
-
-    const response = await GET(
-      createMockRequest('http://localhost:3000/api/stocks/providers/health')
-    );
-    const responseData: APIResponse<ProviderHealthReport> =
-      await response.json();
-
-    expect(response.status).toBe(200);
-    expect(responseData.success).toBe(true);
-    expect(responseData.data).toEqual(health);
-    expect(response.headers.get('Cache-Control')).toBe('no-store');
-    expect(mockGetProviderHealthReport).toHaveBeenCalledTimes(1);
-    expect(mockGetProvider).not.toHaveBeenCalled();
-  });
-
-  it('returns a concrete provider status when requested', async () => {
+  it('returns healthy provider status', async () => {
     const health: ProviderHealthCheck = {
       provider: 'Longbridge',
-      providerId: 'longbridge',
       status: 'healthy',
       latencyMs: 12,
       checkedAt: '2024-01-01T00:00:00.000Z',
@@ -128,8 +105,50 @@ describe('/api/stocks/providers/health API Route', () => {
       await response.json();
 
     expect(response.status).toBe(200);
+    expect(responseData.success).toBe(true);
     expect(responseData.data).toEqual(health);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(mockGetProvider).toHaveBeenCalledWith('longbridge');
+    expect(mockConsumeStockReadRateLimit).toHaveBeenCalledWith(
+      expect.anything(),
+      null
+    );
+  });
+
+  it('returns 429 when the stock read limiter denies the request', async () => {
+    mockConsumeStockReadRateLimit.mockResolvedValueOnce({
+      allowed: false,
+      degraded: false,
+      policy: 'anonymousStockReads',
+      scope: 'stock-read',
+      subject: { type: 'ip', id: '127.0.0.1' },
+      source: 'upstash',
+      limit: 120,
+      remaining: 0,
+      reset: 6000,
+      retryAfter: 5,
+      headers: {
+        'Retry-After': '5',
+        'RateLimit-Limit': '120',
+        'RateLimit-Remaining': '0',
+        'RateLimit-Reset': '6'
+      },
+      error: {
+        code: 'API_LIMIT_EXCEEDED',
+        message: 'Rate limit exceeded. Please try again later.',
+        details: { retryAfter: 5 }
+      }
+    });
+
+    const response = await GET(
+      createMockRequest('http://localhost:3000/api/stocks/providers/health')
+    );
+    const responseData: APIResponse<null> = await response.json();
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('5');
+    expect(responseData.error?.code).toBe('API_LIMIT_EXCEEDED');
+    expect(mockGetProvider).not.toHaveBeenCalled();
   });
 
   it('returns degraded provider status', async () => {
@@ -146,9 +165,7 @@ describe('/api/stocks/providers/health API Route', () => {
     mockProvider.healthCheck.mockResolvedValue(health);
 
     const response = await GET(
-      createMockRequest(
-        'http://localhost:3000/api/stocks/providers/health?provider=longbridge'
-      )
+      createMockRequest('http://localhost:3000/api/stocks/providers/health')
     );
     const responseData: APIResponse<ProviderHealthCheck> =
       await response.json();
@@ -173,9 +190,7 @@ describe('/api/stocks/providers/health API Route', () => {
     mockProvider.healthCheck.mockResolvedValue(health);
 
     const response = await GET(
-      createMockRequest(
-        'http://localhost:3000/api/stocks/providers/health?provider=longbridge'
-      )
+      createMockRequest('http://localhost:3000/api/stocks/providers/health')
     );
     const responseData: APIResponse<ProviderHealthCheck> =
       await response.json();

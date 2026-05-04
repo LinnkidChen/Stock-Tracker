@@ -1,306 +1,524 @@
-import { logger } from '@/lib/logger';
+import { Ratelimit, type Duration } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+import { logger } from './logger';
+import type { APIError } from './types/stock-api';
 
-export type RateLimitScope =
-  | 'quote'
-  | 'kline'
-  | 'watchlist'
-  | 'portfolio'
-  | 'stream';
+export type RateLimitSubjectType = 'ip' | 'user' | 'global';
 
-export interface RateLimitPolicy {
+export interface RateLimitSubject {
+  type: RateLimitSubjectType;
+  id: string;
+}
+
+type RateLimitSource = 'upstash' | 'disabled' | 'error';
+
+export type RateLimitPolicyName =
+  | 'anonymousStockReads'
+  | 'authenticatedStockReads'
+  | 'mutationAttemptsByIp'
+  | 'authenticatedMutations'
+  | 'webSocketUpgrades'
+  | 'longbridgeQuoteBudget'
+  | 'longbridgeKlineBudget'
+  | 'longbridgeHealthBudget'
+  | 'longbridgeDailyBudget';
+
+interface RateLimitPolicy {
+  key: string;
+  scope: string;
+  envKey: string;
+  defaultLimit: number;
+  window: Duration;
+}
+
+interface ResolvedRateLimitPolicy extends RateLimitPolicy {
   limit: number;
-  windowSeconds: number;
 }
 
-export interface RateLimitResult extends RateLimitPolicy {
-  allowed: boolean;
+interface UpstashLimitResponse {
+  success: boolean;
+  limit: number;
   remaining: number;
-  resetAt: number;
+  reset: number;
+  pending?: Promise<unknown>;
+  reason?: string;
+}
+
+export interface RateLimitResult {
+  allowed: boolean;
+  policy: RateLimitPolicyName;
+  scope: string;
+  subject: RateLimitSubject;
+  source: RateLimitSource;
+  degraded: boolean;
+  limit?: number;
+  remaining?: number;
+  reset?: number;
   retryAfter?: number;
-  source: 'supabase' | 'disabled';
+  reason?: string;
+  headers?: Record<string, string>;
+  error?: APIError;
 }
 
-type SupabaseRateLimitRow = {
-  allowed?: unknown;
-  remaining?: unknown;
-  reset_at?: unknown;
-  retry_after_seconds?: unknown;
-};
+export interface RateLimitTelemetryTarget {
+  setAttribute?: (key: string, value: string | number | boolean) => void;
+}
 
-const DEFAULT_RATE_LIMIT_POLICIES: Record<RateLimitScope, RateLimitPolicy> = {
-  quote: { limit: 120, windowSeconds: 60 },
-  kline: { limit: 60, windowSeconds: 60 },
-  watchlist: { limit: 60, windowSeconds: 60 },
-  portfolio: { limit: 60, windowSeconds: 60 },
-  stream: { limit: 20, windowSeconds: 60 }
-};
+const DEFAULT_WS_MAX_SYMBOLS = 30;
 
-export class RateLimitUnavailableError extends Error {
-  constructor(
-    message: string,
-    public readonly details?: Record<string, unknown>
-  ) {
-    super(message);
-    this.name = 'RateLimitUnavailableError';
+const RATE_LIMIT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
+  anonymousStockReads: {
+    key: 'stock-read-anonymous',
+    scope: 'stock-read',
+    envKey: 'RATE_LIMIT_ANON_STOCK_READS_PER_MINUTE',
+    defaultLimit: 120,
+    window: '60 s'
+  },
+  authenticatedStockReads: {
+    key: 'stock-read-authenticated',
+    scope: 'stock-read',
+    envKey: 'RATE_LIMIT_AUTH_STOCK_READS_PER_MINUTE',
+    defaultLimit: 300,
+    window: '60 s'
+  },
+  mutationAttemptsByIp: {
+    key: 'mutation-attempt-ip',
+    scope: 'mutation-attempt',
+    envKey: 'RATE_LIMIT_MUTATION_ATTEMPTS_PER_MINUTE',
+    defaultLimit: 30,
+    window: '60 s'
+  },
+  authenticatedMutations: {
+    key: 'mutation-authenticated',
+    scope: 'mutation-authenticated',
+    envKey: 'RATE_LIMIT_AUTH_MUTATIONS_PER_MINUTE',
+    defaultLimit: 60,
+    window: '60 s'
+  },
+  webSocketUpgrades: {
+    key: 'websocket-upgrade',
+    scope: 'websocket-upgrade',
+    envKey: 'RATE_LIMIT_WS_UPGRADES_PER_MINUTE',
+    defaultLimit: 30,
+    window: '60 s'
+  },
+  longbridgeQuoteBudget: {
+    key: 'longbridge-quote',
+    scope: 'provider-budget',
+    envKey: 'LONGBRIDGE_QUOTE_BUDGET_PER_MINUTE',
+    defaultLimit: 600,
+    window: '60 s'
+  },
+  longbridgeKlineBudget: {
+    key: 'longbridge-kline',
+    scope: 'provider-budget',
+    envKey: 'LONGBRIDGE_KLINE_BUDGET_PER_MINUTE',
+    defaultLimit: 60,
+    window: '60 s'
+  },
+  longbridgeHealthBudget: {
+    key: 'longbridge-health',
+    scope: 'provider-budget',
+    envKey: 'LONGBRIDGE_HEALTH_BUDGET_PER_MINUTE',
+    defaultLimit: 30,
+    window: '60 s'
+  },
+  longbridgeDailyBudget: {
+    key: 'longbridge-daily',
+    scope: 'provider-budget',
+    envKey: 'LONGBRIDGE_DAILY_BUDGET',
+    defaultLimit: 20_000,
+    window: '1 d'
   }
+};
+
+const SAFE_IP_HEADERS = [
+  'x-forwarded-for',
+  'x-real-ip',
+  'cf-connecting-ip',
+  'true-client-ip'
+] as const;
+
+const limiterCache = new Map<string, Ratelimit>();
+const degradedWarningKeys = new Set<string>();
+let redisClient: Redis | null | undefined;
+
+export function getRateLimitConfig() {
+  const policies = Object.fromEntries(
+    Object.entries(RATE_LIMIT_POLICIES).map(([name, policy]) => [
+      name,
+      resolvePolicy(policy as RateLimitPolicy)
+    ])
+  ) as Record<RateLimitPolicyName, ResolvedRateLimitPolicy>;
+
+  return {
+    upstashConfigured: hasUpstashRedisConfig(),
+    webSocketMaxSymbols: getWebSocketMaxSymbols(),
+    policies
+  };
 }
 
-export async function checkRateLimit(
-  request: Request,
-  scope: RateLimitScope,
-  options: { subject?: string | null } = {}
-): Promise<RateLimitResult> {
-  const policy = getRateLimitPolicy(scope);
-  const config = getSupabaseRateLimitConfig();
+export function getClientIp(request: Request): string {
+  for (const header of SAFE_IP_HEADERS) {
+    const value = request.headers.get(header);
+    const candidate = value?.split(',')[0]?.trim();
+    if (candidate) {
+      return candidate;
+    }
+  }
 
-  if (isRateLimitDisabled(config)) {
+  const nextRequestIp = (request as Request & { ip?: string }).ip?.trim();
+  return nextRequestIp || 'anonymous';
+}
+
+export function createRateLimitSubject(
+  request: Request,
+  userId?: string | null
+): RateLimitSubject {
+  if (userId) {
     return {
-      allowed: true,
-      remaining: policy.limit,
-      resetAt: Date.now() + policy.windowSeconds * 1000,
-      source: 'disabled',
-      ...policy
+      type: 'user',
+      id: userId
     };
   }
 
-  if (!config) {
-    throw new RateLimitUnavailableError('Rate limit store is not configured', {
-      scope,
-      requiredEnv: ['NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']
-    });
-  }
-
-  const identity = getRateLimitIdentity(request, options.subject);
-  const bucketKey = await createBucketKey(scope, identity);
-  const endpoint = new URL(
-    '/rest/v1/rpc/check_api_rate_limit',
-    config.supabaseUrl
-  );
-
-  let response: Response;
-  try {
-    response = await fetch(endpoint.toString(), {
-      method: 'POST',
-      headers: {
-        apikey: config.serviceRoleKey,
-        Authorization: `Bearer ${config.serviceRoleKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        p_bucket_key: bucketKey,
-        p_limit: policy.limit,
-        p_window_seconds: policy.windowSeconds
-      }),
-      cache: 'no-store'
-    });
-  } catch (error) {
-    throw new RateLimitUnavailableError('Rate limit store request failed', {
-      scope,
-      error
-    });
-  }
-
-  if (!response.ok) {
-    const body = await readResponseBody(response);
-    logger.error('Rate limit store returned an error', {
-      scope,
-      status: response.status,
-      body
-    });
-
-    throw new RateLimitUnavailableError('Rate limit store returned an error', {
-      scope,
-      status: response.status
-    });
-  }
-
-  const payload = await response.json();
-  return parseSupabaseRateLimitResult(payload, policy);
-}
-
-export function createRateLimitHeaders(
-  result: RateLimitResult
-): Record<string, string> {
-  if (result.source === 'disabled') {
-    return {};
-  }
-
-  const headers: Record<string, string> = {
-    'X-RateLimit-Limit': String(result.limit),
-    'X-RateLimit-Remaining': String(result.remaining),
-    'X-RateLimit-Reset': String(Math.ceil(result.resetAt / 1000))
+  return {
+    type: 'ip',
+    id: getClientIp(request)
   };
-
-  if (result.retryAfter) {
-    headers['Retry-After'] = String(result.retryAfter);
-  }
-
-  return headers;
 }
 
-export function getRateLimitIdentity(
+export async function consumeStockReadRateLimit(
   request: Request,
-  subject?: string | null
-): string {
-  if (subject) {
-    return `user:${subject}`;
-  }
+  userId?: string | null
+): Promise<RateLimitResult> {
+  const subject = createRateLimitSubject(request, userId);
+  const policy =
+    subject.type === 'user' ? 'authenticatedStockReads' : 'anonymousStockReads';
 
-  const headers = request.headers;
-  const forwardedFor = headers.get('x-forwarded-for');
-  const forwardedIp = forwardedFor?.split(',')[0]?.trim();
-  const ip =
-    headers.get('cf-connecting-ip') ||
-    headers.get('x-real-ip') ||
-    headers.get('x-vercel-forwarded-for') ||
-    forwardedIp ||
-    'anonymous';
-  const userAgent = headers.get('user-agent')?.slice(0, 120) || 'unknown';
-
-  return `ip:${ip}:ua:${userAgent}`;
+  return consumeRateLimit(policy, subject, request);
 }
 
-function getRateLimitPolicy(scope: RateLimitScope): RateLimitPolicy {
-  const defaults = DEFAULT_RATE_LIMIT_POLICIES[scope];
-  const envPrefix = `RATE_LIMIT_${scope.toUpperCase()}`;
-
-  return {
-    limit:
-      parsePositiveInteger(process.env[`${envPrefix}_LIMIT`]) ?? defaults.limit,
-    windowSeconds:
-      parsePositiveInteger(process.env[`${envPrefix}_WINDOW_SECONDS`]) ??
-      defaults.windowSeconds
-  };
-}
-
-function getSupabaseRateLimitConfig(): {
-  supabaseUrl: string;
-  serviceRoleKey: string;
-} | null {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return null;
-  }
-
-  return { supabaseUrl, serviceRoleKey };
-}
-
-function isRateLimitDisabled(
-  config: ReturnType<typeof getSupabaseRateLimitConfig>
-): boolean {
-  const explicitValue = process.env.RATE_LIMIT_DISABLED?.toLowerCase();
-  if (explicitValue === 'true' || explicitValue === '1') {
-    return true;
-  }
-
-  return !config && process.env.NODE_ENV !== 'production';
-}
-
-async function createBucketKey(
-  scope: RateLimitScope,
-  identity: string
-): Promise<string> {
-  const salt = process.env.RATE_LIMIT_KEY_SALT || 'stock-tracker';
-  return `${scope}:${await hashValue(`${salt}:${identity}`)}`;
-}
-
-async function hashValue(value: string): Promise<string> {
-  if (globalThis.crypto?.subtle) {
-    const digest = await globalThis.crypto.subtle.digest(
-      'SHA-256',
-      new TextEncoder().encode(value)
-    );
-
-    return Array.from(new Uint8Array(digest))
-      .map((byte) => byte.toString(16).padStart(2, '0'))
-      .join('');
-  }
-
-  return fallbackHash(value);
-}
-
-function fallbackHash(value: string): string {
-  let hash = 0x811c9dc5;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-
-  return (hash >>> 0).toString(16).padStart(8, '0');
-}
-
-function parseSupabaseRateLimitResult(
-  payload: unknown,
-  policy: RateLimitPolicy
-): RateLimitResult {
-  const row = (Array.isArray(payload) ? payload[0] : payload) as
-    | SupabaseRateLimitRow
-    | undefined;
-
-  if (!row || typeof row.allowed !== 'boolean') {
-    throw new RateLimitUnavailableError(
-      'Rate limit store returned an invalid response'
-    );
-  }
-
-  const resetAt = parseResetAt(row.reset_at);
-  const remaining = Math.max(0, parseInteger(row.remaining) ?? 0);
-  const retryAfter =
-    parsePositiveInteger(row.retry_after_seconds) ??
-    (!row.allowed
-      ? Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))
-      : undefined);
-
-  return {
-    allowed: row.allowed,
-    remaining,
-    resetAt,
-    retryAfter,
-    source: 'supabase',
-    ...policy
-  };
-}
-
-function parseResetAt(value: unknown): number {
-  if (typeof value === 'string') {
-    const parsed = Date.parse(value);
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
-  }
-
-  throw new RateLimitUnavailableError(
-    'Rate limit store returned an invalid reset timestamp'
+export async function consumeMutationAttemptRateLimit(
+  request: Request
+): Promise<RateLimitResult> {
+  return consumeRateLimit(
+    'mutationAttemptsByIp',
+    { type: 'ip', id: getClientIp(request) },
+    request
   );
 }
 
-function parsePositiveInteger(value: unknown): number | undefined {
-  const parsed = parseInteger(value);
-  return parsed && parsed > 0 ? parsed : undefined;
+export async function consumeAuthenticatedMutationRateLimit(
+  request: Request,
+  userId: string
+): Promise<RateLimitResult> {
+  return consumeRateLimit(
+    'authenticatedMutations',
+    { type: 'user', id: userId },
+    request
+  );
 }
 
-function parseInteger(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isSafeInteger(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    if (Number.isSafeInteger(parsed)) {
-      return parsed;
-    }
-  }
-
-  return undefined;
+export async function consumeWebSocketUpgradeRateLimit(
+  request: Request
+): Promise<RateLimitResult> {
+  return consumeRateLimit(
+    'webSocketUpgrades',
+    { type: 'ip', id: getClientIp(request) },
+    request
+  );
 }
 
-async function readResponseBody(response: Response): Promise<string> {
+export async function consumeLongbridgeProviderBudget(
+  kind: 'quote' | 'kline' | 'health'
+): Promise<RateLimitResult> {
+  const specificPolicy: RateLimitPolicyName =
+    kind === 'quote'
+      ? 'longbridgeQuoteBudget'
+      : kind === 'kline'
+        ? 'longbridgeKlineBudget'
+        : 'longbridgeHealthBudget';
+  const subject: RateLimitSubject = { type: 'global', id: 'global' };
+  const specificResult = await consumeRateLimit(specificPolicy, subject);
+
+  if (!specificResult.allowed) {
+    return specificResult;
+  }
+
+  return consumeRateLimit('longbridgeDailyBudget', subject);
+}
+
+export async function consumeRateLimit(
+  policyName: RateLimitPolicyName,
+  subject: RateLimitSubject,
+  request?: Request
+): Promise<RateLimitResult> {
+  const policy = resolvePolicy(RATE_LIMIT_POLICIES[policyName]);
+  const baseResult = createBaseResult(policyName, policy, subject);
+
+  if (!hasUpstashRedisConfig()) {
+    return {
+      ...baseResult,
+      allowed: true,
+      degraded: true,
+      source: 'disabled',
+      limit: policy.limit
+    };
+  }
+
   try {
-    return await response.text();
-  } catch {
-    return '';
+    const limiter = getLimiter(policyName, policy);
+    const response = (await limiter.limit(createIdentifier(policy, subject), {
+      ip:
+        subject.type === 'ip'
+          ? subject.id
+          : getRequestHeader(request, 'x-forwarded-for'),
+      userAgent: getRequestHeader(request, 'user-agent')
+    })) as UpstashLimitResponse;
+
+    void response.pending?.catch((error) => {
+      logger.warn('Rate limit background task failed', {
+        error,
+        scope: policy.scope,
+        policy: policy.key
+      });
+    });
+
+    const degraded = response.reason === 'timeout';
+    if (degraded) {
+      warnDegradedOnce(policy.key, 'Rate limiter timed out; request allowed', {
+        scope: policy.scope,
+        policy: policy.key
+      });
+    }
+
+    if (response.success) {
+      return {
+        ...baseResult,
+        allowed: true,
+        degraded,
+        source: 'upstash',
+        limit: response.limit,
+        remaining: response.remaining,
+        reset: response.reset,
+        reason: response.reason
+      };
+    }
+
+    const retryAfter = getRetryAfterSeconds(response.reset);
+    const deniedResult: RateLimitResult = {
+      ...baseResult,
+      allowed: false,
+      degraded: false,
+      source: 'upstash',
+      limit: response.limit,
+      remaining: Math.max(0, response.remaining),
+      reset: response.reset,
+      retryAfter,
+      reason: response.reason,
+      headers: createRateLimitHeaders({
+        limit: response.limit,
+        remaining: response.remaining,
+        reset: response.reset,
+        retryAfter
+      })
+    };
+
+    return {
+      ...deniedResult,
+      error: toRateLimitError(deniedResult)
+    };
+  } catch (error) {
+    warnDegradedOnce(policy.key, 'Rate limiter unavailable; request allowed', {
+      error,
+      scope: policy.scope,
+      policy: policy.key
+    });
+
+    return {
+      ...baseResult,
+      allowed: true,
+      degraded: true,
+      source: 'error',
+      limit: policy.limit
+    };
   }
+}
+
+export function toRateLimitError(result: RateLimitResult): APIError {
+  return {
+    code: 'API_LIMIT_EXCEEDED',
+    message: 'Rate limit exceeded. Please try again later.',
+    details: {
+      retryAfter: result.retryAfter,
+      limit: result.limit,
+      remaining: result.remaining,
+      reset: result.reset,
+      scope: result.scope,
+      policy: result.policy,
+      subjectType: result.subject.type,
+      source: result.source,
+      reason: result.reason
+    }
+  };
+}
+
+export function recordRateLimitTelemetry(
+  target: RateLimitTelemetryTarget | null | undefined,
+  result: RateLimitResult
+) {
+  target?.setAttribute?.('rate_limit.scope', result.scope);
+  target?.setAttribute?.('rate_limit.subject_type', result.subject.type);
+  target?.setAttribute?.('rate_limit.allowed', result.allowed);
+  target?.setAttribute?.('rate_limit.source', result.source);
+  target?.setAttribute?.('rate_limit.degraded', result.degraded);
+
+  if (typeof result.limit === 'number') {
+    target?.setAttribute?.('rate_limit.limit', result.limit);
+  }
+  if (typeof result.remaining === 'number') {
+    target?.setAttribute?.('rate_limit.remaining', result.remaining);
+  }
+  if (typeof result.reset === 'number') {
+    target?.setAttribute?.('rate_limit.reset', result.reset);
+  }
+}
+
+export function getWebSocketMaxSymbols(): number {
+  return readPositiveIntegerEnv(
+    'RATE_LIMIT_WS_MAX_SYMBOLS',
+    DEFAULT_WS_MAX_SYMBOLS
+  );
+}
+
+export function resetRateLimitForTests() {
+  limiterCache.clear();
+  degradedWarningKeys.clear();
+  redisClient = undefined;
+}
+
+function getLimiter(
+  policyName: RateLimitPolicyName,
+  policy: ResolvedRateLimitPolicy
+): Ratelimit {
+  const cacheKey = `${policyName}:${policy.limit}:${policy.window}`;
+  const cached = limiterCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const redis = getRedisClient();
+  if (!redis) {
+    throw new Error('Upstash Redis is not configured');
+  }
+
+  const limiter = new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(policy.limit, policy.window),
+    prefix: `stock-tracker:${policy.key}`,
+    analytics: true,
+    enableProtection: true,
+    timeout: 750
+  });
+
+  limiterCache.set(cacheKey, limiter);
+  return limiter;
+}
+
+function getRedisClient(): Redis | null {
+  if (redisClient !== undefined) {
+    return redisClient;
+  }
+
+  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+
+  redisClient = url && token ? new Redis({ url, token }) : null;
+  return redisClient;
+}
+
+function hasUpstashRedisConfig(): boolean {
+  return Boolean(
+    process.env.UPSTASH_REDIS_REST_URL?.trim() &&
+      process.env.UPSTASH_REDIS_REST_TOKEN?.trim()
+  );
+}
+
+function resolvePolicy(policy: RateLimitPolicy): ResolvedRateLimitPolicy {
+  return {
+    ...policy,
+    limit: readPositiveIntegerEnv(policy.envKey, policy.defaultLimit)
+  };
+}
+
+function readPositiveIntegerEnv(key: string, fallback: number): number {
+  const value = process.env[key]?.trim();
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function createIdentifier(
+  policy: ResolvedRateLimitPolicy,
+  subject: RateLimitSubject
+): string {
+  return `${policy.key}:${subject.type}:${subject.id}`;
+}
+
+function createBaseResult(
+  policyName: RateLimitPolicyName,
+  policy: ResolvedRateLimitPolicy,
+  subject: RateLimitSubject
+): RateLimitResult {
+  return {
+    allowed: true,
+    degraded: false,
+    policy: policyName,
+    scope: policy.scope,
+    subject,
+    source: 'upstash'
+  };
+}
+
+function createRateLimitHeaders(input: {
+  limit: number;
+  remaining: number;
+  reset: number;
+  retryAfter: number;
+}): Record<string, string> {
+  return {
+    'Retry-After': String(input.retryAfter),
+    'RateLimit-Limit': String(input.limit),
+    'RateLimit-Remaining': String(Math.max(0, input.remaining)),
+    'RateLimit-Reset': String(Math.ceil(input.reset / 1000))
+  };
+}
+
+function getRetryAfterSeconds(reset: number): number {
+  return Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+}
+
+function getRequestHeader(
+  request: Request | undefined,
+  name: string
+): string | undefined {
+  const value = request?.headers.get(name)?.trim();
+  return value || undefined;
+}
+
+function warnDegradedOnce(
+  key: string,
+  message: string,
+  context?: Record<string, unknown>
+) {
+  if (degradedWarningKeys.has(key)) {
+    return;
+  }
+
+  degradedWarningKeys.add(key);
+  logger.warn(message, context);
 }

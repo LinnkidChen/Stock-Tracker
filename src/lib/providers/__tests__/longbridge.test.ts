@@ -1,5 +1,6 @@
 import { LongbridgeProvider } from '../longbridge';
 import { LongbridgeRequestGuard } from '../longbridge-request-guard';
+import { consumeLongbridgeProviderBudget } from '../../rate-limit';
 
 const mockCandlesticks = jest.fn();
 const mockConfigFromEnv = jest.fn(() => ({}));
@@ -23,6 +24,11 @@ jest.mock('../../logger', () => ({
     error: jest.fn(),
     warn: jest.fn()
   }
+}));
+
+jest.mock('../../rate-limit', () => ({
+  consumeLongbridgeProviderBudget: jest.fn(),
+  toRateLimitError: jest.fn((result) => result.error)
 }));
 
 const quoteFixture = {
@@ -49,6 +55,10 @@ function createProvider(options: any = {}) {
 }
 
 describe('LongbridgeProvider', () => {
+  const mockConsumeLongbridgeProviderBudget =
+    consumeLongbridgeProviderBudget as jest.MockedFunction<
+      typeof consumeLongbridgeProviderBudget
+    >;
   const originalEnv = {
     LONGPORT_APP_KEY: process.env.LONGPORT_APP_KEY,
     LONGPORT_APP_SECRET: process.env.LONGPORT_APP_SECRET,
@@ -65,6 +75,14 @@ describe('LongbridgeProvider', () => {
     mockConfigFromEnv.mockClear();
     mockQuote.mockReset();
     mockQuoteContextNew.mockReset();
+    mockConsumeLongbridgeProviderBudget.mockResolvedValue({
+      allowed: true,
+      degraded: false,
+      policy: 'longbridgeQuoteBudget',
+      scope: 'provider-budget',
+      subject: { type: 'global', id: 'global' },
+      source: 'upstash'
+    });
     mockQuoteContextNew.mockResolvedValue({
       candlesticks: mockCandlesticks,
       quote: mockQuote
@@ -84,6 +102,7 @@ describe('LongbridgeProvider', () => {
       const quote = await createProvider().getQuote('AAPL');
 
       expect(mockQuote).toHaveBeenCalledWith(['AAPL.US']);
+      expect(mockConsumeLongbridgeProviderBudget).toHaveBeenCalledWith('quote');
       expect(quote).toEqual(
         expect.objectContaining({
           symbol: 'AAPL.US',
@@ -94,6 +113,55 @@ describe('LongbridgeProvider', () => {
           lastUpdated: '2024-01-02T15:30:00.000Z'
         })
       );
+    });
+
+    it('does not call the SDK when the shared quote budget is exceeded', async () => {
+      mockConsumeLongbridgeProviderBudget.mockResolvedValueOnce({
+        allowed: false,
+        degraded: false,
+        policy: 'longbridgeQuoteBudget',
+        scope: 'provider-budget',
+        subject: { type: 'global', id: 'global' },
+        source: 'upstash',
+        limit: 600,
+        remaining: 0,
+        reset: 6000,
+        retryAfter: 5,
+        error: {
+          code: 'API_LIMIT_EXCEEDED',
+          message: 'Rate limit exceeded. Please try again later.',
+          details: {
+            retryAfter: 5,
+            scope: 'provider-budget'
+          }
+        }
+      });
+
+      await expect(createProvider().getQuote('AAPL')).rejects.toMatchObject({
+        code: 'API_LIMIT_EXCEEDED',
+        details: {
+          retryAfter: 5
+        }
+      });
+      expect(mockQuoteContextNew).not.toHaveBeenCalled();
+      expect(mockQuote).not.toHaveBeenCalled();
+    });
+
+    it('continues to the in-process guard when the shared budget fails open', async () => {
+      mockConsumeLongbridgeProviderBudget.mockResolvedValueOnce({
+        allowed: true,
+        degraded: true,
+        policy: 'longbridgeQuoteBudget',
+        scope: 'provider-budget',
+        subject: { type: 'global', id: 'global' },
+        source: 'error'
+      });
+      mockQuote.mockResolvedValue([quoteFixture]);
+
+      const quote = await createProvider().getQuote('AAPL');
+
+      expect(quote.price).toBe(105);
+      expect(mockQuote).toHaveBeenCalledWith(['AAPL.US']);
     });
 
     it('throws INVALID_API_KEY when credentials are missing', async () => {

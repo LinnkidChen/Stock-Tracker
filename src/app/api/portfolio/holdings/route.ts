@@ -12,7 +12,10 @@ import {
   validatePortfolioHoldingBody
 } from '@/lib/portfolio/validation';
 import { PORTFOLIO_AUTH_MISCONFIGURED_REMEDIATION } from '@/lib/portfolio/api-errors';
-import { enforcePortfolioRateLimit } from '@/lib/portfolio/api-rate-limit';
+import {
+  enforcePortfolioMutationAttemptLimit,
+  enforcePortfolioRateLimit
+} from '@/lib/portfolio/api-rate-limit';
 import {
   reportAndCreateObservedErrorResponse,
   toPersistenceErrorCode
@@ -105,7 +108,11 @@ export async function GET(req: NextRequest) {
     { op: 'http.server', name: 'GET /api/portfolio/holdings' },
     async (span) => {
       const { userId } = await auth();
-      const rateLimitResponse = await enforcePortfolioRateLimit(req, userId);
+      const rateLimitResponse = await enforcePortfolioRateLimit(
+        req,
+        userId,
+        span
+      );
       if (rateLimitResponse) {
         return rateLimitResponse;
       }
@@ -161,17 +168,29 @@ export async function POST(req: NextRequest) {
       const path = getRequestPath(req, '/api/portfolio/holdings');
       span?.setAttribute?.('path', path);
 
-      const { userId } = await auth();
-      const rateLimitResponse = await enforcePortfolioRateLimit(req, userId);
-      if (rateLimitResponse) {
-        return rateLimitResponse;
+      const attemptLimitResponse = await enforcePortfolioMutationAttemptLimit(
+        req,
+        span
+      );
+      if (attemptLimitResponse) {
+        return attemptLimitResponse;
       }
 
+      const { userId } = await auth();
       if (!userId) {
         return createUnauthenticatedError(span, {
           path,
           operation: 'portfolio.create'
         });
+      }
+
+      const rateLimitResponse = await enforcePortfolioRateLimit(
+        req,
+        userId,
+        span
+      );
+      if (rateLimitResponse) {
+        return rateLimitResponse;
       }
 
       let body: PortfolioHoldingRequestBody;

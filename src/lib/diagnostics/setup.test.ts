@@ -29,6 +29,8 @@ function configureReadyEnv() {
   process.env.LONGPORT_APP_KEY = 'longbridge_app_key';
   process.env.LONGPORT_APP_SECRET = 'longbridge_app_secret';
   process.env.LONGPORT_ACCESS_TOKEN = 'longbridge_access_token';
+  process.env.UPSTASH_REDIS_REST_URL = 'https://upstash.example.com';
+  process.env.UPSTASH_REDIS_REST_TOKEN = 'upstash_token';
 }
 
 function findCheck(
@@ -81,12 +83,13 @@ describe('getSetupDiagnostics', () => {
     process.env = originalEnv;
   });
 
-  it('returns ready checks when Clerk, Supabase, RLS, market data, and observability are configured', async () => {
+  it('returns ready checks when Clerk, Supabase, RLS, market data, Upstash, and observability are configured', async () => {
     const diagnostics = await getSetupDiagnostics();
 
     expect(diagnostics.status).toBe('ready');
-    expect(diagnostics.checks).toHaveLength(5);
+    expect(diagnostics.checks).toHaveLength(6);
     expect(diagnostics.checks.map((check) => check.status)).toEqual([
+      'ready',
       'ready',
       'ready',
       'ready',
@@ -122,6 +125,7 @@ describe('getSetupDiagnostics', () => {
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
     delete process.env.LONGPORT_APP_KEY;
+    delete process.env.UPSTASH_REDIS_REST_URL;
 
     const diagnostics = await getSetupDiagnostics();
 
@@ -130,6 +134,7 @@ describe('getSetupDiagnostics', () => {
     expect(findCheck(diagnostics, 'supabase').status).toBe('blocked');
     expect(findCheck(diagnostics, 'supabase-rls').status).toBe('blocked');
     expect(findCheck(diagnostics, 'market-data').status).toBe('warning');
+    expect(findCheck(diagnostics, 'upstash').status).toBe('warning');
     expect(JSON.stringify(diagnostics)).toContain(
       'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'
     );
@@ -137,6 +142,7 @@ describe('getSetupDiagnostics', () => {
     expect(JSON.stringify(diagnostics)).not.toContain(
       'longbridge_access_token'
     );
+    expect(JSON.stringify(diagnostics)).not.toContain('upstash_token');
   });
 
   it('accepts the legacy Supabase anon key when the publishable key is missing', async () => {
@@ -258,5 +264,23 @@ describe('getSetupDiagnostics', () => {
       'Yahoo Finance fallback is available without server credentials.'
     );
     expect(JSON.stringify(diagnostics)).not.toContain('longbridge_app_secret');
+  });
+
+  it('warns when Upstash Redis is not configured', async () => {
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    const diagnostics = await getSetupDiagnostics();
+
+    const upstash = findCheck(diagnostics, 'upstash');
+    expect(diagnostics.status).toBe('warning');
+    expect(upstash.status).toBe('warning');
+    expect(upstash.summary).toBe(
+      'Distributed API rate limiting is running in fail-open mode.'
+    );
+    expect(upstash.details).toContain(
+      'Missing environment variables: UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN.'
+    );
+    expect(JSON.stringify(diagnostics)).not.toContain('upstash_token');
   });
 });

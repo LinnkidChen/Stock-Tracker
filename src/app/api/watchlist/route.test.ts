@@ -4,8 +4,11 @@
 import { POST, GET, PATCH } from './route';
 import { NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { checkRateLimit } from '@/lib/rate-limit';
 import { SupabaseAuthConfigError } from '@/lib/supabase/server';
+import {
+  consumeAuthenticatedMutationRateLimit,
+  consumeMutationAttemptRateLimit
+} from '@/lib/rate-limit';
 import {
   getWatchlistItems,
   addToWatchlist,
@@ -19,19 +22,18 @@ jest.mock('@clerk/nextjs/server', () => ({
   auth: jest.fn()
 }));
 
-jest.mock('@/lib/rate-limit', () => ({
-  checkRateLimit: jest.fn(),
-  createRateLimitHeaders: jest.fn((result) =>
-    result.retryAfter ? { 'Retry-After': String(result.retryAfter) } : {}
-  )
-}));
-
 jest.mock('@/lib/watchlist/storage', () => ({
   getWatchlistItems: jest.fn(),
   addToWatchlist: jest.fn(),
   removeFromWatchlist: jest.fn(),
   updateWatchlistItemMetadata: jest.fn(),
   reorderWatchlistItems: jest.fn()
+}));
+
+jest.mock('@/lib/rate-limit', () => ({
+  consumeMutationAttemptRateLimit: jest.fn(),
+  consumeAuthenticatedMutationRateLimit: jest.fn(),
+  toRateLimitError: jest.fn((result) => result.error)
 }));
 
 function createItem(overrides: Partial<WatchlistItem>): WatchlistItem {
@@ -49,29 +51,44 @@ function createItem(overrides: Partial<WatchlistItem>): WatchlistItem {
 
 describe('/api/watchlist', () => {
   const mockAuth = auth as jest.Mock;
-  const mockCheckRateLimit = checkRateLimit as jest.Mock;
   const mockGetItems = getWatchlistItems as jest.Mock;
   const mockAdd = addToWatchlist as jest.Mock;
   const mockRemove = removeFromWatchlist as jest.Mock;
   const mockUpdate = updateWatchlistItemMetadata as jest.Mock;
   const mockReorder = reorderWatchlistItems as jest.Mock;
+  const mockMutationAttemptLimit =
+    consumeMutationAttemptRateLimit as jest.MockedFunction<
+      typeof consumeMutationAttemptRateLimit
+    >;
+  const mockAuthenticatedMutationLimit =
+    consumeAuthenticatedMutationRateLimit as jest.MockedFunction<
+      typeof consumeAuthenticatedMutationRateLimit
+    >;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCheckRateLimit.mockResolvedValue({
+    mockMutationAttemptLimit.mockResolvedValue({
       allowed: true,
-      limit: 60,
-      windowSeconds: 60,
-      remaining: 59,
-      resetAt: Date.now() + 60_000,
-      source: 'supabase'
+      degraded: false,
+      policy: 'mutationAttemptsByIp',
+      scope: 'mutation-attempt',
+      subject: { type: 'ip', id: '127.0.0.1' },
+      source: 'upstash'
+    });
+    mockAuthenticatedMutationLimit.mockResolvedValue({
+      allowed: true,
+      degraded: false,
+      policy: 'authenticatedMutations',
+      scope: 'mutation-authenticated',
+      subject: { type: 'user', id: 'user_123' },
+      source: 'upstash'
     });
   });
 
   describe('GET', () => {
     it('returns 401 if user is not authenticated', async () => {
       mockAuth.mockResolvedValue({ userId: null });
-      const res = await GET(new NextRequest('http://localhost/api/watchlist'));
+      const res = await GET();
       expect(res.status).toBe(401);
     });
 
@@ -84,7 +101,7 @@ describe('/api/watchlist', () => {
       mockAuth.mockResolvedValue({ userId: 'user_123' });
       mockGetItems.mockResolvedValue(items);
 
-      const res = await GET(new NextRequest('http://localhost/api/watchlist'));
+      const res = await GET();
       const json = await res.json();
 
       expect(res.status).toBe(200);
@@ -92,11 +109,6 @@ describe('/api/watchlist', () => {
       expect(json.data.watchlist).toEqual(['AAPL', 'MSFT']);
       expect(json.data.items).toEqual(items);
       expect(mockGetItems).toHaveBeenCalledWith('user_123');
-      expect(mockCheckRateLimit).toHaveBeenCalledWith(
-        expect.any(NextRequest),
-        'watchlist',
-        { subject: 'user_123' }
-      );
     });
   });
 
@@ -109,31 +121,6 @@ describe('/api/watchlist', () => {
       });
       const res = await POST(req);
       expect(res.status).toBe(401);
-    });
-
-    it('returns 429 when the shared limiter rejects the request', async () => {
-      mockAuth.mockResolvedValue({ userId: 'user_123' });
-      mockCheckRateLimit.mockResolvedValue({
-        allowed: false,
-        limit: 60,
-        windowSeconds: 60,
-        remaining: 0,
-        resetAt: Date.now() + 30_000,
-        retryAfter: 30,
-        source: 'supabase'
-      });
-
-      const req = new NextRequest('http://localhost/api/watchlist', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'add', symbol: 'AAPL' })
-      });
-      const res = await POST(req);
-      const json = await res.json();
-
-      expect(res.status).toBe(429);
-      expect(json.error.code).toBe('API_LIMIT_EXCEEDED');
-      expect(res.headers.get('Retry-After')).toBe('30');
-      expect(mockAdd).not.toHaveBeenCalled();
     });
 
     it('adds symbol with normalized metadata', async () => {
@@ -168,6 +155,88 @@ describe('/api/watchlist', () => {
         exchange: 'NASDAQ',
         note: 'Core holding'
       });
+      expect(mockMutationAttemptLimit).toHaveBeenCalledWith(req);
+      expect(mockAuthenticatedMutationLimit).toHaveBeenCalledWith(
+        req,
+        'user_123'
+      );
+    });
+
+    it('returns 429 when the mutation attempt limiter denies the request', async () => {
+      mockMutationAttemptLimit.mockResolvedValueOnce({
+        allowed: false,
+        degraded: false,
+        policy: 'mutationAttemptsByIp',
+        scope: 'mutation-attempt',
+        subject: { type: 'ip', id: '127.0.0.1' },
+        source: 'upstash',
+        limit: 30,
+        remaining: 0,
+        reset: 6000,
+        retryAfter: 5,
+        headers: {
+          'Retry-After': '5',
+          'RateLimit-Limit': '30',
+          'RateLimit-Remaining': '0',
+          'RateLimit-Reset': '6'
+        },
+        error: {
+          code: 'API_LIMIT_EXCEEDED',
+          message: 'Rate limit exceeded. Please try again later.',
+          details: { retryAfter: 5 }
+        }
+      });
+
+      const req = new NextRequest('http://localhost/api/watchlist', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'add', symbol: 'AAPL' })
+      });
+      const res = await POST(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(429);
+      expect(res.headers.get('Retry-After')).toBe('5');
+      expect(json.error.code).toBe('API_LIMIT_EXCEEDED');
+      expect(mockAuth).not.toHaveBeenCalled();
+      expect(mockAdd).not.toHaveBeenCalled();
+    });
+
+    it('returns 429 when the authenticated mutation limiter denies the request', async () => {
+      mockAuth.mockResolvedValue({ userId: 'user_123' });
+      mockAuthenticatedMutationLimit.mockResolvedValueOnce({
+        allowed: false,
+        degraded: false,
+        policy: 'authenticatedMutations',
+        scope: 'mutation-authenticated',
+        subject: { type: 'user', id: 'user_123' },
+        source: 'upstash',
+        limit: 60,
+        remaining: 0,
+        reset: 6000,
+        retryAfter: 5,
+        headers: {
+          'Retry-After': '5',
+          'RateLimit-Limit': '60',
+          'RateLimit-Remaining': '0',
+          'RateLimit-Reset': '6'
+        },
+        error: {
+          code: 'API_LIMIT_EXCEEDED',
+          message: 'Rate limit exceeded. Please try again later.',
+          details: { retryAfter: 5 }
+        }
+      });
+
+      const req = new NextRequest('http://localhost/api/watchlist', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'add', symbol: 'AAPL' })
+      });
+      const res = await POST(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(429);
+      expect(json.error.details.retryAfter).toBe(5);
+      expect(mockAdd).not.toHaveBeenCalled();
     });
 
     it('removes symbol from watchlist', async () => {
@@ -374,7 +443,7 @@ describe('/api/watchlist', () => {
         )
       );
 
-      const res = await GET(new NextRequest('http://localhost/api/watchlist'));
+      const res = await GET();
       const json = await res.json();
 
       expect(res.status).toBe(503);

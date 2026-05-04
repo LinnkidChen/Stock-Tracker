@@ -1,56 +1,59 @@
 import { NextResponse } from 'next/server';
-import { logger } from '@/lib/logger';
 import {
-  checkRateLimit,
-  createRateLimitHeaders,
-  type RateLimitResult
+  consumeAuthenticatedMutationRateLimit,
+  consumeMutationAttemptRateLimit,
+  recordRateLimitTelemetry,
+  type RateLimitTelemetryTarget,
+  type RateLimitResult,
+  toRateLimitError
 } from '@/lib/rate-limit';
 
 export async function enforcePortfolioRateLimit(
   req: Request,
-  userId: string | null
+  userId: string | null,
+  telemetryTarget?: RateLimitTelemetryTarget | null
 ) {
-  try {
-    const result = await checkRateLimit(req, 'portfolio', {
-      subject: userId
-    });
+  const result = userId
+    ? await consumeAuthenticatedMutationRateLimit(req, userId)
+    : await consumeMutationAttemptRateLimit(req);
+  recordRateLimitTelemetry(telemetryTarget, result);
 
-    if (!result.allowed) {
-      return createPortfolioRateLimitResponse(result);
-    }
-
+  if (result.allowed) {
     return null;
-  } catch (error) {
-    logger.error('Portfolio rate limiter unavailable', { error });
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'RATE_LIMIT_UNAVAILABLE',
-          message: 'Rate limit service unavailable'
-        }
-      },
-      { status: 503 }
-    );
   }
+
+  return createPortfolioRateLimitResponse(result);
 }
 
-function createPortfolioRateLimitResponse(result: RateLimitResult) {
+export async function enforcePortfolioMutationAttemptLimit(
+  req: Request,
+  telemetryTarget?: RateLimitTelemetryTarget | null
+) {
+  const result = await consumeMutationAttemptRateLimit(req);
+  recordRateLimitTelemetry(telemetryTarget, result);
+
+  if (result.allowed) {
+    return null;
+  }
+
+  return createPortfolioRateLimitResponse(result);
+}
+
+export function createPortfolioRateLimitResponse(result: RateLimitResult) {
+  const error = result.error ?? toRateLimitError(result);
+
   return NextResponse.json(
     {
       success: false,
       error: {
-        code: 'API_LIMIT_EXCEEDED',
-        message: 'Rate limit exceeded. Try again later.',
-        details: result.retryAfter
-          ? { retryAfter: result.retryAfter }
-          : undefined
+        code: error.code,
+        message: error.message,
+        details: error.details
       }
     },
     {
       status: 429,
-      headers: createRateLimitHeaders(result)
+      headers: result.headers
     }
   );
 }

@@ -24,9 +24,9 @@ export function createErrorResponse<T = null>(
 
   const status = statusCode || getStatusCodeForError(error.code);
   const retryAfter = getRetryAfterFromError(error);
-  const responseHeaders = new Headers(headers);
+  const responseHeaders = normalizeHeaders(headers);
   if (retryAfter) {
-    responseHeaders.set('Retry-After', String(retryAfter));
+    responseHeaders['Retry-After'] = String(retryAfter);
   }
 
   return NextResponse.json(response, { status, headers: responseHeaders });
@@ -157,6 +157,30 @@ function getValidRetryAfter(value: unknown): number | undefined {
   }
 
   return undefined;
+}
+
+function normalizeHeaders(headers?: HeadersInit): Record<string, string> {
+  if (!headers) {
+    return {};
+  }
+
+  if (headers instanceof Headers) {
+    const normalized: Record<string, string> = {};
+    headers.forEach((value, key) => {
+      normalized[key] = value;
+    });
+    return normalized;
+  }
+
+  if (Array.isArray(headers)) {
+    return Object.fromEntries(
+      headers.map(([key, value]) => [key, String(value)])
+    );
+  }
+
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [key, String(value)])
+  );
 }
 
 /**

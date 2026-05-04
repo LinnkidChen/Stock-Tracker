@@ -1,146 +1,176 @@
 /**
  * @jest-environment node
  */
+const mockLimit = jest.fn();
+const mockRedisConstructor = jest.fn();
+const mockRatelimitConstructor = jest.fn();
+const mockSlidingWindow = jest.fn((tokens: number, window: string) => ({
+  tokens,
+  window
+}));
+
+jest.mock('@upstash/redis', () => ({
+  Redis: jest.fn().mockImplementation((config) => {
+    mockRedisConstructor(config);
+    return { config };
+  })
+}));
+
+jest.mock('@upstash/ratelimit', () => ({
+  Ratelimit: jest.fn().mockImplementation((config) => {
+    mockRatelimitConstructor(config);
+    return {
+      limit: mockLimit
+    };
+  })
+}));
+
+jest.mock('./logger', () => ({
+  logger: {
+    warn: jest.fn(),
+    error: jest.fn()
+  }
+}));
+
+import { Ratelimit } from '@upstash/ratelimit';
 import {
-  checkRateLimit,
-  createRateLimitHeaders,
-  RateLimitUnavailableError
+  consumeRateLimit,
+  consumeStockReadRateLimit,
+  createRateLimitSubject,
+  getClientIp,
+  getRateLimitConfig,
+  resetRateLimitForTests,
+  toRateLimitError
 } from './rate-limit';
 
-const originalEnv = process.env;
-const originalFetch = global.fetch;
+(
+  Ratelimit as unknown as { slidingWindow: typeof mockSlidingWindow }
+).slidingWindow = mockSlidingWindow;
 
-function mockJsonResponse(payload: unknown, status = 200): Response {
+function createRequest(headers: Record<string, string> = {}): Request {
   return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => payload,
-    text: async () => JSON.stringify(payload)
-  } as Response;
+    headers: new Headers(headers)
+  } as Request;
 }
 
-describe('rate limit store', () => {
+describe('rate-limit helpers', () => {
+  const originalEnv = process.env;
+
   beforeEach(() => {
-    process.env = {
-      ...originalEnv,
-      NODE_ENV: 'test',
-      NEXT_PUBLIC_SUPABASE_URL: '',
-      SUPABASE_SERVICE_ROLE_KEY: '',
-      RATE_LIMIT_DISABLED: ''
-    };
-    global.fetch = jest.fn();
+    jest.clearAllMocks();
+    resetRateLimitForTests();
+    process.env = { ...originalEnv };
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.RATE_LIMIT_ANON_STOCK_READS_PER_MINUTE;
+    delete process.env.RATE_LIMIT_WS_MAX_SYMBOLS;
+    jest.spyOn(Date, 'now').mockReturnValue(1_000);
   });
 
   afterEach(() => {
-    process.env = originalEnv;
-    global.fetch = originalFetch;
     jest.restoreAllMocks();
   });
 
-  it('allows requests without a configured store outside production', async () => {
-    const result = await checkRateLimit(
-      new Request('http://localhost/api/stocks/quote/AAPL'),
-      'quote'
-    );
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  it('parses defaults and positive integer overrides', () => {
+    process.env.RATE_LIMIT_ANON_STOCK_READS_PER_MINUTE = '42';
+    process.env.RATE_LIMIT_WS_MAX_SYMBOLS = '12';
+    process.env.RATE_LIMIT_AUTH_MUTATIONS_PER_MINUTE = '-1';
+
+    const config = getRateLimitConfig();
+
+    expect(config.upstashConfigured).toBe(false);
+    expect(config.policies.anonymousStockReads.limit).toBe(42);
+    expect(config.policies.authenticatedMutations.limit).toBe(60);
+    expect(config.webSocketMaxSymbols).toBe(12);
+  });
+
+  it('derives IP and authenticated subjects from request data', () => {
+    const request = createRequest({
+      'x-forwarded-for': '203.0.113.10, 10.0.0.1'
+    });
+
+    expect(getClientIp(request)).toBe('203.0.113.10');
+    expect(createRateLimitSubject(request)).toEqual({
+      type: 'ip',
+      id: '203.0.113.10'
+    });
+    expect(createRateLimitSubject(request, 'user_123')).toEqual({
+      type: 'user',
+      id: 'user_123'
+    });
+  });
+
+  it('fails open when Upstash is not configured', async () => {
+    const result = await consumeStockReadRateLimit(createRequest());
 
     expect(result.allowed).toBe(true);
+    expect(result.degraded).toBe(true);
     expect(result.source).toBe('disabled');
-    expect(global.fetch).not.toHaveBeenCalled();
-    expect(createRateLimitHeaders(result)).toEqual({});
+    expect(mockRatelimitConstructor).not.toHaveBeenCalled();
   });
 
-  it('checks the Supabase RPC store with the scope policy', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue(
-      mockJsonResponse([
-        {
-          allowed: true,
-          remaining: 119,
-          reset_at: '2026-01-01T00:01:00.000Z',
-          retry_after_seconds: null
-        }
-      ])
-    );
-    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
-    process.env.RATE_LIMIT_KEY_SALT = 'test-salt';
-
-    const result = await checkRateLimit(
-      new Request('http://localhost/api/stocks/quote/AAPL', {
-        headers: {
-          'x-forwarded-for': '203.0.113.10',
-          'user-agent': 'jest-client'
-        }
-      }),
-      'quote'
-    );
-    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
-    const body = JSON.parse(init.body);
-
-    expect(url).toBe(
-      'https://example.supabase.co/rest/v1/rpc/check_api_rate_limit'
-    );
-    expect(init).toMatchObject({
-      method: 'POST',
-      headers: {
-        apikey: 'service-role-key',
-        Authorization: 'Bearer service-role-key',
-        'Content-Type': 'application/json'
-      },
-      cache: 'no-store'
+  it('returns structured 429 metadata when Upstash denies a request', async () => {
+    process.env.UPSTASH_REDIS_REST_URL = 'https://redis.example.com';
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'token';
+    mockLimit.mockResolvedValue({
+      success: false,
+      limit: 30,
+      remaining: 0,
+      reset: 6_000,
+      pending: Promise.resolve(undefined)
     });
-    expect(body).toMatchObject({
-      p_limit: 120,
-      p_window_seconds: 60
-    });
-    expect(body.p_bucket_key).toMatch(/^quote:/);
-    expect(result).toMatchObject({
-      allowed: true,
-      limit: 120,
-      remaining: 119,
-      source: 'supabase'
-    });
-    expect(createRateLimitHeaders(result)).toEqual({
-      'X-RateLimit-Limit': '120',
-      'X-RateLimit-Remaining': '119',
-      'X-RateLimit-Reset': String(
-        Math.ceil(Date.parse('2026-01-01T00:01:00.000Z') / 1000)
-      )
-    });
-  });
 
-  it('returns retry metadata when the store rejects a request', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue(
-      mockJsonResponse([
-        {
-          allowed: false,
-          remaining: 0,
-          reset_at: '2026-01-01T00:01:00.000Z',
-          retry_after_seconds: 7
-        }
-      ])
+    const result = await consumeRateLimit(
+      'mutationAttemptsByIp',
+      { type: 'ip', id: '203.0.113.10' },
+      createRequest({ 'user-agent': 'Jest' })
     );
-    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
-
-    const result = await checkRateLimit(
-      new Request('http://localhost/api/ws/prices'),
-      'stream'
-    );
+    const error = toRateLimitError(result);
 
     expect(result.allowed).toBe(false);
-    expect(result.retryAfter).toBe(7);
-    expect(createRateLimitHeaders(result)).toMatchObject({
-      'Retry-After': '7',
-      'X-RateLimit-Limit': '20',
-      'X-RateLimit-Remaining': '0'
+    expect(result.headers).toEqual({
+      'Retry-After': '5',
+      'RateLimit-Limit': '30',
+      'RateLimit-Remaining': '0',
+      'RateLimit-Reset': '6'
     });
+    expect(error).toMatchObject({
+      code: 'API_LIMIT_EXCEEDED',
+      details: {
+        retryAfter: 5,
+        limit: 30,
+        scope: 'mutation-attempt',
+        subjectType: 'ip',
+        source: 'upstash'
+      }
+    });
+    expect(mockRedisConstructor).toHaveBeenCalledWith({
+      url: 'https://redis.example.com',
+      token: 'token'
+    });
+    expect(mockSlidingWindow).toHaveBeenCalledWith(30, '60 s');
+    expect(mockLimit).toHaveBeenCalledWith(
+      'mutation-attempt-ip:ip:203.0.113.10',
+      expect.objectContaining({
+        ip: '203.0.113.10',
+        userAgent: 'Jest'
+      })
+    );
   });
 
-  it('fails closed in production when the store is not configured', async () => {
-    process.env.NODE_ENV = 'production';
+  it('fails open when the Upstash check throws', async () => {
+    process.env.UPSTASH_REDIS_REST_URL = 'https://redis.example.com';
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'token';
+    mockLimit.mockRejectedValue(new Error('redis unavailable'));
 
-    await expect(
-      checkRateLimit(new Request('http://localhost/api/ws/prices'), 'stream')
-    ).rejects.toBeInstanceOf(RateLimitUnavailableError);
+    const result = await consumeStockReadRateLimit(createRequest());
+
+    expect(result.allowed).toBe(true);
+    expect(result.degraded).toBe(true);
+    expect(result.source).toBe('error');
   });
 });
